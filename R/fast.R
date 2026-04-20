@@ -146,7 +146,7 @@ fast <- function(model, term = "fa(Site, 4):Genotype",
 
   # ---- Data and fa.asreml -----------------------------------------------
   dat  <- eval(model$call$data)
-  sfa  <- fa.asreml(model, ...)
+  sfa  <- .fa_asreml(model, ...)
 
   # ---- Scores: pivot long -> wide (m genotypes * k factors) ---------------
   # In $scores, the sterm column contains factor labels "Comp1","Comp2",...

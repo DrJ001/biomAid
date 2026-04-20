@@ -199,14 +199,14 @@ randomRegressMV <- function(model, Env = "TSite:Variety", levs = NULL,
 
   # ---- Extract BLUPs and G-matrix ----------------------------------------
   if (startsWith(rterm, "fa")) {
-    sumfa <- fa.asreml(model, trunc.char = NULL)
+    sumfa <- .fa_asreml(model, trunc.char = NULL)
     pvals <- sumfa$blups[[rterm]]$blups[, 1:3]
     names(pvals) <- c("blup", enam, vnam)   # standardise FA column names
     Gmat  <- sumfa$gammas[[rterm]]$Gmat
     pred  <- NULL                            # vcov unavailable; HSD will be NA
   } else {
     pred  <- predict(model, classify = Env, only = Env, vcov = TRUE, ...)
-    Gmat  <- summary(model, vparameters = TRUE)$vparameters[[Env]]
+    Gmat  <- .asreml_vparams(model, Env)
     pvals <- pred$pvals
     names(pvals)[3L] <- "blup"
   }

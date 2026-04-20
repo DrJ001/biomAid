@@ -136,7 +136,7 @@ compare <- function(model, term, by = NULL,
       warning("'pev = FALSE' requires all terms to be in the random formula. ",
               "Falling back to PEV.", call. = FALSE)
     } else {
-      varm <- summary(model, vparameters = TRUE)$vparameters[[term]]
+      varm <- .asreml_vparams(model, term)
       if (is.null(varm))
         warning("Could not retrieve G-matrix for '", term,
                 "'. Falling back to PEV.", call. = FALSE)

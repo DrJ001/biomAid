@@ -23,7 +23,7 @@ Imports:
 Suggests:
     asreml,
     ASExtras4,
-    testthat (>= 3.0.0),
+    testthat (>= 3.1.2),
     devtools,
     covr,
     xml2
