@@ -1,4 +1,8 @@
-# biomAid <img src="https://img.shields.io/badge/R-%3E%3D4.1-blue" align="right"/>
+# biomAid
+
+[![R-CMD-check](https://github.com/DrJ001/bioMaid/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/DrJ001/bioMaid/actions/workflows/R-CMD-check.yml)
+[![Codecov](https://codecov.io/gh/DrJ001/bioMaid/graph/badge.svg)](https://codecov.io/gh/DrJ001/bioMaid)
+[![R >= 4.1](https://img.shields.io/badge/R-%3E%3D4.1-blue)](https://cran.r-project.org/)
 
 Biometric tools for analysing multi-environment plant breeding trials fitted
 with **ASReml-R V4** mixed models.
