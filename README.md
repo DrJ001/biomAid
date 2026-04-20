@@ -5,7 +5,7 @@
 [![R >= 4.1](https://img.shields.io/badge/R-%3E%3D4.1-blue)](https://cran.r-project.org/)
 
 Biometric tools to support the analysis of comparative experiment data fitted
-with **ASReml-R V4** mixed models. Hold tight theer a lot more tools coming.
+with **ASReml-R V4** mixed models. Watch this space, there a lot more functions coming.
 
 ---
 
