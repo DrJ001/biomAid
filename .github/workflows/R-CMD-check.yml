@@ -38,13 +38,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          install.packages(c("remotes", "rcmdcheck"), repos = "https://cloud.r-project.org")
+          install.packages(c("remotes", "rcmdcheck", "testthat"))
           remotes::install_deps(
             pkgdir       = ".",
-            dependencies = c("Depends", "Imports", "LinkingTo"),
-            repos        = "https://cloud.r-project.org"
+            dependencies = c("Depends", "Imports", "LinkingTo")
           )
-          install.packages("testthat", repos = "https://cloud.r-project.org")
         shell: Rscript {0}
 
       - uses: r-lib/actions/check-r-package@v2

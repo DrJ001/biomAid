@@ -20,24 +20,14 @@ jobs:
         with:
           use-public-rspm: true
 
-      - name: Install dependencies
+      - name: Install dependencies and run coverage
         run: |
-          install.packages(c("remotes", "covr", "xml2", "testthat"), repos = "https://cloud.r-project.org")
+          install.packages(c("remotes", "covr", "xml2", "testthat"))
           remotes::install_deps(
             pkgdir       = ".",
-            dependencies = c("Depends", "Imports", "LinkingTo"),
-            repos        = "https://cloud.r-project.org"
+            dependencies = c("Depends", "Imports", "LinkingTo")
           )
-        shell: Rscript {0}
-
-      - name: Test coverage
-        run: |
-          cov <- covr::package_coverage(
-            quiet = FALSE,
-            clean = FALSE,
-            install_path = file.path(normalizePath(Sys.getenv("RUNNER_TEMP"),
-                                                   winslash = "/"), "package")
-          )
+          cov <- covr::package_coverage(quiet = FALSE, clean = FALSE)
           covr::to_cobertura(cov)
         shell: Rscript {0}
 
