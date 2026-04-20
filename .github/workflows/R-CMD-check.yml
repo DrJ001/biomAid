@@ -37,15 +37,16 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
+      # RSPM has no binaries for R-devel; setup-r@v2 falls back to restoring
+      # release-compiled binaries whose .so files use removed R internals.
+      # Delete the entire temp library so R cannot load stale binaries.
+      - name: Clear setup-r temp library on Linux
+        if: runner.os == 'Linux'
+        run: rm -rf "${RUNNER_TEMP}/Library"
+        shell: bash
+
       - name: Install dependencies and check
         run: |
-          # Rebuild any stale cached binaries in setup-r's temp library
-          # ($RUNNER_TEMP/Library is prepended to .libPaths() by setup-r@v2
-          # and may contain binaries compiled for a different R version)
-          temp_lib <- file.path(Sys.getenv("RUNNER_TEMP"), "Library")
-          if (dir.exists(temp_lib))
-            update.packages(ask = FALSE, checkBuilt = TRUE, lib.loc = temp_lib)
-
           install.packages(c("remotes", "rcmdcheck", "testthat", "devtools", "covr", "xml2"))
           remotes::install_deps(
             pkgdir       = ".",
