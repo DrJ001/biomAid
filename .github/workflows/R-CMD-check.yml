@@ -39,7 +39,13 @@ jobs:
 
       - name: Install dependencies and check
         run: |
-          update.packages(ask = FALSE, checkBuilt = TRUE)
+          # Rebuild any stale cached binaries in setup-r's temp library
+          # ($RUNNER_TEMP/Library is prepended to .libPaths() by setup-r@v2
+          # and may contain binaries compiled for a different R version)
+          temp_lib <- file.path(Sys.getenv("RUNNER_TEMP"), "Library")
+          if (dir.exists(temp_lib))
+            update.packages(ask = FALSE, checkBuilt = TRUE, lib.loc = temp_lib)
+
           install.packages(c("remotes", "rcmdcheck", "testthat", "devtools", "covr", "xml2"))
           remotes::install_deps(
             pkgdir       = ".",
