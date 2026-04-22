@@ -237,9 +237,16 @@
 
   base_col <- if (is.null(hl)) "#4E79A7" else "grey78"
 
+  # Zero reference lines only when data is centred -- when centre = FALSE,
+  # x and y are on absolute BLUE scale (~4500) so x=0 / y=0 are off-screen
+  # and would compress the visible data range.
+  ref_layers <- if (centre) list(
+    ggplot2::geom_hline(yintercept = 0, linewidth = 0.25, colour = "grey70"),
+    ggplot2::geom_vline(xintercept = 0, linewidth = 0.25, colour = "grey70")
+  ) else list()
+
   p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y)) +
-    ggplot2::geom_hline(yintercept = 0, linewidth = 0.25, colour = "grey70") +
-    ggplot2::geom_vline(xintercept = 0, linewidth = 0.25, colour = "grey70") +
+    ref_layers +
     ggplot2::geom_point(size = 1.6, alpha = 0.7, colour = base_col, ...) +
     .freg_highlight_layers(df, hl) +
     ggplot2::geom_abline(
@@ -277,11 +284,18 @@
 
   base_col <- if (is.null(hl)) "#E15759" else "grey78"
 
+  # Horizontal zero line always drawn: y = OLS residual is always centred.
+  # Vertical zero line only when x is centred; with centre = FALSE,
+  # x = absolute BLUE (~4500) so x=0 is off-screen and would squash the plot.
+  vline_layer <- if (centre)
+    ggplot2::geom_vline(xintercept = 0, linetype = "dotted",
+                        linewidth  = 0.7, colour = "grey30")
+  else list()
+
   p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y)) +
     ggplot2::geom_hline(yintercept = 0, linetype = "dotted",
                         linewidth  = 0.7, colour = "grey30") +
-    ggplot2::geom_vline(xintercept = 0, linetype = "dotted",
-                        linewidth  = 0.7, colour = "grey30") +
+    vline_layer +
     ggplot2::geom_point(size = 1.6, alpha = 0.7, colour = base_col, ...) +
     .freg_highlight_layers(df, hl) +
     ggplot2::facet_grid(pair_label ~ Group, scales = "free") +
@@ -430,10 +444,13 @@ plot_fixedRegress <- function(res,
   if (return_data) return(df)
 
   # ---- Resolve highlights ------------------------------------------------
+  # Highlights are ALWAYS derived from centred quadrant data regardless of
+  # the display 'centre' setting.  Without centring, x = absolute BLUE
+  # (~4500) is always positive so the bottom-left quadrant is empty and no
+  # blue archetypes can be selected.
   hl <- NULL
   if (identical(highlight, "default")) {
-    qdata <- if (type == "quadrant") df else
-               .freg_quadrant_data(res, treatments, centre)
+    qdata <- .freg_quadrant_data(res, treatments, centre = TRUE)
     hl    <- .freg_default_highlights(qdata)
   } else if (is.character(highlight) && length(highlight) > 0L) {
     all_genos <- unique(as.character(df$Genotype))
