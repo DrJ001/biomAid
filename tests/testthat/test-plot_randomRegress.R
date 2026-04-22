@@ -80,15 +80,15 @@ test_that("treatments with no match gives informative error", {
 
 # ---- Return types -------------------------------------------------------
 
-test_that("all four types return a ggplot object", {
+test_that("all three types return a ggplot object", {
   res <- make_mock_res()
-  for (tp in c("regress", "quadrant", "beta", "gmat"))
+  for (tp in c("regress", "quadrant", "gmat"))
     expect_s3_class(plot_randomRegress(res, type = tp), "ggplot")
 })
 
 test_that("return_data = TRUE returns a data.frame for all types", {
   res <- make_mock_res()
-  for (tp in c("regress", "quadrant", "beta", "gmat")) {
+  for (tp in c("regress", "quadrant", "gmat")) {
     df <- plot_randomRegress(res, type = tp, return_data = TRUE)
     expect_s3_class(df, "data.frame")
     expect_gt(nrow(df), 0L)
@@ -101,21 +101,14 @@ test_that("regress return_data has required columns", {
   df <- plot_randomRegress(make_mock_res(), type = "regress",
                            return_data = TRUE)
   expect_true(all(c("Site", "Variety", "x", "y",
-                    "facet_label", "beta_mean") %in% names(df)))
+                    "pair_label", "beta") %in% names(df)))
 })
 
-test_that("quadrant return_data has efficiency and responsiveness columns", {
+test_that("quadrant return_data has required columns", {
   df <- plot_randomRegress(make_mock_res(), type = "quadrant",
                            return_data = TRUE)
-  expect_true(all(c("Site", "Variety", "efficiency",
-                    "responsiveness", "facet_label") %in% names(df)))
-})
-
-test_that("beta return_data has Site, Conditioned, Conditioning, beta", {
-  df <- plot_randomRegress(make_mock_res(), type = "beta",
-                           return_data = TRUE)
-  expect_true(all(c("Site", "Conditioned", "Conditioning", "beta") %in%
-                    names(df)))
+  expect_true(all(c("Site", "Variety", "x", "y",
+                    "pair_label") %in% names(df)))
 })
 
 test_that("gmat return_data has row_var, col_var, corr", {
@@ -146,13 +139,6 @@ test_that("regress data has one row per variety x site x conditioned treatment",
   expect_equal(nrow(df), 2L * 3L * 8L)
 })
 
-test_that("beta heatmap has one row per site x conditioned treatment", {
-  res <- make_mock_res(ns = 3L)
-  df  <- plot_randomRegress(res, type = "beta", return_data = TRUE)
-  # 2 conditioned treatments x 1 conditioning treatment x 3 sites = 6
-  expect_equal(nrow(df), 2L * 1L * 3L)
-})
-
 test_that("treatments filter reduces rows in regress output", {
   res  <- make_mock_res(ns = 3L, nvar = 8L)
   df_all <- plot_randomRegress(res, type = "regress",
@@ -161,7 +147,14 @@ test_that("treatments filter reduces rows in regress output", {
                                treatments  = "T1",
                                return_data = TRUE)
   expect_lt(nrow(df_sub), nrow(df_all))
-  expect_true(all(df_sub$facet_label == "T1 | T0"))
+  expect_true(all(df_sub$pair_label == "T1 | T0"))
+})
+
+test_that("regress return_data contains beta column with finite values", {
+  df <- plot_randomRegress(make_mock_res(), type = "regress",
+                           return_data = TRUE)
+  expect_true("beta" %in% names(df))
+  expect_true(all(is.finite(df$beta)))
 })
 
 test_that("custom theme is applied without error", {

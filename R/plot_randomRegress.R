@@ -18,23 +18,20 @@
     stop("No conditioned treatments to plot. Check 'treatments'.")
 
   rows <- lapply(conditioned, function(lv_j) {
-    A_j <- cond_list[[lv_j]]
-    # For each conditioning treatment, produce one set of rows
-    # x = conditioning BLUP, y = conditioned raw BLUP
-    # We use only the first conditioning variable on the x-axis;
-    # multi-conditioning sets collapse to the first for a readable 2-D plot.
-    cond_lv <- A_j[1L]
-    beta_j  <- res$beta[[lv_j]]          # ns x |A_j| matrix
+    A_j     <- cond_list[[lv_j]]
+    cond_lv <- A_j[1L]                   # first (primary) conditioning treatment
+    beta_j  <- res$beta[[lv_j]]          # ns x |A_j| matrix, rownames = sites
+
+    # Map site-specific beta onto every blups row by Site
+    site_beta <- setNames(beta_j[, cond_lv], rownames(beta_j))
 
     data.frame(
       Site       = blups$Site,
       Variety    = blups$Variety,
       x          = blups[[cond_lv]],
       y          = blups[[lv_j]],
-      x_label    = cond_lv,
-      y_label    = lv_j,
-      facet_label = paste0(lv_j, " | ", cond_lv),
-      beta_mean  = mean(beta_j[, cond_lv], na.rm = TRUE),
+      pair_label = paste0(lv_j, " | ", cond_lv),
+      beta       = site_beta[as.character(blups$Site)],
       stringsAsFactors = FALSE
     )
   })
@@ -54,7 +51,7 @@
   if (length(conditioned) == 0L)
     stop("No conditioned treatments to plot. Check 'treatments'.")
 
-  # Identify efficiency (unconditional) treatment for the x-axis label
+  # Unconditional (efficiency) treatment — x-axis in every panel
   eff_lv <- names(Filter(is.null, cond_list))[1L]
 
   rows <- lapply(conditioned, function(lv_j) {
@@ -62,12 +59,15 @@
     if (!(resp_col %in% names(blups)))
       stop("Column '", resp_col, "' not found in res$blups.")
 
+    # pair label mirrors the regress convention for easy comparison
+    cond_lv <- cond_list[[lv_j]][1L]
+
     data.frame(
-      Site        = blups$Site,
-      Variety     = blups$Variety,
-      efficiency  = blups[[eff_lv]],
-      responsiveness = blups[[resp_col]],
-      facet_label = lv_j,
+      Site           = blups$Site,
+      Variety        = blups$Variety,
+      x              = blups[[eff_lv]],
+      y              = blups[[resp_col]],
+      pair_label     = paste0(lv_j, " | ", cond_lv),
       stringsAsFactors = FALSE
     )
   })
@@ -75,38 +75,7 @@
   do.call(rbind, rows)
 }
 
-#' @noRd
-.rreg_beta_data <- function(res, treatments) {
 
-  beta      <- res$beta
-  conditioned <- names(beta)
-
-  if (!is.null(treatments))
-    conditioned <- intersect(conditioned, treatments)
-  if (length(conditioned) == 0L)
-    stop("No conditioned treatments to plot. Check 'treatments'.")
-
-  rows <- lapply(conditioned, function(lv_j) {
-    mat <- res$beta[[lv_j]]        # ns x |A_j|
-    df  <- as.data.frame(mat)
-    df$Site     <- rownames(mat)
-    df$Conditioned <- lv_j
-    # Pivot to long: one row per site x conditioning treatment
-    cond_cols <- setdiff(names(df), c("Site", "Conditioned"))
-    do.call(rbind, lapply(cond_cols, function(cc) {
-      data.frame(
-        Site        = df$Site,
-        Conditioned = lv_j,
-        Conditioning = cc,
-        beta        = df[[cc]],
-        label       = paste0(lv_j, " | ", cc),
-        stringsAsFactors = FALSE
-      )
-    }))
-  })
-
-  do.call(rbind, rows)
-}
 
 #' @noRd
 .rreg_gmat_data <- function(res) {
@@ -148,34 +117,41 @@
 #' @noRd
 .rreg_plot_regress <- function(df, theme, ...) {
 
-  facet_levels <- unique(df$facet_label)
+  # One regression line + beta annotation per panel (pair_label x Site)
+  panel_df <- unique(df[, c("pair_label", "Site", "beta")])
+  panel_df$beta_label <- paste0("\u03b2 = ", round(panel_df$beta, 2L))
 
-  # One intercept + slope per facet (constant within facet by construction)
-  ablines <- unique(df[, c("facet_label", "beta_mean")])
-
-  p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y,
-                                         colour = Site)) +
-    ggplot2::geom_point(size = 1.8, alpha = 0.75, ...) +
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y)) +
+    ggplot2::geom_hline(yintercept = 0, linewidth = 0.25, colour = "grey70") +
+    ggplot2::geom_vline(xintercept = 0, linewidth = 0.25, colour = "grey70") +
+    ggplot2::geom_point(size = 1.6, alpha = 0.75, colour = "#4E79A7", ...) +
     ggplot2::geom_abline(
-      data     = ablines,
-      ggplot2::aes(slope = beta_mean, intercept = 0),
-      linetype = "dotted", linewidth = 0.7, colour = "grey30"
+      data     = panel_df,
+      ggplot2::aes(slope = beta, intercept = 0),
+      linetype = "dotted", linewidth = 0.7, colour = "grey20"
     ) +
-    ggplot2::geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey60") +
-    ggplot2::geom_vline(xintercept = 0, linewidth = 0.3, colour = "grey60") +
-    ggplot2::facet_wrap(~ facet_label, scales = "free") +
+    ggplot2::geom_text(
+      data         = panel_df,
+      ggplot2::aes(x = -Inf, y = Inf, label = beta_label),
+      hjust        = -0.15,
+      vjust        = 1.5,
+      size         = 3.2,
+      colour       = "grey20",
+      fontface     = "italic",
+      inherit.aes  = FALSE
+    ) +
+    ggplot2::facet_grid(pair_label ~ Site, scales = "free") +
     ggplot2::labs(
       x       = "Conditioning treatment BLUP",
       y       = "Conditioned treatment BLUP",
-      colour  = "Site",
-      caption = "Dotted line: random regression (mean beta across sites)"
+      caption = "Dotted line: site-specific random regression"
     ) +
     theme +
     ggplot2::theme(
       strip.background = ggplot2::element_rect(fill = "grey92",
                                                colour = "grey70"),
       strip.text       = ggplot2::element_text(face = "bold"),
-      legend.position  = "right"
+      panel.spacing    = ggplot2::unit(0.4, "lines")
     )
   p
 }
@@ -183,66 +159,29 @@
 #' @noRd
 .rreg_plot_quadrant <- function(df, theme, ...) {
 
-  p <- ggplot2::ggplot(df, ggplot2::aes(x = efficiency,
-                                         y = responsiveness,
-                                         colour = Site)) +
-    ggplot2::geom_point(size = 1.8, alpha = 0.75, ...) +
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y)) +
     ggplot2::geom_hline(yintercept = 0, linetype = "dotted",
                         linewidth  = 0.7, colour = "grey30") +
     ggplot2::geom_vline(xintercept = 0, linetype = "dotted",
                         linewidth  = 0.7, colour = "grey30") +
-    ggplot2::facet_wrap(~ facet_label, scales = "free") +
+    ggplot2::geom_point(size = 1.6, alpha = 0.75, colour = "#E15759", ...) +
+    ggplot2::facet_grid(pair_label ~ Site, scales = "free") +
     ggplot2::labs(
-      x      = "Efficiency (unconditional BLUP)",
-      y      = "Responsiveness (conditional BLUP)",
-      colour = "Site"
+      x       = "Efficiency (unconditional BLUP)",
+      y       = "Responsiveness (conditional BLUP)",
+      caption = "Dotted lines at zero divide each panel into four quadrants"
     ) +
     theme +
     ggplot2::theme(
       strip.background = ggplot2::element_rect(fill = "grey92",
                                                colour = "grey70"),
       strip.text       = ggplot2::element_text(face = "bold"),
-      legend.position  = "right"
+      panel.spacing    = ggplot2::unit(0.4, "lines")
     )
   p
 }
 
-#' @noRd
-.rreg_plot_beta <- function(df, theme, ...) {
 
-  # Order sites top-to-bottom as they appear in the data
-  site_levs    <- unique(df$Site)
-  df$Site      <- factor(df$Site, levels = rev(site_levs))
-  df$beta_text <- round(df$beta, 2L)
-
-  p <- ggplot2::ggplot(df, ggplot2::aes(x = Conditioning, y = Site,
-                                         fill = beta)) +
-    ggplot2::geom_tile(colour = "white", linewidth = 0.5) +
-    ggplot2::geom_text(ggplot2::aes(label = beta_text),
-                       size = 3, colour = "grey20") +
-    ggplot2::facet_wrap(~ label, scales = "free_x") +
-    ggplot2::scale_fill_gradient2(
-      low      = "#4575B4",
-      mid      = "#FFFFBF",
-      high     = "#D73027",
-      midpoint = 1,
-      name     = expression(hat(beta))
-    ) +
-    ggplot2::labs(
-      x       = "Conditioning treatment",
-      y       = "Site",
-      caption = "Midpoint = 1 (average responsiveness)"
-    ) +
-    theme +
-    ggplot2::theme(
-      strip.background  = ggplot2::element_rect(fill = "grey92",
-                                                colour = "grey70"),
-      strip.text        = ggplot2::element_text(face = "bold"),
-      panel.grid        = ggplot2::element_blank(),
-      axis.text.x       = ggplot2::element_text(angle = 45, hjust = 1)
-    )
-  p
-}
 
 #' @noRd
 .rreg_plot_gmat <- function(df, theme, ...) {
@@ -286,19 +225,16 @@
 #' @details
 #' The four `type` options are:
 #' \describe{
-#'   \item{`"regress"`}{Faceted scatter of raw conditioned-treatment BLUPs
-#'     (y) against raw conditioning-treatment BLUPs (x), one panel per
-#'     conditioned treatment.  A dotted random regression line with slope
-#'     equal to the mean site-level beta passes through the origin.  Points
-#'     are coloured by site.}
-#'   \item{`"quadrant"`}{Faceted efficiency vs responsiveness scatter, one
-#'     panel per conditioned treatment.  Dotted reference lines at zero on
-#'     both axes divide each panel into four quadrants.  Points are coloured
-#'     by site.}
-#'   \item{`"beta"`}{Heatmap of site-specific regression coefficients (beta).
-#'     Rows = sites, columns = conditioning treatments, fill = beta value with
-#'     a diverging palette centred at 1 (average responsiveness).  Tiles are
-#'     annotated with rounded beta values.}
+#'   \item{`"regress"`}{Grid of scatter plots faceted by BLUP pair (rows) and
+#'     site (columns).  Each panel plots the raw conditioned-treatment BLUPs
+#'     (y) against the conditioning-treatment BLUPs (x) for one site × one
+#'     treatment pair.  A dotted random regression line with the site-specific
+#'     beta slope passes through the origin.}
+#'   \item{`"quadrant"`}{Grid of scatter plots faceted by BLUP pair (rows) and
+#'     site (columns).  Each panel plots responsiveness BLUPs (y) against the
+#'     conditioning treatment BLUPs (x = efficiency) for one site × one
+#'     treatment pair.  Dotted zero reference lines on both axes divide each
+#'     panel into four quadrants.}
 #'   \item{`"gmat"`}{Heatmap of the G-matrix converted to a correlation
 #'     matrix via [stats::cov2cor()].  Fill uses a diverging palette centred
 #'     at zero.}
@@ -306,10 +242,12 @@
 #'
 #' @param res      A list returned by [randomRegress()].
 #' @param type     Character string selecting the plot type. One of
-#'   `"regress"` (default), `"quadrant"`, `"beta"`, or `"gmat"`.
+#'   `"regress"` (default), `"quadrant"`, or `"gmat"`.
 #' @param treatments Character vector restricting which conditioned treatments
 #'   are included in the plot.  `NULL` (default) includes all conditioned
-#'   treatments.  Ignored for `type = "gmat"`.
+#'   treatments.  Ignored for `type = "gmat"`.  When `type = "regress"` the
+#'   site-specific \eqn{\hat{\beta}} for the selected treatments is annotated
+#'   in the top-left corner of each panel.
 #' @param theme    A complete ggplot2 theme object applied to the plot.
 #'   Defaults to [ggplot2::theme_bw()].
 #' @param return_data Logical.  If `TRUE` the function returns the tidy data
@@ -335,9 +273,6 @@
 #' plot_randomRegress(res, type = "quadrant") +
 #'   ggplot2::labs(title = "Efficiency vs Responsiveness")
 #'
-#' # Beta heatmap for a subset of treatments
-#' plot_randomRegress(res, type = "beta", treatments = "N1")
-#'
 #' # G-matrix correlation heatmap
 #' plot_randomRegress(res, type = "gmat")
 #'
@@ -347,8 +282,7 @@
 #'
 #' @export
 plot_randomRegress <- function(res,
-                               type        = c("regress", "quadrant",
-                                               "beta",    "gmat"),
+                               type        = c("regress", "quadrant", "gmat"),
                                treatments  = NULL,
                                theme       = ggplot2::theme_bw(),
                                return_data = FALSE,
@@ -374,7 +308,6 @@ plot_randomRegress <- function(res,
   df <- switch(type,
     regress  = .rreg_regress_data( res, treatments),
     quadrant = .rreg_quadrant_data(res, treatments),
-    beta     = .rreg_beta_data(    res, treatments),
     gmat     = .rreg_gmat_data(    res)
   )
 
@@ -384,7 +317,6 @@ plot_randomRegress <- function(res,
   switch(type,
     regress  = .rreg_plot_regress( df, theme, ...),
     quadrant = .rreg_plot_quadrant(df, theme, ...),
-    beta     = .rreg_plot_beta(    df, theme, ...),
     gmat     = .rreg_plot_gmat(    df, theme, ...)
   )
 }

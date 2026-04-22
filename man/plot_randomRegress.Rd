@@ -6,7 +6,7 @@
 \usage{
 plot_randomRegress(
   res,
-  type = c("regress", "quadrant", "beta", "gmat"),
+  type = c("regress", "quadrant", "gmat"),
   treatments = NULL,
   theme = ggplot2::theme_bw(),
   return_data = FALSE,
@@ -17,11 +17,13 @@ plot_randomRegress(
 \item{res}{A list returned by \code{\link[=randomRegress]{randomRegress()}}.}
 
 \item{type}{Character string selecting the plot type. One of
-\code{"regress"} (default), \code{"quadrant"}, \code{"beta"}, or \code{"gmat"}.}
+\code{"regress"} (default), \code{"quadrant"}, or \code{"gmat"}.}
 
 \item{treatments}{Character vector restricting which conditioned treatments
 are included in the plot.  \code{NULL} (default) includes all conditioned
-treatments.  Ignored for \code{type = "gmat"}.}
+treatments.  Ignored for \code{type = "gmat"}.  When \code{type = "regress"} the
+site-specific \eqn{\hat{\beta}} for the selected treatments is annotated
+in the top-left corner of each panel.}
 
 \item{theme}{A complete ggplot2 theme object applied to the plot.
 Defaults to \code{\link[ggplot2:ggtheme]{ggplot2::theme_bw()}}.}
@@ -46,19 +48,16 @@ customised with the standard \code{+} operator.
 \details{
 The four \code{type} options are:
 \describe{
-\item{\code{"regress"}}{Faceted scatter of raw conditioned-treatment BLUPs
-(y) against raw conditioning-treatment BLUPs (x), one panel per
-conditioned treatment.  A dotted random regression line with slope
-equal to the mean site-level beta passes through the origin.  Points
-are coloured by site.}
-\item{\code{"quadrant"}}{Faceted efficiency vs responsiveness scatter, one
-panel per conditioned treatment.  Dotted reference lines at zero on
-both axes divide each panel into four quadrants.  Points are coloured
-by site.}
-\item{\code{"beta"}}{Heatmap of site-specific regression coefficients (beta).
-Rows = sites, columns = conditioning treatments, fill = beta value with
-a diverging palette centred at 1 (average responsiveness).  Tiles are
-annotated with rounded beta values.}
+\item{\code{"regress"}}{Grid of scatter plots faceted by BLUP pair (rows) and
+site (columns).  Each panel plots the raw conditioned-treatment BLUPs
+(y) against the conditioning-treatment BLUPs (x) for one site × one
+treatment pair.  A dotted random regression line with the site-specific
+beta slope passes through the origin.}
+\item{\code{"quadrant"}}{Grid of scatter plots faceted by BLUP pair (rows) and
+site (columns).  Each panel plots responsiveness BLUPs (y) against the
+conditioning treatment BLUPs (x = efficiency) for one site × one
+treatment pair.  Dotted zero reference lines on both axes divide each
+panel into four quadrants.}
 \item{\code{"gmat"}}{Heatmap of the G-matrix converted to a correlation
 matrix via \code{\link[stats:cor]{stats::cov2cor()}}.  Fill uses a diverging palette centred
 at zero.}
@@ -74,9 +73,6 @@ plot_randomRegress(res)
 # Quadrant plot, further customised
 plot_randomRegress(res, type = "quadrant") +
   ggplot2::labs(title = "Efficiency vs Responsiveness")
-
-# Beta heatmap for a subset of treatments
-plot_randomRegress(res, type = "beta", treatments = "N1")
 
 # G-matrix correlation heatmap
 plot_randomRegress(res, type = "gmat")
