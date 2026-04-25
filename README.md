@@ -9,6 +9,14 @@ with **ASReml-R V4** mixed models. Watch this space, there are a lot more functi
 
 ---
 
+## Vignettes
+
+| Vignette | Description |
+|----------|-------------|
+| [Wald Tests on Fixed-Effect Contrasts](vignettes/waldTest.md) | Mathematical framework and worked examples for `waldTest()` and `plot_waldTest()` |
+
+---
+
 ## Installation
 
 ```r
