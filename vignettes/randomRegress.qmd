@@ -433,13 +433,15 @@ ggplot(df_t1, aes(x = x, y = y, colour = Site)) +
 
 ## References
 
-Cullis, B.R., Smith, A.B. & Coombes, N.E. (2006). On the design of early
-generation variety trials with correlated data. *Journal of Agricultural,
-Biological, and Environmental Statistics*, **11**(4), 381–393.
+Lemerle, D., Smith, A., Verbeek, B., Koetz, E., Lockley, P. & Martin, P. (2006).
+Incremental crop tolerance to weeds: A measure for selecting competitive ability
+in Australian wheats. *Euphytica*, **149**, 85–95.
+<https://doi.org/10.1007/s10681-005-9056-5>
 
-Smith, A.B. & Cullis, B.R. (2018). Plant breeding selection tools built on
-factor analytic mixed models for multi-environment trial data. *Euphytica*,
-**214**, 143.
+McDonald G, Bovill W, Taylor J, Wheeler R. (2015) Responses to phosphorus among wheat genotypes.
+*Crop and Pasture Science*, **66**(5), 430–444. (2015). <https://doi.org/10.1071/CP14191>
 
-Mrode, R.A. (2014). *Linear Models for the Prediction of Animal Breeding
-Values*, 3rd edn. CABI, Wallingford.
+The WtmsDW Locus on Wheat Chromosome 2B Controls Major Natural Variation for
+Floret Sterility Responses to Heat Stress at Booting Stage.
+*Frontiers in Plant Science*, **12**, 635397. (2021).
+<https://doi.org/10.3389/fpls.2021.635397>
