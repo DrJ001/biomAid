@@ -37,9 +37,10 @@
 # The conversion to plotly happens lazily when the object is printed.
 
 ## Wrap a ggplot in the pc_interactive class.
+## hover_data is an optional list of per-panel metadata for hover interaction.
 #' @noRd
-.pc_make_interactive <- function(p) {
-  structure(list(plot = p), class = "pc_interactive")
+.pc_make_interactive <- function(p, hover_data = NULL) {
+  structure(list(plot = p, hover_data = hover_data), class = "pc_interactive")
 }
 
 ## Support ggplot2's + operator on pc_interactive objects.
@@ -51,14 +52,128 @@
 }
 
 ## Auto-convert to plotly on print.
+## For dotplots, injects hover-band JavaScript if hover_data is present.
 #' @export
 print.pc_interactive <- function(x, ...) {
   if (!requireNamespace("plotly", quietly = TRUE))
     stop("Package 'plotly' is required to display an interactive plot. ",
          "Install with: install.packages('plotly')")
   p_plotly <- plotly::ggplotly(x$plot, tooltip = "text")
+  if (!is.null(x$hover_data))
+    p_plotly <- .pc_add_hover_js(p_plotly, x$hover_data)
   print(p_plotly)
   invisible(x)
+}
+
+## Inject hover-band JavaScript into a plotly dotplot.
+##
+## On plotly_hover the criterion band for the active panel shifts to be
+## centred on the hovered variety's predicted value ([x - crit, x + crit])
+## and all points in that panel are recoloured: green (significantly better),
+## blue (not significant), red (significantly worse).  plotly_unhover restores
+## the original band position and colours.
+##
+## hover_data: named list, keys = plotly xaxis names ("x", "x2", ...)
+##   Each element has: crit, orig_x0, orig_x1
+#' @noRd
+.pc_add_hover_js <- function(p_plotly, hover_data) {
+
+  panels_json <- jsonlite::toJSON(hover_data, auto_unbox = TRUE)
+
+  js <- paste0("
+function(el, x) {
+
+  // Per-panel data embedded from R: criterion + original band bounds
+  var panelData = ", panels_json, ";
+
+  // ---- Initialise: read shapes and traces from the rendered plot ---------
+
+  // Map xref -> shape index (0-based) for rect shapes (the criterion band)
+  var axisShape = {};
+  var shapes = x.layout.shapes || [];
+  shapes.forEach(function(shape, idx) {
+    if (shape.type === 'rect') {
+      axisShape[shape.xref || 'x'] = idx;
+    }
+  });
+
+  // Map xaxis -> [{traceIdx, origColours}] for marker traces
+  // Skip diamond-symbol traces (the reference variety overlay).
+  var axisTraces = {};
+  var origColours = {};
+  x.data.forEach(function(trace, idx) {
+    if (trace.type !== 'scatter') return;
+    var sym = trace.marker ? trace.marker.symbol : null;
+    if (sym === 'diamond' || sym === 18) return;   // skip reference diamond
+    var xax = trace.xaxis || 'x';
+    if (!axisTraces[xax]) axisTraces[xax] = [];
+    axisTraces[xax].push(idx);
+    // Save original colours (array or single string)
+    origColours[idx] = (trace.marker && trace.marker.color)
+                         ? trace.marker.color
+                         : '#4E79A7';
+  });
+
+  // ---- Hover handler ----------------------------------------------------
+  el.on('plotly_hover', function(eventData) {
+    if (!eventData.points || !eventData.points.length) return;
+    var pt      = eventData.points[0];
+    var traceEl = el._fullData[pt.curveNumber];
+    var xax     = traceEl.xaxis || 'x';
+    var panel   = panelData[xax];
+    if (!panel) return;
+
+    var hX   = pt.x;
+    var crit = panel.crit;
+
+    // --- Move the band ---
+    var si = axisShape[xax];
+    if (si !== undefined) {
+      var shapeUpdate = {};
+      shapeUpdate['shapes[' + si + '].x0'] = hX - crit;
+      shapeUpdate['shapes[' + si + '].x1'] = hX + crit;
+      Plotly.relayout(el, shapeUpdate);
+    }
+
+    // --- Recolour points -------------------------------------------------
+    // Build a colour array for every point in every marker trace of
+    // this panel by reading pred values from el._fullData.
+    var traces = axisTraces[xax] || [];
+    traces.forEach(function(ti) {
+      var td = el._fullData[ti];
+      if (!td || !td.x) return;
+      var newCols = td.x.map(function(pv) {
+        if (pv > hX + crit) return '#59A14F';   // sig. better  (green)
+        if (pv < hX - crit) return '#E15759';   // sig. worse   (red)
+        return '#4E79A7';                         // not sig.     (blue)
+      });
+      Plotly.restyle(el, {'marker.color': [newCols]}, [ti]);
+    });
+  });
+
+  // ---- Unhover handler: restore original state --------------------------
+  el.on('plotly_unhover', function() {
+    // Restore band bounds for every panel
+    Object.keys(axisShape).forEach(function(xax) {
+      var panel = panelData[xax];
+      if (!panel) return;
+      var si = axisShape[xax];
+      var shapeUpdate = {};
+      shapeUpdate['shapes[' + si + '].x0'] = panel.orig_x0;
+      shapeUpdate['shapes[' + si + '].x1'] = panel.orig_x1;
+      Plotly.relayout(el, shapeUpdate);
+    });
+    // Restore original colours for every trace
+    Object.keys(origColours).forEach(function(ti) {
+      var col = origColours[ti];
+      Plotly.restyle(el, {'marker.color': [Array.isArray(col) ? col : col]},
+                     [parseInt(ti)]);
+    });
+  });
+}
+")
+
+  htmlwidgets::onRender(p_plotly, js)
 }
 
 
@@ -799,8 +914,29 @@ plot_compare <- function(res,
   # ---- Optionally wrap for lazy plotly conversion -------------------------
   # Return a pc_interactive wrapper so the user can still use + to add
   # ggplot2 layers before the plotly conversion happens at print() time.
-  if (interactive)
-    return(.pc_make_interactive(p))
+  if (interactive) {
+    # For dotplots, build per-panel hover metadata so the JavaScript can
+    # move the criterion band and recolour points on hover.
+    hover_data <- if (type == "dotplot") {
+      grps <- unique(df$Group)
+      pdata <- lapply(seq_along(grps), function(gi) {
+        g   <- grps[gi]
+        sub <- df[df$Group == g, ]
+        list(
+          crit    = as.numeric(unique(sub$crit)[1L]),
+          orig_x0 = as.numeric(unique(sub$band_lo)[1L]),
+          orig_x1 = as.numeric(unique(sub$band_hi)[1L])
+        )
+      })
+      # Plotly names axes "x", "x2", "x3", ...
+      xax_names <- ifelse(seq_along(grps) == 1L, "x",
+                          paste0("x", seq_along(grps)))
+      stats::setNames(pdata, xax_names)
+    } else {
+      NULL
+    }
+    return(.pc_make_interactive(p, hover_data))
+  }
 
   p
 }
