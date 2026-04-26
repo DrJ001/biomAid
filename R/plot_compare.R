@@ -17,6 +17,12 @@
 #     treated as a single facet variable.
 #   - All plot types support return_data = TRUE for bespoke ggplot2
 #     customisation.
+#   - reference (dotplot only): name of a variety to anchor the
+#     criterion band. NULL = top-ranked (default). When set, the band
+#     spans [ref - crit, ref + crit] and points are coloured three ways:
+#     green (significantly better), blue (not sig.), red (worse).
+#   - interactive: when TRUE, converts the ggplot to a plotly object
+#     via ggplotly() with hover tooltips. Requires the plotly package.
 # ============================================================
 
 
@@ -152,24 +158,89 @@
 }
 
 ## Build the tidy data frame for the dotplot type.
+##
+## When reference = NULL (default) the band is anchored to the top-ranked
+## variety in each group (one-sided: band = [top - crit, top]).
+## sig is a two-level logical (FALSE = not sig from best, TRUE = sig).
+##
+## When reference is a variety name the band is centred on that variety
+## (two-sided: band = [ref - crit, ref + crit]).
+## sig becomes a three-level character: "better" / "ns" / "worse".
+## If reference is not found in a group a warning is issued and the
+## group falls back to top-ranked behaviour.
 #' @noRd
-.pc_dotplot_data <- function(res, crit_col, comp_col, by_cols) {
+.pc_dotplot_data <- function(res, crit_col, comp_col, by_cols,
+                              reference = NULL) {
 
-  res$Group    <- .pc_group_label(res, by_cols)
-  res$Variety  <- as.character(res[[comp_col]])
-  res$pred     <- res$predicted.value
-  res$crit     <- res[[crit_col]]
+  res$Group   <- .pc_group_label(res, by_cols)
+  res$Variety <- as.character(res[[comp_col]])
+  res$pred    <- res$predicted.value
+  res$crit    <- res[[crit_col]]
 
   # Within each group rank by predicted value (1 = highest)
   res$rank <- ave(res$pred, res$Group,
                   FUN = function(x) rank(-x, ties.method = "first"))
 
-  # Top-ranked predicted value per group (for the criterion band)
-  top_pred <- tapply(res$pred, res$Group, max, na.rm = TRUE)
-  res$top_pred <- as.numeric(top_pred[res$Group])
+  grps <- unique(res$Group)
 
-  # Significant vs not relative to the top-ranked variety
-  res$sig <- abs(res$pred - res$top_pred) > res$crit
+  # Initialise output columns
+  res$ref_pred <- NA_real_
+  res$band_lo  <- NA_real_
+  res$band_hi  <- NA_real_
+  res$sig      <- NA_character_
+
+  for (g in grps) {
+    idx <- res$Group == g
+    sub <- res[idx, ]
+    cr  <- unique(sub$crit)
+
+    if (!is.null(reference)) {
+      ref_idx <- match(reference, sub$Variety)
+      if (is.na(ref_idx)) {
+        warning("Reference '", reference, "' not found in group '", g,
+                "'. Falling back to top-ranked variety.", call. = FALSE)
+        use_ref <- FALSE
+      } else {
+        use_ref <- TRUE
+      }
+    } else {
+      use_ref <- FALSE
+    }
+
+    if (use_ref) {
+      ref_pred <- sub$pred[ref_idx]
+      lo       <- ref_pred - cr
+      hi       <- ref_pred + cr
+      sig_vec  <- ifelse(sub$pred > hi, "better",
+                  ifelse(sub$pred < lo, "worse", "ns"))
+    } else {
+      # Default: anchor to the best
+      ref_pred <- max(sub$pred, na.rm = TRUE)
+      lo       <- ref_pred - cr
+      hi       <- ref_pred          # one-sided
+      sig_vec  <- ifelse(abs(sub$pred - ref_pred) > cr, "sig", "ns")
+    }
+
+    res$ref_pred[idx] <- ref_pred
+    res$band_lo[idx]  <- lo
+    res$band_hi[idx]  <- hi
+    res$sig[idx]      <- sig_vec
+  }
+
+  # Backwards-compatible logical 'sig' flag used by letters/tests
+  # (TRUE = any kind of significant departure from reference)
+  res$sig_any <- res$sig %in% c("sig", "better", "worse")
+
+  # Pre-compute a per-group numeric y-position (1 = lowest pred, n = highest).
+  # Using a continuous numeric y-axis (with custom labels) instead of a
+  # discrete factor axis means geom_rect works with finite ymin/ymax on a
+  # continuous scale — critical for plotly compatibility.
+  res$y_pos <- ave(res$pred, res$Group,
+                   FUN = function(x) rank(x, ties.method = "first"))
+
+  # n per group, needed for geom_rect y bounds
+  res$n_group <- as.numeric(ave(seq_len(nrow(res)), res$Group,
+                                FUN = length))
 
   res[order(res$Group, res$rank), ]
 }
@@ -178,7 +249,7 @@
 #' @noRd
 .pc_letters_data <- function(res, crit_col, comp_col, by_cols) {
 
-  base <- .pc_dotplot_data(res, crit_col, comp_col, by_cols)
+  base <- .pc_dotplot_data(res, crit_col, comp_col, by_cols, reference = NULL)
 
   # Compute CLD per group
   grps <- unique(base$Group)
@@ -236,49 +307,123 @@
 # ---- Plot builders ---------------------------------------------------------
 
 #' @noRd
-.pc_plot_dotplot <- function(df, crit_col, n_groups, theme, ...) {
+.pc_plot_dotplot <- function(df, crit_col, reference, n_groups, theme, ...) {
 
-  base_col <- "#4E79A7"
-  sig_col  <- "#E15759"
+  using_ref   <- !is.null(reference)
+  has_3levels <- using_ref && any(df$sig == "better", na.rm = TRUE) ||
+                              any(df$sig == "worse",  na.rm = TRUE)
 
-  # Shaded criterion band around the top-ranked variety per group
-  band_df <- unique(df[, c("Group", "top_pred", "crit")])
-  band_df$ymin <- band_df$top_pred - band_df$crit
-  band_df$ymax <- band_df$top_pred
+  # Band data frame — uses pre-computed band_lo / band_hi.
+  # ymin/ymax are finite values that span the full panel on a discrete y-axis
+  # (positions run from 0.5 to n+0.5).  This avoids passing -Inf/Inf to
+  # plotly, which cannot do arithmetic on infinite values.
+  band_df        <- unique(df[, c("Group", "ref_pred", "band_lo",
+                                  "band_hi", "n_group")])
+  band_df$y_lo   <- 0.5
+  band_df$y_hi   <- band_df$n_group + 0.5
+
+  # Colour scheme and legend labels
+  if (using_ref) {
+    col_vals   <- c(better = "#59A14F", ns = "#4E79A7", worse = "#E15759")
+    col_labels <- c(better = paste0("Sig. better than ", reference,
+                                    " (", crit_col, ")"),
+                    ns     = paste0("Not sig. from ", reference),
+                    worse  = paste0("Sig. worse than ", reference,
+                                    " (", crit_col, ")"))
+    caption <- paste0("Shaded band: \u00b1", crit_col,
+                      " criterion around reference variety (", reference, ").")
+  } else {
+    col_vals   <- c(ns = "#4E79A7", sig = "#E15759")
+    col_labels <- c(ns  = paste0("Not sig. from best (", crit_col, ")"),
+                    sig = paste0("Sig. from best (", crit_col, ")"))
+    caption <- paste0("Shaded band: ", crit_col,
+                      " criterion below the top-ranked variety. ",
+                      "Red points fall outside the band.")
+  }
+
+  # Tooltip text for plotly
+  df$tooltip_text <- paste0(
+    "<b>", df$Variety, "</b>",
+    "<br>Predicted: ", round(df$pred, 2L),
+    "<br>Group: ",     df$Group,
+    "<br>",            ifelse(df$sig == "ns", "Not significant",
+                       ifelse(df$sig == "sig", paste0("Sig. from best (", crit_col, ")"),
+                       paste0("Sig. ", df$sig, " (", crit_col, ")")))
+  )
+
+  # y-axis label lookup: numeric position -> variety name, per group
+  # We build a list: group -> named vector (pos -> name)
+  grp_labels <- lapply(unique(df$Group), function(g) {
+    sub <- df[df$Group == g, ]
+    stats::setNames(sub$Variety, sub$y_pos)
+  })
+  names(grp_labels) <- unique(df$Group)
+
+  # For a single group, set up the label function for scale_y_continuous
+  # (for multi-group free-scale facets each panel gets its own labels
+  # automatically since y_pos 1..n is consistent within each group)
+  all_y   <- sort(unique(df$y_pos))
+  all_lbl <- grp_labels[[1L]][as.character(all_y)]  # use group 1 as template
+  # for multi-group the varieties differ per panel — use position-based labels
+  # that work across all groups (same position = same rank within group)
+  label_fn <- if (n_groups == 1L) {
+    function(breaks) {
+      lbl <- grp_labels[[1L]][as.character(breaks)]
+      ifelse(is.na(lbl), "", lbl)
+    }
+  } else {
+    # With facet free-scales each panel has its own range; ggplot2 calls the
+    # label function per panel with the panel's break values.  Since y_pos
+    # maps 1..n within each group the same label function applies globally.
+    function(breaks) {
+      # Look up across all groups combined
+      combined <- unlist(grp_labels)
+      lbl <- combined[as.character(breaks)]
+      # If duplicated (same pos in different groups) just take first
+      ifelse(is.na(lbl), "", lbl)
+    }
+  }
 
   p <- ggplot2::ggplot(df,
-         ggplot2::aes(x = pred, y = stats::reorder(Variety, pred))) +
+         ggplot2::aes(x = pred, y = y_pos)) +
+    # Criterion band on continuous y-axis — fully plotly-compatible
     ggplot2::geom_rect(
       data        = band_df,
-      ggplot2::aes(xmin = ymin, xmax = ymax,
-                   ymin = -Inf, ymax = Inf),
+      ggplot2::aes(xmin = band_lo, xmax = band_hi,
+                   ymin = y_lo,   ymax = y_hi),
       fill        = "#FFEFC0",
       alpha       = 0.6,
       inherit.aes = FALSE
     ) +
+    # Reference line
     ggplot2::geom_vline(
-      data     = band_df,
-      ggplot2::aes(xintercept = top_pred),
-      linetype = "dashed",
+      data      = band_df,
+      ggplot2::aes(xintercept = ref_pred),
+      linetype  = "dashed",
       linewidth = 0.45,
-      colour   = "grey40"
+      colour    = "grey40"
     ) +
+    # All points — reference variety included so it stays at its correct
+    # y_pos; the diamond overlay drawn below visually replaces the dot
     ggplot2::geom_point(
-      ggplot2::aes(colour = sig),
-      size = 2.4, ...
+      ggplot2::aes(colour = sig, text = tooltip_text),
+      size = 2.4,
+      ...
     ) +
     ggplot2::scale_colour_manual(
-      values = c("FALSE" = base_col, "TRUE" = sig_col),
-      labels = c("FALSE" = paste0("Not sig. from best (", crit_col, ")"),
-                 "TRUE"  = paste0("Sig. from best (", crit_col, ")")),
+      values = col_vals,
+      labels = col_labels,
       name   = NULL
+    ) +
+    ggplot2::scale_y_continuous(
+      breaks = all_y,
+      labels = label_fn,
+      expand = ggplot2::expansion(add = 0.6)
     ) +
     ggplot2::labs(
       x       = "Predicted value",
       y       = NULL,
-      caption = paste0("Shaded band: ", crit_col,
-                       " criterion below the top-ranked variety. ",
-                       "Red points fall outside the band.")
+      caption = caption
     ) +
     theme +
     ggplot2::theme(
@@ -290,6 +435,27 @@
       axis.text.y      = ggplot2::element_text(size = 7)
     )
 
+  # Reference variety: diamond overlay at its correct y_pos
+  if (using_ref) {
+    ref_rows <- df[df$Variety == reference, ]
+    if (nrow(ref_rows) > 0L) {
+      ref_rows$tooltip_text <- paste0(
+        "<b>", ref_rows$Variety, "</b> (reference)",
+        "<br>Predicted: ", round(ref_rows$pred, 2L),
+        "<br>Group: ", ref_rows$Group
+      )
+      p <- p +
+        ggplot2::geom_point(
+          data        = ref_rows,
+          ggplot2::aes(x = pred, y = y_pos, text = tooltip_text),
+          shape       = 18L,
+          size        = 4.5,
+          colour      = "grey20",
+          inherit.aes = FALSE
+        )
+    }
+  }
+
   if (n_groups > 1L)
     p <- p + ggplot2::facet_wrap(~ Group, scales = "free")
 
@@ -299,22 +465,50 @@
 #' @noRd
 .pc_plot_letters <- function(df, crit_col, n_groups, theme, ...) {
 
+  df$tooltip_text <- paste0(
+    "<b>", df$Variety, "</b>",
+    "<br>Predicted: ", round(df$pred, 2L),
+    "<br>Letter(s): ", df$letter,
+    "<br>Group: ",     df$Group
+  )
+
+  # Build per-group y-axis label lookup (same approach as dotplot)
+  grp_labels_l <- lapply(unique(df$Group), function(g) {
+    sub <- df[df$Group == g, ]
+    stats::setNames(sub$Variety, sub$y_pos)
+  })
+  names(grp_labels_l) <- unique(df$Group)
+  all_y_l   <- sort(unique(df$y_pos))
+  label_fn_l <- function(breaks) {
+    combined <- unlist(grp_labels_l)
+    lbl <- combined[as.character(breaks)]
+    ifelse(is.na(lbl), "", lbl)
+  }
+
   p <- ggplot2::ggplot(df,
-         ggplot2::aes(x = pred, y = stats::reorder(Variety, pred))) +
+         ggplot2::aes(x = pred, y = y_pos)) +
     ggplot2::geom_vline(
-      data      = unique(df[, c("Group", "top_pred")]),
-      ggplot2::aes(xintercept = top_pred),
+      data      = unique(df[, c("Group", "ref_pred")]),
+      ggplot2::aes(xintercept = ref_pred),
       linetype  = "dashed",
       linewidth = 0.45,
       colour    = "grey60"
     ) +
-    ggplot2::geom_point(colour = "#4E79A7", size = 2.4, ...) +
+    ggplot2::geom_point(
+      ggplot2::aes(text = tooltip_text),
+      colour = "#4E79A7", size = 2.4, ...
+    ) +
     ggplot2::geom_text(
       ggplot2::aes(label = letter),
-      hjust  = -0.5,
-      size   = 3.0,
-      colour = "grey20",
+      hjust    = -0.5,
+      size     = 3.0,
+      colour   = "grey20",
       fontface = "bold"
+    ) +
+    ggplot2::scale_y_continuous(
+      breaks = all_y_l,
+      labels = label_fn_l,
+      expand = ggplot2::expansion(add = 0.6)
     ) +
     ggplot2::labs(
       x       = "Predicted value",
@@ -341,8 +535,16 @@
 #' @noRd
 .pc_plot_heatmap <- function(df, crit_col, n_groups, theme, ...) {
 
+  df$tooltip_text <- paste0(
+    "<b>", df$Var_x, " vs ", df$Var_y, "</b>",
+    "<br>|Difference|: ", round(df$diff, 2L),
+    "<br>Significant: ", ifelse(df$sig, "Yes", "No"),
+    "<br>Group: ", df$Group
+  )
+
   p <- ggplot2::ggplot(df,
-         ggplot2::aes(x = Var_x, y = Var_y, fill = diff)) +
+         ggplot2::aes(x = Var_x, y = Var_y, fill = diff,
+                      text = tooltip_text)) +
     ggplot2::geom_tile(colour = "white", linewidth = 0.25) +
     ggplot2::geom_point(
       data        = df[df$sig, ],
@@ -423,6 +625,20 @@
 #' @param res         A data frame returned by [compare()].
 #' @param type        Character string selecting the plot type. One of
 #'   `"dotplot"` (default), `"letters"`, or `"heatmap"`.
+#' @param reference   Character string or `NULL`. Applies to `type =
+#'   "dotplot"` only. When `NULL` (default), the criterion band is anchored
+#'   to the top-ranked variety in each group (one-sided band; points outside
+#'   the band are red). When set to a variety name, the band is centred on
+#'   that variety (`[ref \eqn{-} crit,\; ref + crit]`), the reference variety
+#'   is shown as a diamond, and points are coloured green (significantly
+#'   better), blue (not significant), or red (significantly worse). If the
+#'   reference variety is not found in a particular group a warning is issued
+#'   and that group falls back to top-ranked behaviour. Ignored with a warning
+#'   for `type = "letters"` or `"heatmap"`.
+#' @param interactive Logical. If `TRUE`, converts the finished ggplot to an
+#'   interactive [plotly::ggplotly()] object with hover tooltips showing the
+#'   variety name, predicted value, group, and significance status. Requires
+#'   the \pkg{plotly} package. Default `FALSE`.
 #' @param theme       A complete ggplot2 theme object.
 #'   Default [ggplot2::theme_bw()].
 #' @param return_data Logical. If `TRUE` returns the tidy data frame used to
@@ -430,8 +646,8 @@
 #' @param ...         Additional arguments passed to the background
 #'   `geom_point()` call (e.g. `size`, `alpha`).
 #'
-#' @return A `ggplot` object (when `return_data = FALSE`) or a `data.frame`
-#'   (when `return_data = TRUE`).
+#' @return A `ggplot` object, a `plotly` object (when `interactive = TRUE`),
+#'   or a `data.frame` (when `return_data = TRUE`).
 #'
 #' @seealso [compare()], [ggplot2::ggplot()]
 #'
@@ -442,14 +658,20 @@
 #'                by   = "Site",
 #'                type = "HSD")
 #'
-#' # Sorted dot plot with criterion band
+#' # Sorted dot plot with criterion band anchored to best variety
 #' plot_compare(res)
+#'
+#' # Anchor band to a specific check variety
+#' plot_compare(res, reference = "Scout")
+#'
+#' # Interactive plotly version with hover tooltips
+#' plot_compare(res, interactive = TRUE)
 #'
 #' # Compact letter display
 #' plot_compare(res, type = "letters")
 #'
-#' # Pairwise significance heatmap
-#' plot_compare(res, type = "heatmap")
+#' # Interactive heatmap
+#' plot_compare(res, type = "heatmap", interactive = TRUE)
 #'
 #' # Retrieve the tidy data frame
 #' df <- plot_compare(res, return_data = TRUE)
@@ -462,6 +684,8 @@
 #' @export
 plot_compare <- function(res,
                          type        = c("dotplot", "letters", "heatmap"),
+                         reference   = NULL,
+                         interactive = FALSE,
                          theme       = ggplot2::theme_bw(),
                          return_data = FALSE,
                          ...) {
@@ -473,11 +697,27 @@ plot_compare <- function(res,
     stop("'res' must be a data frame returned by compare().")
 
   required <- c("predicted.value", "std.error", "avsed")
-  missing  <- setdiff(required, names(res))
-  if (length(missing))
+  missing_cols <- setdiff(required, names(res))
+  if (length(missing_cols))
     stop("'res' is missing expected column(s): ",
-         paste(missing, collapse = ", "),
+         paste(missing_cols, collapse = ", "),
          ". Was it produced by compare()?")
+
+  if (!is.null(reference)) {
+    if (!is.character(reference) || length(reference) != 1L)
+      stop("'reference' must be a single character string or NULL.")
+    if (type != "dotplot") {
+      warning("'reference' is only used for type = \"dotplot\". Ignoring.",
+              call. = FALSE)
+      reference <- NULL
+    }
+  }
+
+  if (!is.logical(interactive) || length(interactive) != 1L)
+    stop("'interactive' must be a single logical value.")
+  if (interactive && !requireNamespace("plotly", quietly = TRUE))
+    stop("Package 'plotly' is required for interactive = TRUE. ",
+         "Install with: install.packages('plotly')")
 
   if (!inherits(theme, "theme"))
     stop("'theme' must be a ggplot2 theme object, e.g. ggplot2::theme_bw().")
@@ -486,15 +726,15 @@ plot_compare <- function(res,
     stop("'return_data' must be a single logical value.")
 
   # ---- Detect structure ---------------------------------------------------
-  crit_col          <- .pc_crit_col(res)
-  cols              <- .pc_detect_cols(res, crit_col)
-  by_cols           <- cols$by_cols
-  comp_col          <- cols$comp_col
-  n_groups          <- length(unique(.pc_group_label(res, by_cols)))
+  crit_col <- .pc_crit_col(res)
+  cols     <- .pc_detect_cols(res, crit_col)
+  by_cols  <- cols$by_cols
+  comp_col <- cols$comp_col
+  n_groups <- length(unique(.pc_group_label(res, by_cols)))
 
   # ---- Build tidy data ----------------------------------------------------
   df <- switch(type,
-    dotplot = .pc_dotplot_data(res, crit_col, comp_col, by_cols),
+    dotplot = .pc_dotplot_data(res, crit_col, comp_col, by_cols, reference),
     letters = .pc_letters_data(res, crit_col, comp_col, by_cols),
     heatmap = .pc_heatmap_data(res, crit_col, comp_col, by_cols)
   )
@@ -502,9 +742,19 @@ plot_compare <- function(res,
   if (return_data) return(df)
 
   # ---- Build plot ---------------------------------------------------------
-  switch(type,
-    dotplot = .pc_plot_dotplot(df, crit_col, n_groups, theme, ...),
+  # Suppress "Ignoring unknown aesthetics: text" — the text aes is only
+  # consumed by plotly::ggplotly(); ggplot2 silently drops it when
+  # interactive = FALSE.  We suppress the warning to keep the static
+  # rendering clean.
+  p <- suppressWarnings(switch(type,
+    dotplot = .pc_plot_dotplot(df, crit_col, reference, n_groups, theme, ...),
     letters = .pc_plot_letters(df, crit_col, n_groups, theme, ...),
     heatmap = .pc_plot_heatmap(df, crit_col, n_groups, theme, ...)
-  )
+  ))
+
+  # ---- Optionally convert to plotly ---------------------------------------
+  if (interactive)
+    return(plotly::ggplotly(p, tooltip = "text"))
+
+  p
 }
