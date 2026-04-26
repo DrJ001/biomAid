@@ -183,18 +183,22 @@ group to `p.adjust()`. The key options are:
 
 We use `simTrialData()` to generate a balanced multi-environment trial with
 20 varieties, 4 sites, and 4 nitrogen treatments (Control, LowN, MidN, HighN).
-An ASReml-R V4 mixed model is then fitted with treatment and site as fixed
-effects, and variety plus spatial terms as random effects.
+The treatment effects are deliberately set to span a range — a small step from
+Control to LowN, a moderate step to MidN, and a large step to HighN — so that
+the resulting contrasts include a mix of non-significant, borderline, and clearly
+significant comparisons. A `Treatment * Site` fixed model allows treatment
+effects to vary across sites, which is reflected in the by-group testing section.
 
 ```{r simulate_simple}
 #| cache: true
 out <- simTrialData(
-  nvar       = 20L,
-  nsite      = 4L,
-  treatments = c("Control", "LowN", "MidN", "HighN"),
-  nrep       = 3L,
-  seed       = 42L,
-  verbose    = FALSE
+  nvar          = 20L,
+  nsite         = 4L,
+  treatments    = c("Control", "LowN", "MidN", "HighN"),
+  treat_effects = c(0, 50, 120, 250),
+  nrep          = 3L,
+  seed          = 42L,
+  verbose       = FALSE
 )
 dat            <- out$data
 treatments     <- c("Control", "LowN", "MidN", "HighN")
@@ -207,7 +211,7 @@ dat$Column     <- factor(dat$Column)
 #| results: hide
 asreml.options(trace = FALSE)
 model <- asreml(
-  yield    ~ Treatment + Site,
+  yield    ~ Treatment * Site,
   random   = ~ Variety + at(Site):Rep,
   residual = ~ dsum(~ ar1(Row):ar1(Column) | Site),
   data     = dat,
