@@ -42,44 +42,46 @@
 ##
 ## Strategy:
 ##   - Remove known non-factor bookkeeping columns.
-##   - For each remaining factor column, check whether its values are
-##     constant within each unique criterion value.  Columns that ARE
-##     constant are "by" (group) columns; the one that is NOT is the
-##     comparison variable.
-##   - Works for zero, one, or multiple by-columns.
+##   - Count unique values per candidate column across the whole dataset.
+##   - The comparison variable is the column with the most unique values
+##     (typically varieties: 20–200 unique levels).
+##   - All other columns with fewer unique values are treated as by-columns
+##     (typically sites/treatments: 2–20 unique levels).
+##
+##   This cardinality approach is robust when the criterion value happens
+##   to be identical across multiple groups — the criterion-based grouping
+##   used previously would then fail to distinguish group vs comparison columns.
 #' @noRd
 .pc_detect_cols <- function(res, crit_col) {
 
-  skip <- c("predicted.value", "std.error", "avsed", crit_col)
+  skip       <- c("predicted.value", "std.error", "avsed", crit_col)
   candidates <- setdiff(names(res), skip)
 
-  # Split rows by unique criterion value to identify groups
-  grp_id <- as.character(res[[crit_col]])
+  if (length(candidates) == 0L)
+    stop("No factor columns found in 'res' to use as the comparison variable.")
 
-  by_cols   <- character(0L)
-  comp_cols <- character(0L)
+  # Count unique values for each candidate column
+  n_unique <- vapply(candidates,
+                     function(col) length(unique(as.character(res[[col]]))),
+                     integer(1L))
 
-  for (col in candidates) {
-    vals_per_grp <- tapply(as.character(res[[col]]), grp_id,
-                           function(x) length(unique(x)))
-    if (all(vals_per_grp == 1L))
-      by_cols <- c(by_cols, col)
-    else
-      comp_cols <- c(comp_cols, col)
+  max_u    <- max(n_unique)
+  comp_col <- candidates[n_unique == max_u]
+
+  # If there is a tie for highest cardinality, warn and use the first
+  if (length(comp_col) > 1L) {
+    warning("Multiple columns share the highest cardinality (",
+            max_u, " unique values): ",
+            paste(comp_col, collapse = ", "),
+            ". Using '", comp_col[1L], "' as the comparison variable.",
+            call. = FALSE)
+    comp_col <- comp_col[1L]
   }
 
-  # comp_cols should be exactly one column; warn if ambiguous
-  if (length(comp_cols) == 0L)
-    stop("Could not identify the comparison variable in 'res'. ",
-         "All factor columns are constant within groups.")
-  if (length(comp_cols) > 1L)
-    warning("Multiple candidate comparison columns found: ",
-            paste(comp_cols, collapse = ", "),
-            ". Using '", comp_cols[1L], "'.",
-            call. = FALSE)
+  by_cols <- candidates[n_unique < max_u]
 
   list(by_cols  = by_cols,
-       comp_col = comp_cols[1L])
+       comp_col = comp_col)
 }
 
 ## Build a composite group label column ("All" when no by-columns).
@@ -294,9 +296,12 @@
     pairs$Group  <- g
     pairs$crit   <- cr
 
-    # Factor levels in descending predicted value order
-    pairs$Var_x  <- factor(pairs$Var_x, levels = vars)
-    pairs$Var_y  <- factor(pairs$Var_y, levels = rev(vars))
+    # Factor levels in descending predicted value order.
+    # unique() guards against duplicated levels if variety names were
+    # non-unique within a group (which should not happen but is defensive).
+    vars_u <- unique(vars)
+    pairs$Var_x  <- factor(pairs$Var_x, levels = vars_u)
+    pairs$Var_y  <- factor(pairs$Var_y, levels = rev(vars_u))
     pairs
   })
 
