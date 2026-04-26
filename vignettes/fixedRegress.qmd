@@ -232,6 +232,7 @@ regressions are performed within each site:
 
 ```{r run_fr_baseline}
 #| cache: true
+#| dependson: fit_model
 res_base <- fixedRegress(
   model,
   term = "Treatment:Site:Variety",
