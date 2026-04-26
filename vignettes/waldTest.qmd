@@ -28,6 +28,7 @@ execute:
 #| include: false
 library(biomAid)
 library(ggplot2)
+library(asreml)
 ```
 
 ---
@@ -178,39 +179,58 @@ group to `p.adjust()`. The key options are:
 
 ## Setup
 
-### Simulated data — four nitrogen treatments
+### Simulated data and model
 
-We simulate a prediction object for four nitrogen treatments with a known
-increasing yield response. This mirrors the structure returned by
-`predict(model, classify = "Treatment", vcov = TRUE)` from ASReml-R V4.
+We use `simTrialData()` to generate a balanced multi-environment trial with
+20 varieties, 4 sites, and 4 nitrogen treatments (Control, LowN, MidN, HighN).
+An ASReml-R V4 mixed model is then fitted with treatment and site as fixed
+effects, and variety plus spatial terms as random effects.
 
 ```{r simulate_simple}
-set.seed(42L)
-
-treatments <- c("Control", "LowN", "MidN", "HighN")
-n          <- length(treatments)
-mu         <- c(45, 52, 61, 67)   # known increasing trend
-
-# Predicted values data frame
-pv <- data.frame(
-  Treatment       = factor(treatments, levels = treatments),
-  predicted.value = mu + stats::rnorm(n, 0, 2),
-  std.error       = stats::runif(n, 1.5, 3.5),
-  status          = factor(rep("Estimable", n)),
-  stringsAsFactors = FALSE
+#| cache: true
+out <- simTrialData(
+  nvar       = 20L,
+  nsite      = 4L,
+  treatments = c("Control", "LowN", "MidN", "HighN"),
+  nrep       = 3L,
+  seed       = 42L,
+  verbose    = FALSE
 )
-
-# Prediction error variance–covariance matrix
-A    <- matrix(stats::rnorm(n^2, 0, 0.4), n, n)
-vcov <- crossprod(A) + diag(c(4, 5, 5, 6))
-
-pred <- list(pvals = pv, vcov = vcov)
+dat            <- out$data
+treatments     <- c("Control", "LowN", "MidN", "HighN")
+dat$Row        <- factor(dat$Row)
+dat$Column     <- factor(dat$Column)
 ```
 
-The predicted values and their standard errors:
+```{r fit_model}
+#| cache: true
+#| results: hide
+asreml.options(trace = FALSE)
+model <- asreml(
+  yield    ~ Treatment + Site,
+  random   = ~ Variety + at(Site):Rep,
+  residual = ~ dsum(~ ar1(Row):ar1(Column) | Site),
+  data     = dat,
+  maxit    = 30L
+)
+model <- update(model)
+```
 
-```{r show_pv}
-pv[, c("Treatment", "predicted.value", "std.error")]
+Treatment BLUEs are obtained by predicting the `Treatment` term with a full
+prediction error variance–covariance matrix:
+
+```{r pred_treatment}
+#| cache: true
+pred <- predict(model, classify = "Treatment", vcov = TRUE)
+pred$pvals[, c("Treatment", "predicted.value", "std.error")]
+```
+
+For the by-group examples (Example 6) we also obtain predictions for every
+Treatment × Site combination:
+
+```{r pred_treatment_site}
+#| cache: true
+pred3 <- predict(model, classify = "Treatment:Site", vcov = TRUE)
 ```
 
 ---
@@ -366,38 +386,6 @@ When predictions span multiple environments (e.g. a `Treatment:Site` classify),
 the `by` argument runs the same `cc` specification independently within each
 group. The grouping column is prepended to both output tables.
 
-```{r by_group_data}
-set.seed(123L)
-sites <- c("Site1", "Site2", "Site3")
-
-make_site_pv <- function(site, seed) {
-  set.seed(seed)
-  data.frame(
-    Treatment       = factor(treatments, levels = treatments),
-    Site            = factor(site),
-    predicted.value = mu + stats::rnorm(n, 0, 8),
-    std.error       = stats::runif(n, 1.5, 4.0),
-    status          = factor(rep("Estimable", n)),
-    stringsAsFactors = FALSE
-  )
-}
-
-all_pv <- do.call(rbind, mapply(make_site_pv, sites, c(1L, 2L, 3L),
-                                SIMPLIFY = FALSE))
-n_tot  <- nrow(all_pv)
-
-# Block-diagonal vcov — sites are independent
-vcov3 <- matrix(0, n_tot, n_tot)
-for (i in seq_along(sites)) {
-  idx <- ((i - 1L) * n + 1L):(i * n)
-  set.seed(i * 10L)
-  Ai  <- matrix(stats::rnorm(n^2, 0, 0.4), n, n)
-  vcov3[idx, idx] <- crossprod(Ai) + diag(stats::runif(n, 3, 7))
-}
-
-pred3 <- list(pvals = all_pv, vcov = vcov3)
-```
-
 ```{r by_group_test}
 res6 <- waldTest(
   pred3,
@@ -421,9 +409,10 @@ key and the output column is named accordingly:
 
 ```{r multi_by}
 #| eval: false
-# Illustrative — would require a Treatment:Site:Year classify
+# Illustrative — requires a Treatment:Site:Year classify
+# pred_sy <- predict(model, classify = "Treatment:Site:Year", vcov = TRUE)
 res_sy <- waldTest(
-  pred_site_year,
+  pred_sy,
   cc = list(list(coef = treatments, type = "con", comp = "pairwise")),
   by = c("Site", "Year")
 )
@@ -440,22 +429,19 @@ gives better-calibrated p-values in small samples. Set `test = "F"` and supply
 `df_error`.
 
 ```{r f_test}
-# Simulate a realistic denominator df (e.g. from a field trial model)
-df_error_sim <- 54L
-
 res7 <- waldTest(
   pred,
   cc       = list(list(coef = treatments, type = "con", comp = "pairwise")),
   test     = "F",
-  df_error = df_error_sim
+  df_error = model$nedf
 )
 
 res7$Contrasts
 ```
 
 The column is now `F.Statistic` (= Wald statistic for single contrasts).
-P-values are from $F_{1,54}$ rather than $\chi^2_1$ — slightly more
-conservative in small samples.
+P-values are from $F_{1,\nu}$ (where $\nu$ = `model$nedf`) rather than
+$\chi^2_1$ — slightly more conservative in small samples.
 
 ---
 
