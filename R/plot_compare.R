@@ -67,25 +67,18 @@ print.pc_interactive <- function(x, ...) {
 
 ## Inject hover-band JavaScript into a plotly dotplot.
 ##
-## ggplotly converts geom_rect into a scatter trace with fill="toself", NOT
-## a layout.shape.  layout.shapes are the only thing Plotly.relayout() can
-## move at runtime.  So we:
-##   1. Remove the fill="toself" traces (the ggplotly-converted bands).
-##   2. Add equivalent layout.shapes that Plotly.relayout() CAN update.
-##   3. Inject JavaScript that updates those shapes on hover.
+## The geom_rect band is deliberately excluded from the ggplot when building
+## for interactive mode (the builder receives interactive = TRUE).  This means
+## the ggplotly output contains NO fill="toself" band traces to remove, so no
+## ggplot theming elements are accidentally stripped.  The band is added here
+## as a proper layout.shape which Plotly.relayout() CAN update at runtime.
 ##
 ## hover_data: named list, keys = plotly xaxis names ("x", "x2", ...)
 ##   Each element has: crit, orig_x0, orig_x1, n_vars
 #' @noRd
 .pc_add_hover_js <- function(p_plotly, hover_data) {
 
-  # ---- Step 1: remove fill="toself" traces (geom_rect bands) -------------
-  is_band_trace <- function(tr) {
-    isTRUE(tr$fill == "toself")
-  }
-  p_plotly$x$data <- Filter(Negate(is_band_trace), p_plotly$x$data)
-
-  # ---- Step 2: add proper layout.shapes for each panel -------------------
+  # ---- Add layout.shapes for the band — one per panel --------------------
   # Use yref = "y" / "y2" ... with data coordinates so each shape is
   # confined to its own subplot.
   # The continuous y-axis (y_pos) ranges from 0.5 to n_vars + 0.5.
@@ -487,7 +480,8 @@ function(el, x) {
 # ---- Plot builders ---------------------------------------------------------
 
 #' @noRd
-.pc_plot_dotplot <- function(df, crit_col, reference, n_groups, theme, ...) {
+.pc_plot_dotplot <- function(df, crit_col, reference, n_groups,
+                              interactive = FALSE, theme, ...) {
 
   using_ref   <- !is.null(reference)
   has_3levels <- using_ref && any(df$sig == "better", na.rm = TRUE) ||
@@ -564,17 +558,27 @@ function(el, x) {
     }
   }
 
-  p <- ggplot2::ggplot(df,
-         ggplot2::aes(x = pred, y = y_pos)) +
-    # Criterion band on continuous y-axis — fully plotly-compatible
-    ggplot2::geom_rect(
+  # Start the plot — geom_rect is added separately below so that a
+  # conditional NULL never hits +.gg (which does not accept NULL).
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = pred, y = y_pos))
+
+  # Criterion band — static only.  For interactive plots the band is added
+  # as a proper layout.shape by .pc_add_hover_js() AFTER ggplotly conversion
+  # so Plotly.relayout() can move it on hover.  Including geom_rect for
+  # interactive mode produces a fill="toself" scatter trace that cannot be
+  # moved; filtering it out also removes panel/strip background traces.
+  if (!interactive) {
+    p <- p + ggplot2::geom_rect(
       data        = band_df,
       ggplot2::aes(xmin = band_lo, xmax = band_hi,
                    ymin = y_lo,   ymax = y_hi),
       fill        = "#FFEFC0",
       alpha       = 0.6,
       inherit.aes = FALSE
-    ) +
+    )
+  }
+
+  p <- p +
     # Reference line
     ggplot2::geom_vline(
       data      = band_df,
@@ -930,7 +934,8 @@ plot_compare <- function(res,
   # interactive = FALSE.  We suppress the warning to keep the static
   # rendering clean.
   p <- suppressWarnings(switch(type,
-    dotplot = .pc_plot_dotplot(df, crit_col, reference, n_groups, theme, ...),
+    dotplot = .pc_plot_dotplot(df, crit_col, reference, n_groups,
+                               interactive, theme, ...),
     letters = .pc_plot_letters(df, crit_col, n_groups, theme, ...),
     heatmap = .pc_plot_heatmap(df, crit_col, n_groups, theme, ...)
   ))
