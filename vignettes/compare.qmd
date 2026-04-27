@@ -451,10 +451,8 @@ original state.
 
 ```{r interactive}
 #| eval: true
-#| fig-height: 7
-# Rendered as an embedded HTML widget — hover over any variety to move the band
-plot_compare(res_hsd, type = "dotplot", interactive = TRUE) +
-  ggplot2::ggtitle("Hover over any variety to explore significance")
+# as_plotly() returns the plotly htmlwidget directly so knitr embeds it correctly
+as_plotly(plot_compare(res_hsd, type = "dotplot", interactive = TRUE))
 ```
 
 > **Note:** `interactive = TRUE` requires the **plotly** package

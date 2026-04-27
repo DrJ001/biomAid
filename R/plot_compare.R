@@ -44,11 +44,25 @@
 }
 
 ## Support ggplot2's + operator on pc_interactive objects.
-## Adds the layer to the internal ggplot, then re-wraps.
+##
+## ggplot2 >= 4.0.0 migrated to S7 classes and registers an S7 method for
+## the base + operator that returns NULL for non-ggplot left operands.
+## Neither +.pc_interactive nor Ops.pc_interactive can intercept that S7
+## dispatch when the right operand is an S7 gg object.
+##
+## The fix: use ggplot2::ggplot_add() directly instead of the + operator
+## on the internal ggplot.  ggplot_add(object, plot, name) is the exported
+## ggplot2 S7 generic that + calls internally, so the effect is identical
+## but the call goes through ggplot2's own API without hitting the dispatch
+## conflict.
 #' @export
-`+.pc_interactive` <- function(e1, e2) {
-  e1$plot <- e1$plot + e2
-  e1
+Ops.pc_interactive <- function(e1, e2) {
+  if (.Generic == "+" && inherits(e1, "pc_interactive")) {
+    objectname <- deparse(substitute(e2))
+    e1$plot <- ggplot2::ggplot_add(e2, e1$plot, objectname)
+    return(e1)
+  }
+  stop("Operator '", .Generic, "' is not defined for pc_interactive objects.")
 }
 
 ## Auto-convert to plotly on print.
@@ -91,6 +105,52 @@ knit_print.pc_interactive <- function(x, ...) {
   if (!is.null(x$hover_data))
     p_plotly <- .pc_add_hover_js(p_plotly, x$hover_data)
   knitr::knit_print(p_plotly, ...)
+}
+
+## Convert a pc_interactive object to a plotly htmlwidget.
+##
+## as_plotly() is the escape hatch for knitr/Quarto vignettes where S3
+## dispatch through knit_print may be unreliable (e.g. when the installed
+## package version lags the source).  Calling as_plotly() as the LAST
+## expression of a chunk returns a native plotly htmlwidget, which knitr
+## captures via htmlwidgets' built-in knit_print.htmlwidget — no biomAid-
+## specific registration required.
+##
+## Usage in a vignette chunk:
+##   p_int <- plot_compare(res, interactive = TRUE) + ggtitle("...")
+##   as_plotly(p_int)   # last expression: knitr embeds the widget directly
+
+#' Convert a `pc_interactive` Object to a Plotly Widget
+#'
+#' @description
+#' Converts a [plot_compare()] `pc_interactive` result to a
+#' [plotly::plotly] htmlwidget, applying the hover-band JavaScript for
+#' dotplots.  Useful in knitr/Quarto documents where the object should be
+#' the direct return value of the chunk so that knitr embeds it correctly.
+#'
+#' @param x A `pc_interactive` object returned by
+#'   `plot_compare(..., interactive = TRUE)` or by `+.pc_interactive`.
+#' @param ... Unused; included for future extensibility.
+#'
+#' @return A [plotly::plotly] htmlwidget.
+#'
+#' @examples
+#' \dontrun{
+#' p_int <- plot_compare(res, type = "dotplot", interactive = TRUE) +
+#'   ggplot2::ggtitle("Hover to explore")
+#' as_plotly(p_int)   # embed in a knitr/Quarto chunk
+#' }
+#'
+#' @export
+as_plotly <- function(x, ...) {
+  if (!inherits(x, "pc_interactive"))
+    stop("'x' must be a pc_interactive object returned by plot_compare().")
+  if (!requireNamespace("plotly", quietly = TRUE))
+    stop("Package 'plotly' is required. Install with: install.packages('plotly')")
+  p_plotly <- plotly::ggplotly(x$plot, tooltip = "text")
+  if (!is.null(x$hover_data))
+    p_plotly <- .pc_add_hover_js(p_plotly, x$hover_data)
+  p_plotly
 }
 
 ## Inject hover-band JavaScript into a plotly dotplot.
