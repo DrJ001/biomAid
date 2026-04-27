@@ -160,8 +160,80 @@ as_plotly <- function(x, height = NULL, width = NULL, ...) {
     stop("Package 'plotly' is required. Install with: install.packages('plotly')")
   p_plotly <- plotly::ggplotly(x$plot, tooltip = "text",
                                height = height, width = width)
+  p_plotly <- .pc_fix_subplot_spacing(p_plotly)
   if (!is.null(x$hover_data))
     p_plotly <- .pc_add_hover_js(p_plotly, x$hover_data)
+  p_plotly
+}
+
+## Fix subplot y-axis domain spacing for multi-panel ggplotly output.
+##
+## ggplotly converts facet_wrap panels into plotly subplots, but the computed
+## domain gaps are often too small — panels crowd each other regardless of
+## the total widget height.  This function redistributes yaxis domains so
+## that each row occupies an equal share of [0, 1] with a fixed fractional
+## gap between rows, then shifts any strip-label annotations (yref="paper")
+## that sat at the top of each old domain to the top of the new domain.
+#' @noRd
+.pc_fix_subplot_spacing <- function(p_plotly, row_gap = 0.12) {
+
+  ly <- p_plotly$x$layout
+
+  # ---- Identify multi-row yaxis entries ----------------------------------
+  yax_names <- sort(names(ly)[grepl("^yaxis[0-9]*$", names(ly))])
+  if (length(yax_names) <= 1L) return(p_plotly)   # single panel — nothing to do
+
+  old_domains <- lapply(yax_names, function(n) ly[[n]]$domain)
+  old_mids    <- vapply(old_domains, function(d)
+                          if (is.null(d)) NA_real_ else mean(d), numeric(1L))
+
+  # Cluster into rows: round mid to 1 d.p. then rank ascending (1=bottom row)
+  row_id <- as.integer(factor(round(old_mids, 1L)))
+  n_rows <- max(row_id, na.rm = TRUE)
+  if (n_rows <= 1L) return(p_plotly)              # all panels in one row
+
+  # ---- Compute new evenly-spaced row domains -----------------------------
+  row_h  <- (1 - row_gap * (n_rows - 1L)) / n_rows
+  row_lo <- function(r) (r - 1L) * (row_h + row_gap)
+  row_hi <- function(r) row_lo(r) + row_h
+
+  # Map from old domain top → new domain top (used to relocate annotations)
+  old_top_to_new <- stats::setNames(
+    vapply(row_id, row_hi, numeric(1L)),
+    vapply(old_domains, function(d) if (is.null(d)) NA_real_ else d[2L],
+           numeric(1L))
+  )
+
+  # Apply new domains to yaxis entries
+  for (i in seq_along(yax_names)) {
+    r  <- row_id[i]
+    p_plotly$x$layout[[yax_names[i]]]$domain <- c(row_lo(r), row_hi(r))
+  }
+
+  # ---- Relocate strip-label annotations ----------------------------------
+  # ggplotly places strip text as annotations with yref="paper" whose y
+  # coordinate sits just above the top of the panel's old yaxis domain.
+  # Shift them to the top of the new domain (+/- the same small offset).
+  anns <- p_plotly$x$layout$annotations
+  if (!is.null(anns)) {
+    tol <- 0.08   # tolerance: annotation is "above" a domain top if within tol
+    p_plotly$x$layout$annotations <- lapply(anns, function(a) {
+      if (!identical(a$yref, "paper")) return(a)
+      ay <- a$y
+      if (is.null(ay) || is.na(ay)) return(a)
+      # Find the old domain top this annotation belongs to
+      match_top <- names(old_top_to_new)[
+        abs(as.numeric(names(old_top_to_new)) - ay) < tol
+      ]
+      if (length(match_top) == 1L) {
+        old_top <- as.numeric(match_top)
+        new_top <- old_top_to_new[[match_top]]
+        a$y <- new_top + (ay - old_top)   # preserve offset above panel top
+      }
+      a
+    })
+  }
+
   p_plotly
 }
 
