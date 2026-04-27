@@ -412,6 +412,51 @@ p3 <- plot_compare(res_hsd, type = "dotplot", reference = "Var10") +
 print(p3)
 ```
 
+### Half-criterion error bars — `type = "errbar"`
+
+Each variety is shown as a point (its predicted value) with a horizontal line
+segment spanning $\hat{\tau} \pm \frac{1}{2}\text{HSD}$.  The visual
+significance rule is exact: **two varieties are significantly different if and
+only if their bars do not overlap**.  This is equivalent to the criterion test
+$|\hat{\tau}_i - \hat{\tau}_j| > \text{HSD}$.
+
+The error bar display is particularly useful when interest lies in all pairwise
+comparisons rather than just comparisons with the best variety — every
+non-overlapping pair stands out directly, not just those that fall outside a
+single band.
+
+```{r errbar_single}
+#| fig-height: 7
+p_eb1 <- plot_compare(res_hsd |> subset(Site == "Env1"), type = "errbar") +
+  ggtitle("Half-HSD error bars — Env1",
+          subtitle = "Non-overlapping bars = significant difference")
+print(p_eb1)
+```
+
+With a `by`-grouped result, each site gets its own panel.  Bar widths differ
+between sites because each site has its own spatial error variance and therefore
+its own HSD.
+
+```{r errbar_grouped}
+#| fig-height: 7
+p_eb2 <- plot_compare(res_hsd, type = "errbar") +
+  ggtitle("Half-HSD error bars by site",
+          subtitle = "Bar width = site-specific HSD/2")
+print(p_eb2)
+```
+
+The criterion type changes the bar width directly — LSD bars are shorter
+(more discriminating) and Bonferroni bars are wider (more conservative).  This
+makes the effect of the multiplicity correction immediately visible:
+
+```{r errbar_lsd}
+#| fig-height: 7
+p_eb3 <- plot_compare(res_lsd |> subset(Site == "Env1"), type = "errbar") +
+  ggtitle("Half-LSD error bars — Env1",
+          subtitle = "LSD bars are shorter than HSD bars — more pairs declared significant")
+print(p_eb3)
+```
+
 ### Compact letter display — `type = "letters"`
 
 The compact letter display (CLD) is the standard reporting format in plant
