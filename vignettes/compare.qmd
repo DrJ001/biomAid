@@ -450,18 +450,18 @@ blue = not significant, red = significantly worse).  Unhovering restores the
 original state.
 
 ```{r interactive}
-#| eval: false
-# Renders to the RStudio Viewer pane — interactive hover moves the band
-plot_compare(res_hsd, type = "dotplot", interactive = TRUE) +
+#| eval: true
+#| fig-height: 7
+# Rendered as an embedded HTML widget — hover over any variety to move the band
+p_int <- plot_compare(res_hsd, type = "dotplot", interactive = TRUE) +
   ggplot2::ggtitle("Hover over any variety to explore significance")
-
-# Also works for letters and heatmap (tooltips, no band interaction)
-plot_compare(res_hsd, type = "heatmap", interactive = TRUE)
+print(p_int)
 ```
 
 > **Note:** `interactive = TRUE` requires the **plotly** package
-> (`install.packages("plotly")`).  Interactive plots render to the Viewer pane
-> as an HTML widget, not to the standard R Graphics window.
+> (`install.packages("plotly")`).  The widget is embedded directly in the
+> HTML document — hover over any variety point to move the criterion band
+> and recolour all points relative to it.
 
 ### Extracting plot data — `return_data = TRUE`
 
