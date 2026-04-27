@@ -6,7 +6,7 @@
 \usage{
 plot_compare(
   res,
-  type = c("dotplot", "letters", "heatmap"),
+  type = c("dotplot", "errbar", "letters", "heatmap"),
   reference = NULL,
   interactive = FALSE,
   theme = ggplot2::theme_bw(),
@@ -18,7 +18,7 @@ plot_compare(
 \item{res}{A data frame returned by \code{\link[=compare]{compare()}}.}
 
 \item{type}{Character string selecting the plot type. One of
-\code{"dotplot"} (default), \code{"letters"}, or \code{"heatmap"}.}
+\code{"dotplot"} (default), \code{"errbar"}, \code{"letters"}, or \code{"heatmap"}.}
 
 \item{reference}{Character string or \code{NULL}. Applies to \code{type = "dotplot"} only. When \code{NULL} (default), the criterion band is anchored
 to the top-ranked variety in each group (one-sided band; points outside
@@ -52,12 +52,12 @@ A \code{ggplot} object (when \code{interactive = FALSE} and
 (when \code{return_data = TRUE}).
 }
 \description{
-Produces one of three ggplot2 visualisations from a \code{\link[=compare]{compare()}} result
+Produces one of four ggplot2 visualisations from a \code{\link[=compare]{compare()}} result
 object, all correctly handling the \code{by}-group structure (including
 multi-factor groups) through automatic faceting.
 }
 \details{
-The three \code{type} options are:
+The four \code{type} options are:
 \describe{
 \item{\code{"dotplot"}}{Varieties sorted by predicted value (highest at top)
 within each group.  A shaded band of width equal to the comparison
@@ -65,6 +65,12 @@ criterion is drawn below the top-ranked variety — any variety whose
 point falls within the band is \strong{not} significantly different from the
 best.  Points outside the band are coloured red.  The dashed vertical
 line marks the top-ranked predicted value.}
+\item{\code{"errbar"}}{Varieties sorted by predicted value (highest at top).
+A horizontal line segment spanning
+\eqn{[\hat\tau - \text{crit}/2,\; \hat\tau + \text{crit}/2]}
+is drawn for each variety, with the predicted value marked by a point.
+Two varieties are significantly different if and only if their bars
+do not overlap — an exact visual equivalent of the criterion test.}
 \item{\code{"letters"}}{Compact letter display (CLD) overlaid on the sorted
 dot plot.  Varieties sharing at least one letter are not significantly
 different.  Letters are assigned by the standard descending sweep

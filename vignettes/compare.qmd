@@ -533,6 +533,7 @@ plot_compare(res_hsd, type = "letters") +
 | Task | Specification |
 |------|--------------|
 | Sorted dot plot with criterion band | `type = "dotplot"` (default) |
+| Half-criterion error bars (non-overlap = significant) | `type = "errbar"` |
 | Compact letter display | `type = "letters"` |
 | Pairwise significance heatmap | `type = "heatmap"` |
 | Band anchored to best variety | `reference = NULL` (default) |

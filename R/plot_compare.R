@@ -659,6 +659,20 @@ function(el, x) {
   merge(base, letter_df, by = c("Group", "Variety"), all.x = TRUE)
 }
 
+## Build the tidy data frame for the errbar type.
+##
+## Each variety gets a point at its predicted value and a horizontal line
+## segment spanning [pred - crit/2, pred + crit/2].  Two varieties are
+## significantly different iff their bars do not overlap, which is equivalent
+## to the criterion test |pred_i - pred_j| > crit.
+#' @noRd
+.pc_errbar_data <- function(res, crit_col, comp_col, by_cols) {
+  df      <- .pc_dotplot_data(res, crit_col, comp_col, by_cols, reference = NULL)
+  df$lo   <- df$pred - df$crit / 2
+  df$hi   <- df$pred + df$crit / 2
+  df
+}
+
 ## Build the tidy data frame for the heatmap type.
 #' @noRd
 .pc_heatmap_data <- function(res, crit_col, comp_col, by_cols) {
@@ -971,6 +985,60 @@ function(el, x) {
 }
 
 #' @noRd
+.pc_plot_errbar <- function(df, crit_col, n_groups, theme, ...) {
+
+  df$tooltip_text <- paste0(
+    "<b>", df$Variety, "</b>",
+    "<br>Predicted: ",  round(df$pred, 2L),
+    "<br>\u00b1", crit_col, "/2: ",  round(df$crit / 2, 2L),
+    "<br>Bar: [",  round(df$lo, 2L), ", ", round(df$hi, 2L), "]",
+    "<br>Group: ", df$Group
+  )
+
+  caption <- paste0(
+    "Bars span \u00b1\u00bd\u00d7", crit_col,
+    " around each predicted value. ",
+    "Non-overlapping bars indicate a significant difference."
+  )
+
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = pred, y = var_label)) +
+    ggplot2::geom_segment(
+      ggplot2::aes(x = lo, xend = hi, y = var_label, yend = var_label),
+      colour    = "#4E79A7",
+      linewidth = 0.8,
+      inherit.aes = FALSE
+    ) +
+    ggplot2::geom_point(
+      ggplot2::aes(text = tooltip_text),
+      colour = "#4E79A7",
+      size   = 2.0,
+      ...
+    ) +
+    ggplot2::scale_y_discrete(
+      labels = function(x) sub("^[^\x01]+\x01", "", x),
+      expand = ggplot2::expansion(add = 0.6)
+    ) +
+    ggplot2::labs(
+      x       = "Predicted value",
+      y       = NULL,
+      caption = caption
+    ) +
+    theme +
+    ggplot2::theme(
+      strip.background = ggplot2::element_rect(fill = "grey92",
+                                               colour = "grey70"),
+      strip.text       = ggplot2::element_text(face = "bold"),
+      panel.spacing    = ggplot2::unit(0.5, "lines"),
+      axis.text.y      = ggplot2::element_text(size = 7)
+    )
+
+  if (n_groups > 1L)
+    p <- p + ggplot2::facet_wrap(~ Group, scales = "free")
+
+  p
+}
+
+#' @noRd
 .pc_plot_heatmap <- function(df, crit_col, n_groups, theme, ...) {
 
   df$tooltip_text <- paste0(
@@ -1028,12 +1096,12 @@ function(el, x) {
 #' Plot Output from compare()
 #'
 #' @description
-#' Produces one of three ggplot2 visualisations from a [compare()] result
+#' Produces one of four ggplot2 visualisations from a [compare()] result
 #' object, all correctly handling the `by`-group structure (including
 #' multi-factor groups) through automatic faceting.
 #'
 #' @details
-#' The three `type` options are:
+#' The four `type` options are:
 #' \describe{
 #'   \item{`"dotplot"`}{Varieties sorted by predicted value (highest at top)
 #'     within each group.  A shaded band of width equal to the comparison
@@ -1041,6 +1109,12 @@ function(el, x) {
 #'     point falls within the band is **not** significantly different from the
 #'     best.  Points outside the band are coloured red.  The dashed vertical
 #'     line marks the top-ranked predicted value.}
+#'   \item{`"errbar"`}{Varieties sorted by predicted value (highest at top).
+#'     A horizontal line segment spanning
+#'     \eqn{[\hat\tau - \text{crit}/2,\; \hat\tau + \text{crit}/2]}
+#'     is drawn for each variety, with the predicted value marked by a point.
+#'     Two varieties are significantly different if and only if their bars
+#'     do not overlap — an exact visual equivalent of the criterion test.}
 #'   \item{`"letters"`}{Compact letter display (CLD) overlaid on the sorted
 #'     dot plot.  Varieties sharing at least one letter are not significantly
 #'     different.  Letters are assigned by the standard descending sweep
@@ -1062,7 +1136,7 @@ function(el, x) {
 #'
 #' @param res         A data frame returned by [compare()].
 #' @param type        Character string selecting the plot type. One of
-#'   `"dotplot"` (default), `"letters"`, or `"heatmap"`.
+#'   `"dotplot"` (default), `"errbar"`, `"letters"`, or `"heatmap"`.
 #' @param reference   Character string or `NULL`. Applies to `type =
 #'   "dotplot"` only. When `NULL` (default), the criterion band is anchored
 #'   to the top-ranked variety in each group (one-sided band; points outside
@@ -1124,7 +1198,7 @@ function(el, x) {
 #'
 #' @export
 plot_compare <- function(res,
-                         type        = c("dotplot", "letters", "heatmap"),
+                         type        = c("dotplot", "errbar", "letters", "heatmap"),
                          reference   = NULL,
                          interactive = FALSE,
                          theme       = ggplot2::theme_bw(),
@@ -1154,6 +1228,10 @@ plot_compare <- function(res,
     }
   }
 
+  if (interactive && type == "errbar")
+    message("Note: interactive = TRUE is not supported for type = \"errbar\"; ",
+            "returning a static ggplot.")
+
   if (!is.logical(interactive) || length(interactive) != 1L)
     stop("'interactive' must be a single logical value.")
   if (interactive && !requireNamespace("plotly", quietly = TRUE))
@@ -1176,6 +1254,7 @@ plot_compare <- function(res,
   # ---- Build tidy data ----------------------------------------------------
   df <- switch(type,
     dotplot = .pc_dotplot_data(res, crit_col, comp_col, by_cols, reference),
+    errbar  = .pc_errbar_data(res, crit_col, comp_col, by_cols),
     letters = .pc_letters_data(res, crit_col, comp_col, by_cols),
     heatmap = .pc_heatmap_data(res, crit_col, comp_col, by_cols)
   )
@@ -1190,6 +1269,7 @@ plot_compare <- function(res,
   p <- suppressWarnings(switch(type,
     dotplot = .pc_plot_dotplot(df, crit_col, reference, n_groups,
                                interactive, theme, ...),
+    errbar  = .pc_plot_errbar(df, crit_col, n_groups, theme, ...),
     letters = .pc_plot_letters(df, crit_col, n_groups, theme, ...),
     heatmap = .pc_plot_heatmap(df, crit_col, n_groups, theme, ...)
   ))
