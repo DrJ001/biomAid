@@ -6,6 +6,7 @@ template:
   bootstrap: 5
   bootswatch: litera
   theme: arrow-light
+  math-rendering: katex
 
 home:
   title: "biomAid — Biometric Tools for Plant Breeding Trials"

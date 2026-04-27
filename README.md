@@ -19,6 +19,12 @@ with **ASReml-R V4** mixed models. Watch this space, there are a lot more functi
 | [Extracting and Padding Field Trial Layouts](https://DrJ001.github.io/biomAid/padTrial.html) | Step-by-step guide to guard-row removal, missing-plot padding, and Before/After visualisation with `padTrial()` and `plot_padTrial()` |
 | [Multiple Comparison Criteria](https://DrJ001.github.io/biomAid/compare.html) | HSD, LSD, and Bonferroni criteria, by-group comparisons, and all three plot types for `compare()` and `plot_compare()` |
 
+## Function reference
+
+Full documentation for every exported function is available on the package website:
+
+👉 **[https://DrJ001.github.io/biomAid/reference/](https://DrJ001.github.io/biomAid/reference/)**
+
 ---
 
 ## Installation
