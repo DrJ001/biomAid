@@ -150,8 +150,7 @@ appropriate measure of uncertainty for genotypic BLUPs.
 > needed to read it; run the code chunks only if you have ASReml-R installed.
 
 We use `simTrialData()` to generate a balanced multi-environment trial with
-20 varieties, 4 sites, and 3 nitrogen treatments (T0, T1, T2). Variety is in
-the random effects so that BLUPs can be demonstrated alongside BLUEs.
+20 varieties, 4 sites, and 3 nitrogen treatments (T0, T1, T2).
 
 ```{r simulate}
 #| cache: true
@@ -169,17 +168,18 @@ dat$Row    <- factor(dat$Row)
 dat$Column <- factor(dat$Column)
 ```
 
-We fit a model with treatments as fixed effects and variety as a random effect
-so that both BLUEs (treatments) and BLUPs (varieties) are available for
-comparison:
+We fit a **fixed `Treatment × Site × Variety` model** with
+site-within-replicate random effects and a spatial residual structure.
+Variety must be in the fixed effects so that `predict()` returns BLUEs for
+every Variety × Site combination — the basis for the comparison criteria.
 
 ```{r fit_model}
 #| cache: true
 #| results: hide
 asreml.options(trace = FALSE)
 model <- asreml(
-  yield    ~ Treatment * Site,
-  random   = ~ Variety + at(Site):Rep,
+  yield    ~ Treatment * Site * Variety,
+  random   = ~ at(Site):Rep,
   residual = ~ dsum(~ ar1(Row):ar1(Column) | Site),
   data     = dat,
   maxit    = 30L
@@ -191,34 +191,34 @@ model <- update(model)
 
 ## Example 1: HSD — single global group
 
-The simplest use: compare all treatment BLUEs across the trial in a single
-group, with no `by` argument.  `compare()` calls `predict()` internally using
-`term` as the `classify`.
+The simplest use: compare all variety BLUEs across the trial in a single
+global group (no `by` argument).  `compare()` calls `predict()` internally
+using `term` as the `classify`.
 
 ```{r hsd_single}
 res1 <- compare(
   model,
-  term = "Treatment",
+  term = "Variety",
   type = "HSD"
 )
 
-res1
+head(res1[order(res1$predicted.value, decreasing = TRUE), ])
 ```
 
-The `HSD` column is **constant within the group** — all predicted values use
-the same criterion.  Two treatments are significantly different if
+The `HSD` column is **constant within the group** — all predicted values share
+the same criterion.  Two varieties are significantly different if
 `|pred_i - pred_j| > HSD`.  The `avsed` column records the average SED on
 which the criterion is based.
 
 Applying the criterion manually:
 
 ```{r hsd_single_apply}
-# Are T0 and T2 significantly different?
-preds <- res1$predicted.value
-names(preds) <- res1$Treatment
-cat("T0 vs T2: |diff| =", round(abs(preds["T0"] - preds["T2"]), 1L),
-    "  HSD =", round(res1$HSD[1L], 1L),
-    "  Significant:", abs(preds["T0"] - preds["T2"]) > res1$HSD[1L], "\n")
+# Are Var01 and Var20 significantly different?
+preds <- setNames(res1$predicted.value, as.character(res1$Variety))
+diff  <- abs(preds["Var01"] - preds["Var20"])
+cat("|Var01 - Var20| =", round(diff, 1L),
+    "  HSD =",           round(res1$HSD[1L], 1L),
+    "  Significant:",    diff > res1$HSD[1L], "\n")
 ```
 
 ---
@@ -227,47 +227,48 @@ cat("T0 vs T2: |diff| =", round(abs(preds["T0"] - preds["T2"]), 1L),
 
 Adding `by = "Site"` performs independent comparisons within each site, using
 each site's own prediction error variance matrix and thus its own criterion.
+This is the most common usage: **20 varieties compared within each of 4 sites**.
 
 ```{r hsd_by_site}
 #| cache: true
-res2 <- compare(
+res_hsd <- compare(
   model,
-  term = "Treatment:Site",
+  term = "Variety:Site",
   by   = "Site",
   type = "HSD"
 )
 
 # HSD varies by site (different PEV per site from the spatial model)
-unique(res2[, c("Site", "HSD", "avsed")])
+unique(res_hsd[, c("Site", "HSD", "avsed")])
 ```
 
 The HSD differs between sites because the spatial AR1×AR1 residual structure
-gives each site a different effective error variance. Sites with more efficient
-spatial control (lower `avsed`) will have a smaller, more powerful criterion.
+gives each site its own effective error variance.  Sites with tighter spatial
+control (lower `avsed`) have a smaller, more powerful criterion.
 
 ---
 
 ## Example 3: Multi-factor `by`
 
-When variety BLUPs are predicted across all treatment × site combinations,
-passing a character vector to `by` splits comparisons by every combination
-of both factors.  The colon-string form `"Site:Treatment"` is equivalent.
+When predictions span multiple factors, `by` accepts a character vector.
+Here varieties are compared **within every Site × Treatment combination** —
+asking "which varieties perform best under each treatment at each site?".
+The colon-string form `"Site:Treatment"` is equivalent to the vector form.
 
 ```{r hsd_multi_by}
 #| cache: true
-# Variety BLUPs: compare varieties within each Site × Treatment combination
-res3a <- compare(model, term = "Variety:Treatment:Site",
+# Compare varieties within each Site × Treatment combination
+res3a <- compare(model, term = "Variety:Site:Treatment",
                  by = c("Site", "Treatment"), type = "HSD")
-res3b <- compare(model, term = "Variety:Treatment:Site",
+res3b <- compare(model, term = "Variety:Site:Treatment",
                  by = "Site:Treatment", type = "HSD")
 
-# HSD per Site × Treatment group (first 6 rows)
+# HSD per Site × Treatment group (first 6 of 12 groups)
 unique(res3a[, c("Site", "Treatment", "HSD", "avsed")])[1:6, ]
 ```
 
-The criterion varies across Site × Treatment combinations because each cell
-has a different effective error variance — the spatial model and treatment
-design make each sub-environment unique.
+The criterion varies across Site × Treatment combinations because each
+sub-environment has its own spatial error structure.
 
 ---
 
@@ -279,43 +280,48 @@ HSD sits between them for most group sizes.
 
 ```{r three_criteria}
 #| cache: true
-res_hsd <- compare(model, term = "Treatment:Site", by = "Site", type = "HSD")
-res_lsd <- compare(model, term = "Treatment:Site", by = "Site", type = "LSD")
-res_bon <- compare(model, term = "Treatment:Site", by = "Site",
+res_lsd <- compare(model, term = "Variety:Site", by = "Site", type = "LSD")
+res_bon <- compare(model, term = "Variety:Site", by = "Site",
                    type = "Bonferroni")
 
-# Criteria for Env1
+# Criteria for Env1 (res_hsd already computed in Example 2)
 env1 <- function(r, col) round(unique(r[[col]][r$Site == "Env1"]), 1L)
-cat("Env1 criteria:\n")
+cat("Env1 criteria (20 varieties):\n")
 cat("  LSD        =", env1(res_lsd, "LSD"),        "\n")
 cat("  HSD        =", env1(res_hsd, "HSD"),        "\n")
 cat("  Bonferroni =", env1(res_bon, "Bonferroni"), "\n")
 ```
 
-For three treatments, $m = \binom{3}{2} = 3$ pairs.  Bonferroni divides
-$\alpha$ by 6 (two-sided), LSD divides by 2 — the difference grows rapidly
-with the number of treatments.
+For 20 varieties, $m = \binom{20}{2} = 190$ pairs.  The Bonferroni correction
+is very conservative at this scale — HSD is generally preferred for large
+variety trials.
 
 ---
 
 ## Example 5: Variety BLUPs with `pev = FALSE`
 
-When comparing variety BLUPs, the PEV understates uncertainty because it
-ignores the shrinkage towards zero inherent in random effects.  Setting
-`pev = FALSE` substitutes the posterior variance $\mathbf{G} - \mathbf{PEV}$,
-giving a more appropriate — and larger — criterion.
+When variety is in the **random** effects the PEV understates uncertainty
+because it ignores the shrinkage towards zero inherent in BLUP estimation.
+Setting `pev = FALSE` substitutes the posterior variance
+$\mathbf{G} - \mathbf{PEV}$, giving a more appropriate — and larger — criterion.
 
 ```{r pev_false}
-#| cache: true
-res_pev  <- compare(model, term = "Variety", type = "HSD", pev = TRUE)
-res_post <- compare(model, term = "Variety", type = "HSD", pev = FALSE)
+#| eval: false
+# Illustrative — requires a model with Variety in the random effects:
+# model_rnd <- asreml(yield ~ Treatment * Site,
+#                     random = ~ Variety + at(Site):Rep, ...)
+
+res_pev  <- compare(model_rnd, term = "Variety", type = "HSD", pev = TRUE)
+res_post <- compare(model_rnd, term = "Variety", type = "HSD", pev = FALSE)
 
 cat("HSD (PEV):            ", round(res_pev$HSD[1L],  1L), "\n")
 cat("HSD (posterior var.): ", round(res_post$HSD[1L], 1L), "\n")
+# The posterior-variance HSD is larger, reflecting true BLUP uncertainty.
 ```
 
-The posterior-variance criterion is larger, reflecting the true uncertainty
-in declaring two BLUPs significantly different.
+> **Note:** `pev = FALSE` is only meaningful when `term` is in the **random**
+> part of the model.  In the current vignette Variety is fixed, so
+> `pev = FALSE` is not applicable here.
 
 ---
 
@@ -326,9 +332,9 @@ significant pairs.
 
 ```{r alpha_adjust}
 #| cache: true
-r_05 <- compare(model, term = "Treatment:Site", by = "Site",
+r_05 <- compare(model, term = "Variety:Site", by = "Site",
                 type = "HSD", alpha = 0.05)
-r_01 <- compare(model, term = "Treatment:Site", by = "Site",
+r_01 <- compare(model, term = "Variety:Site", by = "Site",
                 type = "HSD", alpha = 0.01)
 
 env1_05 <- unique(r_05$HSD[r_05$Site == "Env1"])
@@ -346,16 +352,16 @@ structure automatically — no extra arguments are needed to handle `by` groups.
 
 ### Dot plot — `type = "dotplot"`
 
-Varieties (or treatments) are sorted by predicted value, highest at the top.
-A **shaded band** of width equal to the criterion is drawn below the
-top-ranked variety.  Any variety within the band is not significantly different
-from the best; those outside (coloured red) are.  The dashed vertical line
-marks the top-ranked predicted value.
+Varieties are sorted by predicted value, highest at the top.  A **shaded band**
+of width equal to the HSD is drawn below the top-ranked variety.  Any variety
+within the band is not significantly different from the best; those outside
+(coloured red) are.  The dashed vertical line marks the top-ranked predicted
+value.
 
 ```{r dotplot_single}
-#| fig-height: 5
+#| fig-height: 7
 p1 <- plot_compare(res_hsd |> subset(Site == "Env1"), type = "dotplot") +
-  ggtitle("Treatment comparison — Env1 (HSD)")
+  ggtitle("Variety comparison — Env1 (HSD)")
 print(p1)
 ```
 
@@ -363,36 +369,28 @@ When a `by`-grouped result is passed, each group becomes its own facet panel
 with its own site-specific criterion band:
 
 ```{r dotplot_grouped}
-#| fig-height: 5
+#| fig-height: 7
 p2 <- plot_compare(res_hsd, type = "dotplot") +
-  ggtitle("Treatment comparison by site (HSD)",
+  ggtitle("Variety comparison by site (HSD)",
           subtitle = "Band width = site-specific HSD")
 print(p2)
 ```
 
 ### Reference variety — `reference =`
 
-Setting `reference` centres the band on a specific variety rather than the
-best.  Points are coloured three ways: **green** (significantly better than
-the reference), **blue** (not significantly different), **red** (significantly
-worse).  The reference variety is shown as a filled diamond.
+Setting `reference` centres the band on a named variety rather than the best.
+Points are coloured three ways: **green** (significantly better), **blue**
+(not significantly different), **red** (significantly worse).  The reference
+variety is shown as a filled diamond.
 
 This is the natural way to ask *"which varieties are significantly better or
 worse than our commercial check?"*
 
 ```{r dotplot_reference}
-#| fig-height: 6
-# Use variety BLUPs for a more meaningful comparison
-res_var <- compare(model, term = "Variety:Site", by = "Site",
-                   type = "HSD")
-
-# Pick the median-ranked variety in Env1 as the reference check
-env1_preds <- res_var[res_var$Site == "Env1", ]
-ref_var    <- env1_preds$Variety[order(env1_preds$predicted.value)[10L]]
-cat("Reference variety:", as.character(ref_var), "\n")
-
-p3 <- plot_compare(res_var, type = "dotplot", reference = as.character(ref_var)) +
-  ggtitle(paste0("Variety comparison — reference: ", ref_var),
+#| fig-height: 7
+# Use Var10 as the commercial check reference
+p3 <- plot_compare(res_hsd, type = "dotplot", reference = "Var10") +
+  ggtitle("Variety comparison — reference: Var10",
           subtitle = "Green = sig. better | Blue = not sig. | Red = sig. worse")
 print(p3)
 ```
@@ -401,11 +399,11 @@ print(p3)
 
 The compact letter display (CLD) is the standard reporting format in plant
 science.  Varieties sharing at least one letter are not significantly different.
-Letters are assigned by the descending sweep algorithm using the comparison
-criterion as the significance threshold.
+Letters are assigned by the descending sweep algorithm using the HSD as the
+significance threshold.
 
 ```{r letters_single}
-#| fig-height: 5
+#| fig-height: 7
 p4 <- plot_compare(res_hsd |> subset(Site == "Env1"), type = "letters") +
   ggtitle("Compact letter display — Env1 (HSD)")
 print(p4)
@@ -415,46 +413,27 @@ With `by`-groups, each site gets its own panel with independent letter
 assignments:
 
 ```{r letters_grouped}
-#| fig-height: 5
+#| fig-height: 7
 p5 <- plot_compare(res_hsd, type = "letters") +
-  ggtitle("CLD by site", subtitle = "Letters are independent within each site")
+  ggtitle("CLD — 20 varieties by site",
+          subtitle = "Letters are independent within each site")
 print(p5)
 ```
 
 ### Pairwise significance heatmap — `type = "heatmap"`
 
-The heatmap shows all $\binom{n}{2}$ pairwise absolute differences as a
-colour-coded matrix.  A white cross (×) marks pairs that exceed the criterion
-(significant).  For large variety sets this reveals the full pattern of
-discrimination in a single view — something no letter display can show.
-
-```{r heatmap_single}
-#| fig-height: 5
-p6 <- plot_compare(res_hsd |> subset(Site == "Env1"), type = "heatmap") +
-  ggtitle("Pairwise significance heatmap — Env1")
-print(p6)
-```
-
-```{r heatmap_grouped}
-#| fig-height: 5
-#| fig-width: 9
-p7 <- plot_compare(res_hsd, type = "heatmap") +
-  ggtitle("Pairwise significance heatmap by site")
-print(p7)
-```
-
-### Variety heatmap — larger set
-
-The heatmap is especially useful when there are many varieties and the letter
-display becomes long.
+The heatmap shows all $\binom{20}{2} = 190$ pairwise absolute differences as
+a colour-coded matrix.  A white cross (×) marks pairs that exceed the HSD
+criterion.  For 20+ varieties this reveals the full discrimination pattern at a
+glance — something no letter display can convey.
 
 ```{r heatmap_variety}
 #| fig-height: 7
-#| fig-width: 9
-p8 <- plot_compare(res_var, type = "heatmap") +
-  ggtitle("Variety pairwise significance — all sites",
+#| fig-width: 10
+p6 <- plot_compare(res_hsd, type = "heatmap") +
+  ggtitle("Variety pairwise significance — 4 sites",
           subtitle = "White × = significant at HSD level")
-print(p8)
+print(p6)
 ```
 
 ### Interactive dotplot — `interactive = TRUE`
@@ -473,7 +452,7 @@ original state.
 ```{r interactive}
 #| eval: false
 # Renders to the RStudio Viewer pane — interactive hover moves the band
-plot_compare(res_var, type = "dotplot", interactive = TRUE) +
+plot_compare(res_hsd, type = "dotplot", interactive = TRUE) +
   ggplot2::ggtitle("Hover over any variety to explore significance")
 
 # Also works for letters and heatmap (tooltips, no band interaction)
@@ -496,7 +475,8 @@ head(df_dot[, c("Group", "Variety", "pred", "crit", "rank", "sig")])
 
 ```{r return_data_heat}
 df_heat <- plot_compare(res_hsd |> subset(Site == "Env1"),
-                        type = "heatmap", return_data = TRUE)
+                        type   = "heatmap",
+                        return_data = TRUE)
 head(df_heat[, c("Var_x", "Var_y", "diff", "sig")])
 ```
 
@@ -523,12 +503,10 @@ ggplot(df_env1, aes(x = pred, y = reorder(Variety, pred),
 The ggplot object returned by `plot_compare()` can also be extended with `+`:
 
 ```{r extend}
-#| fig-height: 5
+#| fig-height: 7
 plot_compare(res_hsd, type = "letters") +
-  ggplot2::ggtitle("Tukey HSD letter groups by site",
-                   subtitle = paste0("alpha = 0.05 | ",
-                                     nrow(out$data) / 4L,
-                                     " plots per site")) +
+  ggplot2::ggtitle("Tukey HSD — 20 varieties across 4 sites",
+                   subtitle = "alpha = 0.05 | Letters independent per site") +
   ggplot2::xlab("Predicted yield (kg/ha)")
 ```
 
