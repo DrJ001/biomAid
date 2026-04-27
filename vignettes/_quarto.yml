@@ -16,6 +16,8 @@ website:
             href: fixedRegress.html
           - text: "Extracting and Padding Field Trial Layouts"
             href: padTrial.html
+          - text: "Multiple Comparison Criteria"
+            href: compare.html
 
 format:
   html:

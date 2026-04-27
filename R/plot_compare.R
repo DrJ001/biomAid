@@ -218,17 +218,24 @@ function(el, x) {
 
 ## Identify (a) the group columns and (b) the comparison variable.
 ##
-## Strategy:
-##   - Remove known non-factor bookkeeping columns.
-##   - Count unique values per candidate column across the whole dataset.
-##   - The comparison variable is the column with the most unique values
-##     (typically varieties: 20–200 unique levels).
-##   - All other columns with fewer unique values are treated as by-columns
-##     (typically sites/treatments: 2–20 unique levels).
+## Two-pass strategy:
 ##
-##   This cardinality approach is robust when the criterion value happens
-##   to be identical across multiple groups — the criterion-based grouping
-##   used previously would then fail to distinguish group vs comparison columns.
+## Pass 1 — criterion-based grouping.
+##   Group rows by their criterion value.  Columns that are constant within
+##   every criterion group are by-columns; the one that varies is the
+##   comparison variable.  This gives the correct answer in the common case
+##   where each by-group has a different criterion (e.g. 4 sites, 4 HSD
+##   values → Treatment varies within each group, Site is constant).
+##
+## Pass 2 — cardinality fallback.
+##   Used only when Pass 1 returns more than one comparison candidate
+##   (i.e. the criterion is identical across all groups).  Among the
+##   candidates that varied in Pass 1, the one with the most unique values
+##   is the comparison variable.
+##
+##   Example where Pass 1 would fail: 2 sites with the same HSD = 180 → one
+##   big criterion group → both Site and Variety appear to vary → cardinality
+##   correctly picks Variety (20 unique) over Site (2 unique).
 #' @noRd
 .pc_detect_cols <- function(res, crit_col) {
 
@@ -238,25 +245,43 @@ function(el, x) {
   if (length(candidates) == 0L)
     stop("No factor columns found in 'res' to use as the comparison variable.")
 
-  # Count unique values for each candidate column
-  n_unique <- vapply(candidates,
+  # ---- Pass 1: criterion-based grouping ----------------------------------
+  grp_id    <- as.character(res[[crit_col]])
+  by_crit   <- character(0L)
+  comp_crit <- character(0L)
+
+  for (col in candidates) {
+    vals_per_grp <- tapply(as.character(res[[col]]), grp_id,
+                           function(x) length(unique(x)))
+    if (all(vals_per_grp == 1L))
+      by_crit   <- c(by_crit,   col)
+    else
+      comp_crit <- c(comp_crit, col)
+  }
+
+  if (length(comp_crit) == 1L)
+    return(list(by_cols = by_crit, comp_col = comp_crit))
+
+  # ---- Pass 2: cardinality tiebreaker ------------------------------------
+  # Restrict to the candidates that varied in Pass 1 (or all if Pass 1 found
+  # nothing, which should not happen in practice).
+  pool <- if (length(comp_crit) > 0L) comp_crit else candidates
+
+  n_unique <- vapply(pool,
                      function(col) length(unique(as.character(res[[col]]))),
                      integer(1L))
 
   max_u    <- max(n_unique)
-  comp_col <- candidates[n_unique == max_u]
+  comp_col <- pool[n_unique == max_u]
 
-  # If there is a tie for highest cardinality, warn and use the first
   if (length(comp_col) > 1L) {
-    warning("Multiple columns share the highest cardinality (",
-            max_u, " unique values): ",
-            paste(comp_col, collapse = ", "),
-            ". Using '", comp_col[1L], "' as the comparison variable.",
-            call. = FALSE)
+    warning("Could not unambiguously identify the comparison variable. ",
+            "Candidates: ", paste(comp_col, collapse = ", "),
+            ". Using '", comp_col[1L], "'.", call. = FALSE)
     comp_col <- comp_col[1L]
   }
 
-  by_cols <- candidates[n_unique < max_u]
+  by_cols <- setdiff(candidates, comp_col)
 
   list(by_cols  = by_cols,
        comp_col = comp_col)
