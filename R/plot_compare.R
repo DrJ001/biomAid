@@ -65,6 +65,28 @@ print.pc_interactive <- function(x, ...) {
   invisible(x)
 }
 
+## knitr knit_print method for pc_interactive.
+##
+## When a pc_interactive object is the last expression in a knitr/Quarto
+## chunk, knitr dispatches to knit_print() rather than print().  Without
+## this method knitr would call print.pc_interactive() which prints the
+## plotly widget via a nested print() call — a side-effect that knitr
+## cannot capture — and the chunk output shows NULL instead of the widget.
+## This method converts to plotly and hands the widget back to knitr via
+## knitr::knit_print() so it is properly embedded in the HTML output.
+#' @export
+knit_print.pc_interactive <- function(x, ...) {
+  if (!requireNamespace("plotly",  quietly = TRUE))
+    stop("Package 'plotly' is required to display an interactive plot. ",
+         "Install with: install.packages('plotly')")
+  if (!requireNamespace("knitr",   quietly = TRUE))
+    stop("Package 'knitr' is required for knit_print support.")
+  p_plotly <- plotly::ggplotly(x$plot, tooltip = "text")
+  if (!is.null(x$hover_data))
+    p_plotly <- .pc_add_hover_js(p_plotly, x$hover_data)
+  knitr::knit_print(p_plotly, ...)
+}
+
 ## Inject hover-band JavaScript into a plotly dotplot.
 ##
 ## The geom_rect band is deliberately excluded from the ggplot when building

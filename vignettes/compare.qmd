@@ -453,9 +453,8 @@ original state.
 #| eval: true
 #| fig-height: 7
 # Rendered as an embedded HTML widget — hover over any variety to move the band
-p_int <- plot_compare(res_hsd, type = "dotplot", interactive = TRUE) +
+plot_compare(res_hsd, type = "dotplot", interactive = TRUE) +
   ggplot2::ggtitle("Hover over any variety to explore significance")
-print(p_int)
 ```
 
 > **Note:** `interactive = TRUE` requires the **plotly** package
