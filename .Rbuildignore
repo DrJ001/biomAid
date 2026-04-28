@@ -3,3 +3,7 @@
 ^\.git$
 ^\.gitignore$
 ^README\.Rmd$
+^\.github$
+^_pkgdown\.yml$
+^docs$
+^vignettes$

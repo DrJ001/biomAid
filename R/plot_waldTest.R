@@ -22,6 +22,11 @@
 # ============================================================
 
 
+utils::globalVariables(c(
+  "Estimate", "y_factor", "neg_log10_p", "CI_lower", "CI_upper",
+  "x_label", "p_label"
+))
+
 # ---- Private helpers -------------------------------------------------------
 
 ## Detect the grouping column added by waldTest() when `by` was supplied.

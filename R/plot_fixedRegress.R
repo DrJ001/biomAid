@@ -12,6 +12,14 @@
 #  to simplify downstream ggplot2 calls.
 # ============================================================
 
+utils::globalVariables(c(
+  "x", "y", "Genotype", "group", "intercept", "beta_label",
+  "aggregate", "ave", "quantile"
+))
+
+#' @importFrom stats aggregate ave quantile
+NULL
+
 # ---- Column detection --------------------------------------------------
 
 # Infer the group and genotype column names from the blues data frame.

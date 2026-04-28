@@ -1,7 +1,7 @@
 # biomAid
 
 [![R-CMD-check](https://github.com/DrJ001/biomAid/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/DrJ001/biomAid/actions/workflows/R-CMD-check.yml)
-[![Codecov](https://codecov.io/gh/DrJ001/biomAid/graph/badge.svg)](https://codecov.io/gh/DrJ001/biomAid)
+[![Codecov](https://app.codecov.io/gh/DrJ001/biomAid/graph/badge.svg)](https://app.codecov.io/gh/DrJ001/biomAid)
 [![R >= 4.1](https://img.shields.io/badge/R-%3E%3D4.1-blue)](https://cran.r-project.org/)
 
 Biometric tools to support the analysis of comparative experiment data fitted
@@ -37,7 +37,7 @@ pak::pkg_install("DrJ001/biomAid")
 remotes::install_github("DrJ001/biomAid")
 ```
 
-> **Note:** The core modelling functions require an [ASReml-R V4](https://vsni.co.uk/software/asreml-r)
+> **Note:** The core modelling functions require an [ASReml-R V4](https://vsni.co.uk/software/asreml-r/)
 > licence. `simTrialData()` and all `plot_*()` functions are fully standalone.
 
 ---

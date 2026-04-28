@@ -20,6 +20,10 @@
 # ============================================================
 
 
+utils::globalVariables(c(
+  "col_num", "row_num", "fill_group", "label_text"
+))
+
 # ---- Private helpers -------------------------------------------------------
 
 ## Parse "Row:Column" pattern string into a named list.

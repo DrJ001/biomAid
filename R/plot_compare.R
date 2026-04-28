@@ -1,11 +1,11 @@
-# ============================================================
+﻿# ============================================================
 #  plot_compare.R
 #  ggplot2 visualisations for compare() output.
 #
 #  Three plot types:
-#   "dotplot"  — sorted predicted values with shaded criterion band
-#   "letters"  — compact letter display (CLD) on a sorted dot plot
-#   "heatmap"  — pairwise difference matrix coloured by significance
+#   "dotplot"  -- sorted predicted values with shaded criterion band
+#   "letters"  -- compact letter display (CLD) on a sorted dot plot
+#   "heatmap"  -- pairwise difference matrix coloured by significance
 #
 #  Design:
 #   - res already carries the criterion as a named column (HSD / LSD /
@@ -25,6 +25,14 @@
 #     via ggplotly() with hover tooltips. Requires the plotly package.
 # ============================================================
 
+
+utils::globalVariables(c(
+  "pred", "var_label", "band_lo", "band_hi", "ref_pred", "sig",
+  "tooltip_text", "y_pos", "lo", "hi", "Var_x", "Var_y", "letter", "ave"
+))
+
+#' @importFrom stats aggregate ave
+NULL
 
 # ---- pc_interactive wrapper class -----------------------------------------
 #
@@ -125,14 +133,14 @@ print.pc_interactive <- function(x, ...) {
 ## When a pc_interactive object is the last expression in a knitr/Quarto
 ## chunk, knitr dispatches to knit_print() rather than print().  Without
 ## this method knitr would call print.pc_interactive() which prints the
-## plotly widget via a nested print() call — a side-effect that knitr
-## cannot capture — and the chunk output shows NULL instead of the widget.
+## plotly widget via a nested print() call -- a side-effect that knitr
+## cannot capture -- and the chunk output shows NULL instead of the widget.
 ## This method converts to plotly and hands the widget back to knitr via
 ## knitr::knit_print() so it is properly embedded in the HTML output.
 ##
 ## @importFrom knitr knit_print is required so roxygen2 registers this as
 ## S3method(knit_print, pc_interactive) in NAMESPACE rather than a plain
-## export — without the S3method entry, UseMethod("knit_print") in knitr
+## export -- without the S3method entry, UseMethod("knit_print") in knitr
 ## will never dispatch here.
 #' @importFrom knitr knit_print
 #' @export
@@ -154,7 +162,7 @@ knit_print.pc_interactive <- function(x, ...) {
 ## dispatch through knit_print may be unreliable (e.g. when the installed
 ## package version lags the source).  Calling as_plotly() as the LAST
 ## expression of a chunk returns a native plotly htmlwidget, which knitr
-## captures via htmlwidgets' built-in knit_print.htmlwidget — no biomAid-
+## captures via htmlwidgets' built-in knit_print.htmlwidget -- no biomAid-
 ## specific registration required.
 ##
 ## Usage in a vignette chunk:
@@ -176,7 +184,7 @@ knit_print.pc_interactive <- function(x, ...) {
 #'   default height (~400 px), which is often too short when the plot has
 #'   multiple facet panels each showing many varieties.  A sensible rule of
 #'   thumb: 180 px per panel row (e.g. `height = 700` for 4 panels in a
-#'   2 × 2 grid).
+#'   2 x 2 grid).
 #' @param width Numeric or `NULL`. Widget width in pixels.  `NULL` (default)
 #'   uses 100 % of the container width.
 #' @param ... Unused; included for future extensibility.
@@ -185,10 +193,10 @@ knit_print.pc_interactive <- function(x, ...) {
 #'
 #' @examples
 #' \dontrun{
-#' # Single-group dotplot — default height is fine
+#' # Single-group dotplot -- default height is fine
 #' as_plotly(plot_compare(res, type = "dotplot", interactive = TRUE))
 #'
-#' # Four-panel dotplot — set a taller height so panels don't overlap
+#' # Four-panel dotplot -- set a taller height so panels don't overlap
 #' as_plotly(plot_compare(res, type = "dotplot", interactive = TRUE),
 #'           height = 700)
 #' }
@@ -210,7 +218,7 @@ as_plotly <- function(x, height = NULL, width = NULL, ...) {
 ## Fix subplot y-axis domain spacing for multi-panel ggplotly output.
 ##
 ## ggplotly converts facet_wrap panels into plotly subplots, but the computed
-## domain gaps are often too small — panels crowd each other regardless of
+## domain gaps are often too small -- panels crowd each other regardless of
 ## the total widget height.  This function redistributes yaxis domains so
 ## that each row occupies an equal share of [0, 1] with a fixed fractional
 ## gap between rows, then shifts any strip-label annotations (yref="paper")
@@ -222,7 +230,7 @@ as_plotly <- function(x, height = NULL, width = NULL, ...) {
 
   # ---- Identify multi-row yaxis entries ----------------------------------
   yax_names <- sort(names(ly)[grepl("^yaxis[0-9]*$", names(ly))])
-  if (length(yax_names) <= 1L) return(p_plotly)   # single panel — nothing to do
+  if (length(yax_names) <= 1L) return(p_plotly)   # single panel -- nothing to do
 
   old_domains <- lapply(yax_names, function(n) ly[[n]]$domain)
   old_mids    <- vapply(old_domains, function(d)
@@ -238,7 +246,7 @@ as_plotly <- function(x, height = NULL, width = NULL, ...) {
   row_lo <- function(r) (r - 1L) * (row_h + row_gap)
   row_hi <- function(r) row_lo(r) + row_h
 
-  # Map from old domain top → new domain top (used to relocate annotations)
+  # Map from old domain top -> new domain top (used to relocate annotations)
   old_top_to_new <- stats::setNames(
     vapply(row_id, row_hi, numeric(1L)),
     vapply(old_domains, function(d) if (is.null(d)) NA_real_ else d[2L],
@@ -293,7 +301,7 @@ as_plotly <- function(x, height = NULL, width = NULL, ...) {
 
   # ---- APPEND band shapes to existing layout.shapes ----------------------
   # ggplotly already puts shapes in layout.shapes (panel borders, strip
-  # boxes, etc.).  We must APPEND the band shapes — not replace — or all
+  # boxes, etc.).  We must APPEND the band shapes -- not replace -- or all
   # those theming shapes are lost.
   existing <- p_plotly$x$layout$shapes
   if (is.null(existing)) existing <- list()
@@ -320,7 +328,7 @@ as_plotly <- function(x, height = NULL, width = NULL, ...) {
   p_plotly$x$layout$shapes <- c(existing, band_shapes)
 
   # Build an explicit xaxis -> band shape index (0-based) map so the
-  # JavaScript never has to scan for the right shape by type — it knows
+  # JavaScript never has to scan for the right shape by type -- it knows
   # exactly which indices are the bands we just appended.
   axis_shape_map <- stats::setNames(
     as.list(seq_len(length(xax_names)) + n_existing - 1L),
@@ -337,7 +345,7 @@ function(el, x) {
   // Per-panel data: criterion + original band bounds (embedded from R)
   var panelData = ", panels_json, ";
 
-  // Explicit band shape indices (0-based) per panel axis — embedded from R
+  // Explicit band shape indices (0-based) per panel axis -- embedded from R
   // so the JS never accidentally selects a ggplotly theming shape.
   var axisShape = ", axis_shape_json, ";
 
@@ -433,21 +441,21 @@ function(el, x) {
 ##
 ## Two-pass strategy:
 ##
-## Pass 1 — criterion-based grouping.
+## Pass 1 -- criterion-based grouping.
 ##   Group rows by their criterion value.  Columns that are constant within
 ##   every criterion group are by-columns; the one that varies is the
 ##   comparison variable.  This gives the correct answer in the common case
 ##   where each by-group has a different criterion (e.g. 4 sites, 4 HSD
-##   values → Treatment varies within each group, Site is constant).
+##   values -> Treatment varies within each group, Site is constant).
 ##
-## Pass 2 — cardinality fallback.
+## Pass 2 -- cardinality fallback.
 ##   Used only when Pass 1 returns more than one comparison candidate
 ##   (i.e. the criterion is identical across all groups).  Among the
 ##   candidates that varied in Pass 1, the one with the most unique values
 ##   is the comparison variable.
 ##
-##   Example where Pass 1 would fail: 2 sites with the same HSD = 180 → one
-##   big criterion group → both Site and Variety appear to vary → cardinality
+##   Example where Pass 1 would fail: 2 sites with the same HSD = 180 -> one
+##   big criterion group -> both Site and Variety appear to vary -> cardinality
 ##   correctly picks Variety (20 unique) over Site (2 unique).
 #' @noRd
 .pc_detect_cols <- function(res, crit_col) {
@@ -541,7 +549,7 @@ function(el, x) {
   for (i in seq_len(n - 1L)) {
     for (j in seq(i + 1L, n)) {
       if (abs(pv_s[i] - pv_s[j]) > criterion) {
-        # i and j are significantly different — must not share a letter
+        # i and j are significantly different -- must not share a letter
         shared <- intersect(letter_sets[[i]], letter_sets[[j]])
         if (length(shared) > 0L) {
           # Give j (and its non-sig neighbours above it) a new letter
@@ -652,7 +660,7 @@ function(el, x) {
   # Pre-compute a per-group numeric y-position (1 = lowest pred, n = highest).
   # Using a continuous numeric y-axis (with custom labels) instead of a
   # discrete factor axis means geom_rect works with finite ymin/ymax on a
-  # continuous scale — critical for plotly compatibility.
+  # continuous scale -- critical for plotly compatibility.
   res$y_pos <- ave(res$pred, res$Group,
                    FUN = function(x) rank(x, ties.method = "first"))
 
@@ -765,7 +773,7 @@ function(el, x) {
   has_3levels <- using_ref && any(df$sig == "better", na.rm = TRUE) ||
                               any(df$sig == "worse",  na.rm = TRUE)
 
-  # Band data frame — uses pre-computed band_lo / band_hi.
+  # Band data frame -- uses pre-computed band_lo / band_hi.
   # ymin/ymax are finite values that span the full panel on a discrete y-axis
   # (positions run from 0.5 to n+0.5).  This avoids passing -Inf/Inf to
   # plotly, which cannot do arithmetic on infinite values.
@@ -851,7 +859,7 @@ function(el, x) {
         name   = NULL
       ) +
       ggplot2::scale_y_discrete(
-        # Strip the "Group\x01" namespace prefix — show only the variety name
+        # Strip the "Group\x01" namespace prefix -- show only the variety name
         labels  = function(x) sub("^[^\x01]+\x01", "", x),
         expand  = ggplot2::expansion(add = 0.6)
       ) +
@@ -1146,7 +1154,7 @@ function(el, x) {
 #' \describe{
 #'   \item{`"dotplot"`}{Varieties sorted by predicted value (highest at top)
 #'     within each group.  A shaded band of width equal to the comparison
-#'     criterion is drawn below the top-ranked variety — any variety whose
+#'     criterion is drawn below the top-ranked variety -- any variety whose
 #'     point falls within the band is **not** significantly different from the
 #'     best.  Points outside the band are coloured red.  The dashed vertical
 #'     line marks the top-ranked predicted value.}
@@ -1155,7 +1163,7 @@ function(el, x) {
 #'     \eqn{[\hat\tau - \text{crit}/2,\; \hat\tau + \text{crit}/2]}
 #'     is drawn for each variety, with the predicted value marked by a point.
 #'     Two varieties are significantly different if and only if their bars
-#'     do not overlap — an exact visual equivalent of the criterion test.}
+#'     do not overlap -- an exact visual equivalent of the criterion test.}
 #'   \item{`"letters"`}{Compact letter display (CLD) overlaid on the sorted
 #'     dot plot.  Varieties sharing at least one letter are not significantly
 #'     different.  Letters are assigned by the standard descending sweep
@@ -1167,7 +1175,7 @@ function(el, x) {
 #'     display becomes unreadable.}
 #' }
 #'
-#' **Group detection** — `plot_compare()` infers which columns are grouping
+#' **Group detection** -- `plot_compare()` infers which columns are grouping
 #' variables and which is the comparison variable directly from `res`.
 #' Factor columns that are constant within every group (i.e. within every
 #' block of rows sharing the same criterion value) are treated as `by`
@@ -1201,7 +1209,7 @@ function(el, x) {
 #'
 #' @return A `ggplot` object (when `interactive = FALSE` and
 #'   `return_data = FALSE`), a `pc_interactive` object (when
-#'   `interactive = TRUE` — auto-converts to plotly on `print()`; supports
+#'   `interactive = TRUE` -- auto-converts to plotly on `print()`; supports
 #'   `+` for ggplot2 layer extensions before conversion), or a `data.frame`
 #'   (when `return_data = TRUE`).
 #'
@@ -1234,7 +1242,7 @@ function(el, x) {
 #'
 #' # Extend with a custom title
 #' plot_compare(res, type = "letters") +
-#'   ggplot2::ggtitle("Variety comparison — HSD (Tukey)")
+#'   ggplot2::ggtitle("Variety comparison -- HSD (Tukey)")
 #' }
 #'
 #' @export
@@ -1303,7 +1311,7 @@ plot_compare <- function(res,
   if (return_data) return(df)
 
   # ---- Build plot ---------------------------------------------------------
-  # Suppress "Ignoring unknown aesthetics: text" — the text aes is only
+  # Suppress "Ignoring unknown aesthetics: text" -- the text aes is only
   # consumed by plotly::ggplotly(); ggplot2 silently drops it when
   # interactive = FALSE.  We suppress the warning to keep the static
   # rendering clean.

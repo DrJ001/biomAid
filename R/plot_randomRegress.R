@@ -3,6 +3,14 @@
 #  ggplot2 visualisation for randomRegress() output.
 # ============================================================
 
+utils::globalVariables(c(
+  "x", "y", "Variety", "group", "beta_label", "col_var", "row_var",
+  "corr", "cov2cor", "ave", "aggregate", "quantile"
+))
+
+#' @importFrom stats aggregate ave cov2cor quantile
+NULL
+
 # ---- Data preparation helpers ------------------------------------------
 
 #' @noRd
