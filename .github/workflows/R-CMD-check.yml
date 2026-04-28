@@ -24,7 +24,6 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
-      _R_CHECK_FORCE_SUGGESTS_: false
 
     steps:
       - uses: actions/checkout@v4
@@ -37,25 +36,15 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
-      # RSPM has no binaries for R-devel; setup-r@v2 restores release-compiled
-      # binaries whose .so files reference removed R internals (e.g. SETLENGTH).
-      # Clear the cached contents but recreate the directory so R still has a
-      # writable library to install fresh compatible packages into.
-      - name: Clear setup-r temp library on Linux
-        if: runner.os == 'Linux'
-        run: |
-          rm -rf "${RUNNER_TEMP}/Library"
-          mkdir -p "${RUNNER_TEMP}/Library"
-        shell: bash
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::rcmdcheck
+            any::covr
+          needs: check
 
-      - name: Install dependencies and check
+      - name: Check
         run: |
-          install.packages(c("remotes", "rcmdcheck", "testthat", "devtools", "covr", "xml2",
-                             "plotly", "jsonlite", "htmlwidgets"))
-          remotes::install_deps(
-            pkgdir       = ".",
-            dependencies = c("Depends", "Imports", "LinkingTo")
-          )
           rcmdcheck::rcmdcheck(
             args     = c("--no-manual", "--as-cran"),
             error_on = "warning"
