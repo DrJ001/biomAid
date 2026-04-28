@@ -50,7 +50,8 @@ jobs:
 
       - name: Install dependencies and check
         run: |
-          install.packages(c("remotes", "rcmdcheck", "testthat", "devtools", "covr", "xml2"))
+          install.packages(c("remotes", "rcmdcheck", "testthat", "devtools", "covr", "xml2",
+                             "plotly", "jsonlite", "htmlwidgets"))
           remotes::install_deps(
             pkgdir       = ".",
             dependencies = c("Depends", "Imports", "LinkingTo")
