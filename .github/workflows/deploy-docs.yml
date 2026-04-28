@@ -37,6 +37,7 @@ jobs:
           extra-packages: |
             any::knitr
             any::rmarkdown
+            local::.
             asreml=?ignore
             ASExtras4=?ignore
           needs: website
