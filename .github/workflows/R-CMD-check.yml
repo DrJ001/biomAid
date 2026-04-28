@@ -24,6 +24,7 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
+      _R_CHECK_FORCE_SUGGESTS_: false
 
     steps:
       - uses: actions/checkout@v4
@@ -41,9 +42,9 @@ jobs:
           extra-packages: |
             any::rcmdcheck
             any::covr
+            asreml=?ignore
+            ASExtras4=?ignore
           needs: check
-          # asreml and ASExtras4 are commercial/non-CRAN packages; skip them
-          ignore-packages: asreml, ASExtras4
 
       - name: Check
         run: |
