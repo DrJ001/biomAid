@@ -1,0 +1,595 @@
+# =============================================================================
+# plot_accuracy.R  —  ggplot2 visualisations for accuracy() output
+# =============================================================================
+#
+# Single-model types  (res2 not required):
+#   "lollipop"  Group-level mean accuracy; lollipop + optional sd error bars.
+#               Faceted by metric when both accuracy and cullis are present.
+#   "violin"    Per-variety accuracy distribution per group (requires by_variety
+#               data). Faceted by metric when both are present.
+#   "heatmap"   Variety × Group accuracy grid (requires by_variety data).
+#               Faceted by metric when both are present.
+#
+# Comparison types  (res2 required):
+#   "dumbbell"  Paired group-level dots connected by a coloured segment
+#               (green = model2 improved, red = model2 declined).
+#   "scatter"   Per-variety model1 (x) vs model2 (y) accuracy scatter with a
+#               diagonal reference line (requires by_variety data in both).
+#   "diff"      Signed accuracy gain (model2 − model1) lollipop per group.
+# =============================================================================
+
+utils::globalVariables(c(
+  "group", "value", "sd_val", "metric_label", "model_label",
+  "variety", "x1", "x2", "diff_val", "gain_dir",
+  ".value_x", ".value_y"
+))
+
+# =============================================================================
+# MAIN FUNCTION
+# =============================================================================
+
+#' Plot accuracy results from \code{accuracy()}
+#'
+#' Provides six plot types for visualising BLUP accuracy computed by
+#' \code{\link{accuracy}()}: a lollipop summary, violin distribution, heatmap,
+#' and three two-model comparison plots (dumbbell, scatter, diff).
+#'
+#' @param res      Data frame returned by \code{accuracy()}. May be group-level
+#'   or by-variety (\code{by_variety = TRUE}) depending on \code{type}.
+#' @param res2     Optional second data frame from \code{accuracy()} for
+#'   comparison plots (\code{"dumbbell"}, \code{"scatter"}, \code{"diff"}).
+#' @param type     Plot type — one of \code{"lollipop"}, \code{"violin"},
+#'   \code{"heatmap"}, \code{"dumbbell"}, \code{"scatter"}, \code{"diff"}.
+#' @param metric   Character vector: \code{"accuracy"}, \code{"cullis"}, or
+#'   both (default). When both are selected the plot is faceted into two panels.
+#' @param label1   Legend label for \code{res}  (comparison plots only).
+#' @param label2   Legend label for \code{res2} (comparison plots only).
+#' @param theme    A ggplot2 theme object applied to all plots.
+#' @param return_data Logical. If \code{TRUE}, returns a list with elements
+#'   \code{$plot} and \code{$data} instead of just the plot.
+#' @param ...      Currently unused.
+#'
+#' @return A \code{ggplot} object, or a named list when \code{return_data = TRUE}.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' acc  <- accuracy(model_fa,   metric = c("accuracy","cullis"))
+#' acc2 <- accuracy(model_diag, metric = c("accuracy","cullis"))
+#'
+#' plot_accuracy(acc,       type = "lollipop")
+#' plot_accuracy(acc_bv,    type = "violin")
+#' plot_accuracy(acc_bv,    type = "heatmap")
+#' plot_accuracy(acc, acc2, type = "dumbbell", label1 = "FA", label2 = "Diag")
+#' plot_accuracy(acc_bv, acc2_bv, type = "scatter")
+#' plot_accuracy(acc, acc2, type = "diff", label1 = "FA", label2 = "Diag")
+#' }
+plot_accuracy <- function(res,
+                           res2        = NULL,
+                           type        = c("lollipop", "violin", "heatmap",
+                                           "dumbbell", "scatter", "diff"),
+                           metric      = c("accuracy", "cullis"),
+                           label1      = "Model 1",
+                           label2      = "Model 2",
+                           theme       = ggplot2::theme_bw(),
+                           return_data = FALSE,
+                           ...) {
+
+  type   <- match.arg(type)
+  metric <- match.arg(metric, several.ok = TRUE)
+
+  # ---- helpers ---------------------------------------------------------------
+  is_bv  <- function(d) "variety" %in% names(d)
+
+  # ---- type/data validation --------------------------------------------------
+  single_types  <- c("lollipop", "violin", "heatmap")
+  compare_types <- c("dumbbell", "scatter", "diff")
+  bv_types      <- c("violin", "heatmap", "scatter")
+
+  if (type %in% single_types && !is.null(res2))
+    warning(sprintf("[plot_accuracy] type='%s' ignores res2.", type))
+  if (type %in% compare_types && is.null(res2))
+    stop(sprintf("[plot_accuracy] type='%s' requires res2.", type))
+  if (type %in% bv_types && !is_bv(res))
+    stop(sprintf("[plot_accuracy] type='%s' requires by_variety=TRUE data in res.", type))
+  if (type == "scatter" && !is.null(res2) && !is_bv(res2))
+    stop("[plot_accuracy] type='scatter' requires by_variety=TRUE data in res2.")
+
+  # ---- metric column validation ----------------------------------------------
+  .check_metric <- function(d, m, lbl = "res") {
+    acc_col <- if (is_bv(d)) "accuracy" else "mean_acc"
+    if ("accuracy" %in% m && !acc_col %in% names(d))
+      stop(sprintf(
+        "[plot_accuracy] 'accuracy' not in %s — run accuracy(..., metric='accuracy').", lbl))
+    if ("cullis" %in% m && !"cullis_h2" %in% names(d))
+      stop(sprintf(
+        "[plot_accuracy] 'cullis' not in %s — run accuracy(..., metric='cullis').", lbl))
+  }
+  .check_metric(res, metric, "res")
+  if (!is.null(res2)) .check_metric(res2, metric, "res2")
+
+  # ---- dispatch --------------------------------------------------------------
+  switch(type,
+    lollipop = .pa_lollipop(res,           metric, theme, return_data),
+    violin   = .pa_violin(  res,           metric, theme, return_data),
+    heatmap  = .pa_heatmap( res,           metric, theme, return_data),
+    dumbbell = .pa_dumbbell(res, res2, metric, label1, label2, theme, return_data),
+    scatter  = .pa_scatter( res, res2, metric, label1, label2, theme, return_data),
+    diff     = .pa_diff(    res, res2, metric, label1, label2, theme, return_data)
+  )
+}
+
+# =============================================================================
+# DATA PREP HELPERS
+# =============================================================================
+
+# Colour palette used throughout
+.pa_metric_cols <- c("Mrode Accuracy" = "#2166AC", "Cullis H\u00b2" = "#D6604D")
+.pa_gain_cols   <- c("Improved" = "#1A9641", "Declined"  = "#D7191C")
+
+# Convert group-level accuracy() output to long format
+.pa_long_grp <- function(res, metric) {
+  out <- list()
+  if ("accuracy" %in% metric && "mean_acc" %in% names(res)) {
+    out[["accuracy"]] <- data.frame(
+      group        = res$group,
+      n_vars       = res$n_vars,
+      value        = res$mean_acc,
+      sd_val       = if ("sd_acc" %in% names(res)) res$sd_acc else NA_real_,
+      metric_label = "Mrode Accuracy",
+      stringsAsFactors = FALSE
+    )
+  }
+  if ("cullis" %in% metric && "cullis_h2" %in% names(res)) {
+    out[["cullis"]] <- data.frame(
+      group        = res$group,
+      n_vars       = if ("n_vars" %in% names(res)) res$n_vars else NA_integer_,
+      value        = res$cullis_h2,
+      sd_val       = NA_real_,
+      metric_label = "Cullis H\u00b2",
+      stringsAsFactors = FALSE
+    )
+  }
+  if (!length(out)) stop("[plot_accuracy] No matching metric columns found in res.")
+  do.call(rbind, c(out, make.row.names = FALSE))
+}
+
+# Convert by_variety accuracy() output to long format
+.pa_long_bv <- function(res, metric) {
+  out <- list()
+  if ("accuracy" %in% metric && "accuracy" %in% names(res)) {
+    out[["accuracy"]] <- data.frame(
+      group        = res$group,
+      variety      = res$variety,
+      value        = res$accuracy,
+      metric_label = "Mrode Accuracy",
+      stringsAsFactors = FALSE
+    )
+  }
+  if ("cullis" %in% metric && "cullis_h2" %in% names(res)) {
+    out[["cullis"]] <- data.frame(
+      group        = res$group,
+      variety      = res$variety,
+      value        = res$cullis_h2,
+      metric_label = "Cullis H\u00b2",
+      stringsAsFactors = FALSE
+    )
+  }
+  if (!length(out)) stop("[plot_accuracy] No matching metric columns found in res.")
+  do.call(rbind, c(out, make.row.names = FALSE))
+}
+
+# Set group factor levels ordered by mean value (ascending → best at top of y)
+# Uses the first metric_label present if multiple exist.
+.pa_order_groups <- function(d) {
+  ref_metric <- unique(d$metric_label)[1L]
+  ref        <- d[d$metric_label == ref_metric, ]
+  ord        <- tapply(ref$value, ref$group, mean, na.rm = TRUE)
+  d$group    <- factor(d$group, levels = names(sort(ord)))
+  d
+}
+
+# Set variety factor levels ordered by mean value (descending → best at top of y)
+.pa_order_varieties <- function(d) {
+  ref_metric <- unique(d$metric_label)[1L]
+  ref        <- d[d$metric_label == ref_metric, ]
+  ord        <- tapply(ref$value, ref$variety, mean, na.rm = TRUE)
+  d$variety  <- factor(d$variety, levels = names(sort(ord, decreasing = TRUE)))
+  d
+}
+
+# =============================================================================
+# LOLLIPOP  (single model, group-level)
+# =============================================================================
+
+.pa_lollipop <- function(res, metric, theme, return_data) {
+
+  d <- .pa_long_grp(res, metric)
+  d <- .pa_order_groups(d)
+
+  use_facet <- length(unique(d$metric_label)) > 1L
+
+  p <- ggplot2::ggplot(d, ggplot2::aes(x = value, y = group)) +
+    ggplot2::geom_segment(
+      ggplot2::aes(x = 0, xend = value, yend = group),
+      colour = "grey65", linewidth = 0.7
+    ) +
+    ggplot2::geom_point(
+      ggplot2::aes(colour = metric_label),
+      size = 3.5, show.legend = !use_facet
+    )
+
+  # Horizontal error bars for accuracy metric only (sd_val is NA for cullis)
+  d_err <- d[!is.na(d$sd_val) & d$sd_val > 0, ]
+  if (nrow(d_err) > 0L) {
+    p <- p + ggplot2::geom_errorbar(
+      data = d_err,
+      ggplot2::aes(xmin = pmax(0, value - sd_val),
+                   xmax = pmin(1, value + sd_val),
+                   y    = group),
+      orientation = "y",
+      width    = 0.3,
+      colour   = "grey40",
+      linewidth = 0.5
+    )
+  }
+
+  p <- p +
+    ggplot2::scale_x_continuous(
+      limits = c(0, 1),
+      breaks = seq(0, 1, 0.2),
+      expand = ggplot2::expansion(mult = c(0, 0.03))
+    ) +
+    ggplot2::scale_colour_manual(
+      values = .pa_metric_cols,
+      guide  = if (use_facet) "none" else ggplot2::guide_legend(title = NULL)
+    ) +
+    ggplot2::labs(x = "Accuracy", y = NULL, colour = NULL) +
+    theme
+
+  if (use_facet)
+    p <- p + ggplot2::facet_wrap(~ metric_label, ncol = 2, scales = "free_x")
+
+  if (return_data) return(list(plot = p, data = d))
+  p
+}
+
+# =============================================================================
+# VIOLIN  (single model, by_variety)
+# =============================================================================
+
+.pa_violin <- function(res, metric, theme, return_data) {
+
+  d <- .pa_long_bv(res, metric)
+
+  # Cullis H² is a group-level constant in by_variety data — it produces a
+  # degenerate flat display in a violin. Suppress it automatically when
+  # Mrode Accuracy is also present; direct users to lollipop instead.
+  cullis_lbl  <- "Cullis H\u00b2"
+  acc_lbl     <- "Mrode Accuracy"
+  has_cullis  <- cullis_lbl %in% unique(d$metric_label)
+  has_acc     <- acc_lbl    %in% unique(d$metric_label)
+
+  if (has_cullis && has_acc) {
+    message("[plot_accuracy] violin: Cullis H\u00b2 is a group-level statistic ",
+            "and is suppressed in violin mode. ",
+            "Use type = \"lollipop\" to visualise it alongside Mrode Accuracy.")
+    d <- d[d$metric_label == acc_lbl, ]
+  }
+
+  d <- .pa_order_groups(d)
+
+  use_facet <- length(unique(d$metric_label)) > 1L
+
+  # Detect if a metric's values are constant within every group (cullis case
+  # when only cullis was requested and accuracy was absent)
+  .is_const <- function(sub) {
+    all(tapply(sub$value, sub$group,
+               function(x) length(unique(round(x, 10)))) == 1L)
+  }
+
+  p <- ggplot2::ggplot(d, ggplot2::aes(x = group, y = value))
+
+  if (use_facet) {
+    # Build per-metric geoms using data= subsets; facet handles layout
+    for (ml in unique(d$metric_label)) {
+      sub <- d[d$metric_label == ml, ]
+      col <- .pa_metric_cols[ml]
+      if (.is_const(sub)) {
+        # Cullis: one point per group (constant within group)
+        grp_sum <- aggregate(value ~ group, data = sub, FUN = mean)
+        p <- p +
+          ggplot2::geom_point(
+            data = grp_sum,
+            ggplot2::aes(x = group, y = value),
+            colour = col, fill = col,
+            shape = 18, size = 5
+          )
+      } else {
+        p <- p +
+          ggplot2::geom_violin(
+            data = sub,
+            fill = col, colour = col, alpha = 0.30,
+            trim = TRUE, scale = "width"
+          ) +
+          ggplot2::geom_jitter(
+            data = sub,
+            colour = col, alpha = 0.65, size = 1.5,
+            width = 0.10, height = 0
+          )
+      }
+    }
+    p <- p + ggplot2::facet_wrap(~ metric_label, ncol = 1, scales = "free_y")
+
+  } else {
+    col <- .pa_metric_cols[unique(d$metric_label)]
+    if (.is_const(d)) {
+      grp_sum <- aggregate(value ~ group, data = d, FUN = mean)
+      p <- p +
+        ggplot2::geom_point(
+          data = grp_sum,
+          ggplot2::aes(x = group, y = value),
+          colour = col, fill = col, shape = 18, size = 5
+        )
+    } else {
+      p <- p +
+        ggplot2::geom_violin(
+          fill = col, colour = col, alpha = 0.30,
+          trim = TRUE, scale = "width"
+        ) +
+        ggplot2::geom_jitter(
+          colour = col, alpha = 0.65, size = 1.5,
+          width = 0.10, height = 0
+        )
+    }
+  }
+
+  p <- p +
+    ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+    ggplot2::labs(x = "Group", y = "Accuracy") +
+    theme
+
+  if (return_data) return(list(plot = p, data = d))
+  p
+}
+
+# =============================================================================
+# HEATMAP  (single model, by_variety)
+# =============================================================================
+
+.pa_heatmap <- function(res, metric, theme, return_data) {
+
+  d <- .pa_long_bv(res, metric)
+  d <- .pa_order_groups(d)
+  d <- .pa_order_varieties(d)
+
+  use_facet <- length(unique(d$metric_label)) > 1L
+
+  p <- ggplot2::ggplot(d, ggplot2::aes(x = group, y = variety, fill = value)) +
+    ggplot2::geom_tile(colour = "white", linewidth = 0.3) +
+    ggplot2::scale_fill_viridis_c(
+      option = "D",
+      name   = "Accuracy",
+      limits = c(0, 1),
+      breaks = seq(0, 1, 0.2)
+    ) +
+    ggplot2::labs(x = "Group", y = "Variety") +
+    theme +
+    ggplot2::theme(
+      axis.text.y      = ggplot2::element_text(size = 7),
+      panel.grid.major = ggplot2::element_blank(),
+      panel.grid.minor = ggplot2::element_blank()
+    )
+
+  if (use_facet)
+    p <- p + ggplot2::facet_wrap(~ metric_label, ncol = 2)
+
+  if (return_data) return(list(plot = p, data = d))
+  p
+}
+
+# =============================================================================
+# DUMBBELL  (two models, group-level)
+# =============================================================================
+
+.pa_dumbbell <- function(res, res2, metric, label1, label2, theme, return_data) {
+
+  d1         <- .pa_long_grp(res,  metric); d1$model_label <- label1
+  d2         <- .pa_long_grp(res2, metric); d2$model_label <- label2
+  dall       <- rbind(d1, d2)
+
+  # Segment data: one row per group × metric
+  seg <- merge(
+    d1[, c("group", "value", "metric_label")],
+    d2[, c("group", "value", "metric_label")],
+    by = c("group", "metric_label"),
+    suffixes = c("_1", "_2")
+  )
+  names(seg)[names(seg) == "value_1"] <- "x1"
+  names(seg)[names(seg) == "value_2"] <- "x2"
+  seg$gain_dir <- ifelse(seg$x2 >= seg$x1, "Improved", "Declined")
+
+  # Order groups by model1 accuracy value (ascending → best at top)
+  ref_metric     <- unique(dall$metric_label)[1L]
+  ref_d1         <- d1[d1$metric_label == ref_metric, ]
+  grp_ord        <- names(sort(tapply(ref_d1$value, ref_d1$group, mean, na.rm = TRUE)))
+  dall$group     <- factor(dall$group, levels = grp_ord)
+  seg$group      <- factor(seg$group,  levels = grp_ord)
+  dall$model_label <- factor(dall$model_label, levels = c(label1, label2))
+
+  use_facet <- length(unique(dall$metric_label)) > 1L
+
+  model_fills <- c("#2166AC", "#D6604D")
+  names(model_fills) <- c(label1, label2)
+
+  p <- ggplot2::ggplot() +
+    # Connecting segment — colour encodes direction of change
+    ggplot2::geom_segment(
+      data = seg,
+      ggplot2::aes(x     = x1, xend  = x2,
+                   y     = group, yend  = group,
+                   colour = gain_dir),
+      linewidth = 1.4, alpha = 0.85
+    ) +
+    # Model points — shape + fill distinguish models
+    ggplot2::geom_point(
+      data = dall,
+      ggplot2::aes(x    = value,
+                   y    = group,
+                   shape = model_label,
+                   fill  = model_label),
+      colour = "white", stroke = 0.5, size = 4.0
+    ) +
+    ggplot2::scale_colour_manual(
+      name   = NULL,
+      values = .pa_gain_cols
+    ) +
+    ggplot2::scale_shape_manual(
+      name   = "Model",
+      values = c(21L, 22L),
+      labels = c(label1, label2)
+    ) +
+    ggplot2::scale_fill_manual(
+      name   = "Model",
+      values = model_fills,
+      labels = c(label1, label2)
+    ) +
+    ggplot2::scale_x_continuous(
+      limits = c(0, 1),
+      breaks = seq(0, 1, 0.2),
+      expand = ggplot2::expansion(mult = c(0, 0.03))
+    ) +
+    ggplot2::guides(
+      shape  = ggplot2::guide_legend(
+        order = 1,
+        override.aes = list(
+          fill   = unname(model_fills),
+          colour = "white",
+          size   = 3.5
+        )
+      ),
+      fill   = "none",
+      colour = ggplot2::guide_legend(
+        order = 2,
+        override.aes = list(linewidth = 1.4, alpha = 0.85)
+      )
+    ) +
+    ggplot2::labs(x = "Accuracy", y = NULL) +
+    theme
+
+  if (use_facet)
+    p <- p + ggplot2::facet_wrap(~ metric_label, ncol = 2, scales = "free_x")
+
+  if (return_data)
+    return(list(plot = p,
+                data = list(model1 = d1, model2 = d2, segments = seg)))
+  p
+}
+
+# =============================================================================
+# SCATTER  (two models, by_variety)
+# =============================================================================
+
+.pa_scatter <- function(res, res2, metric, label1, label2, theme, return_data) {
+
+  d1 <- .pa_long_bv(res,  metric)
+  d2 <- .pa_long_bv(res2, metric)
+  names(d1)[names(d1) == "value"] <- ".value_x"
+  names(d2)[names(d2) == "value"] <- ".value_y"
+
+  d <- merge(
+    d1[, c("group", "variety", "metric_label", ".value_x")],
+    d2[, c("group", "variety", "metric_label", ".value_y")],
+    by = c("group", "variety", "metric_label")
+  )
+
+  use_facet <- length(unique(d$metric_label)) > 1L
+  n_grp     <- length(unique(d$group))
+
+  p <- ggplot2::ggplot(d,
+       ggplot2::aes(x = .value_x, y = .value_y, colour = group)) +
+    ggplot2::geom_abline(
+      slope = 1, intercept = 0,
+      linetype = "dashed", colour = "grey45", linewidth = 0.7
+    ) +
+    ggplot2::geom_point(alpha = 0.70, size = 2.0) +
+    ggplot2::scale_x_continuous(
+      limits = c(0, 1), breaks = seq(0, 1, 0.2),
+      expand = ggplot2::expansion(mult = c(0.02, 0.02))
+    ) +
+    ggplot2::scale_y_continuous(
+      limits = c(0, 1), breaks = seq(0, 1, 0.2),
+      expand = ggplot2::expansion(mult = c(0.02, 0.02))
+    ) +
+    ggplot2::labs(
+      x      = paste0(label1, "  accuracy"),
+      y      = paste0(label2, "  accuracy"),
+      colour = "Group"
+    ) +
+    theme
+
+  if (use_facet)
+    p <- p + ggplot2::facet_wrap(~ metric_label, ncol = 2)
+
+  if (return_data) return(list(plot = p, data = d))
+  p
+}
+
+# =============================================================================
+# DIFF  (two models, group-level)
+# =============================================================================
+
+.pa_diff <- function(res, res2, metric, label1, label2, theme, return_data) {
+
+  d1 <- .pa_long_grp(res,  metric)
+  d2 <- .pa_long_grp(res2, metric)
+
+  d <- merge(
+    d1[, c("group", "value", "n_vars", "metric_label")],
+    d2[, c("group", "value", "metric_label")],
+    by       = c("group", "metric_label"),
+    suffixes = c("_1", "_2")
+  )
+  d$diff_val <- d$value_2 - d$value_1
+  d$gain_dir <- ifelse(d$diff_val >= 0, "Improved", "Declined")
+
+  # Order by diff_val within the first metric (ascending → biggest gain at top)
+  ref_metric <- unique(d$metric_label)[1L]
+  ref_d      <- d[d$metric_label == ref_metric, ]
+  grp_ord    <- names(sort(tapply(ref_d$diff_val, ref_d$group, mean, na.rm = TRUE)))
+  d$group    <- factor(d$group, levels = grp_ord)
+
+  use_facet <- length(unique(d$metric_label)) > 1L
+
+  # Symmetric x limits centred on 0
+  abs_max <- max(abs(d$diff_val), na.rm = TRUE)
+  x_lim   <- c(-abs_max, abs_max) * 1.08
+
+  p <- ggplot2::ggplot(d, ggplot2::aes(x = diff_val, y = group,
+                                        colour = gain_dir)) +
+    ggplot2::geom_vline(
+      xintercept = 0, linetype = "dashed",
+      colour = "grey40", linewidth = 0.6
+    ) +
+    ggplot2::geom_segment(
+      ggplot2::aes(x = 0, xend = diff_val, yend = group),
+      linewidth = 0.9
+    ) +
+    ggplot2::geom_point(size = 3.5) +
+    ggplot2::scale_colour_manual(values = .pa_gain_cols, guide = "none") +
+    ggplot2::scale_x_continuous(
+      limits = x_lim,
+      expand = ggplot2::expansion(mult = c(0, 0))
+    ) +
+    ggplot2::labs(
+      x = sprintf("Accuracy gain  (%s \u2212 %s)", label2, label1),
+      y = NULL
+    ) +
+    theme
+
+  if (use_facet)
+    p <- p + ggplot2::facet_wrap(~ metric_label, ncol = 2, scales = "free_x")
+
+  if (return_data) return(list(plot = p, data = d))
+  p
+}

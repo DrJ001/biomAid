@@ -2,171 +2,161 @@
 % Please edit documentation in R/simulate_trial_data.R
 \name{simTrialData}
 \alias{simTrialData}
-\title{Simulate Multi-Treatment Multi-Environment Plant Breeding Trial Data}
+\title{Simulate Multi-Environment Plant Breeding Trial Data}
 \usage{
 simTrialData(
   nvar = 20L,
   nsite = 10L,
-  treatments = c("N0", "N1", "N2"),
-  nrep = 3L,
-  rows_per_strip = NULL,
-  cols_per_strip = NULL,
-  site_mean = 4500,
-  site_sd = 600,
-  treat_effects = NULL,
-  sigma_base = 250,
-  sigr = NULL,
-  beta_min = NULL,
-  beta_max = NULL,
-  rep_sd = 150,
-  row_sd = 80,
-  col_sd = 60,
-  error_sd = 350,
-  sep = "-",
-  variety_prefix = "Var",
-  site_prefix = "Env",
+  treatments = NULL,
+  nrep = 2L,
+  n_fa = 2L,
+  incidence = "balanced",
   seed = NULL,
-  outfile = NULL,
-  verbose = TRUE
+  verbose = TRUE,
+  sim.options = list()
 )
 }
 \arguments{
-\item{nvar}{Integer. Number of varieties. Should be composite (not
-prime) for a tidy rectangular sub-plot layout; a warning is issued
-otherwise.  Default \code{20}.}
+\item{nvar}{Integer. Maximum number of varieties. Default \code{20}.}
 
 \item{nsite}{Integer. Number of environments (sites). Default \code{10}.}
 
-\item{treatments}{Character vector of length ≥ 2 giving treatment labels.
-The \strong{first element} is the baseline; all others are regressed onto it
-in \code{\link[=randomRegress]{randomRegress()}}.  Default \code{c("N0", "N1", "N2")}.}
+\item{treatments}{Character vector of treatment labels (length >= 2), or
+\code{NULL} (default) for a MET-only trial with no treatment structure.}
 
-\item{nrep}{Integer. Number of complete replicates per environment.
-Default \code{3}.}
+\item{nrep}{Integer. Replicates per environment. Default \code{2}.}
 
-\item{rows_per_strip}{Integer or \code{NULL}. Rows allocated to each treatment
-strip within a replicate block. With \code{cols_per_strip} must satisfy
-\code{rows_per_strip * cols_per_strip == nvar}. Auto-calculated to the
-near-square factor pair when \code{NULL}.}
+\item{n_fa}{Integer. Number of FA factors used in the data-generating
+genetic model. Must be less than the number of groups (environments or
+Treatment x Site combinations). Default \code{2}.}
 
-\item{cols_per_strip}{Integer or \code{NULL}. Columns per treatment strip.
-Auto-calculated when \code{NULL} (see \code{rows_per_strip}).}
+\item{incidence}{Controls which varieties are observed at which sites.
+One of:
+\describe{
+\item{\code{"balanced"}}{(Default) All \code{nvar} varieties are observed at every
+site. Produces identical PEV for all varieties within a site.}
+\item{\code{"unbalanced"}}{Automatically generates a two-tier incidence
+structure: approximately 20\\% of varieties are "core" entries that
+appear in at least 75\\% of sites; the remaining varieties appear in
+40-85\\% of sites at random. Every variety appears in at least 2 sites;
+every site has at least \code{max(ceiling(nvar * 0.4), 2)} varieties.}
+\item{Matrix}{An \verb{nvar x nsite} matrix of \code{0}/\code{1} or \code{TRUE}/\code{FALSE}
+supplied by the user. Entry \verb{[v, s] = 1} means variety \code{v} is
+observed at site \code{s}. Every variety must appear in at least 1 site;
+every site must have at least 2 varieties.}
+}}
 
-\item{site_mean}{Numeric. Grand mean yield across all sites (same units
-as the simulated trait). Default \code{4500}.}
-
-\item{site_sd}{Numeric. Standard deviation of site mean yields.
-Default \code{600}.}
-
-\item{treat_effects}{Numeric vector of length \code{length(treatments)} giving
-the fixed treatment main effects, with \code{treat_effects[1] = 0} for
-identifiability.  Auto-spaced from 0 to \code{0.25 * site_mean} when \code{NULL}.}
-
-\item{sigma_base}{Numeric. Genetic standard deviation for the baseline
-treatment BLUP. Default \code{250}.}
-
-\item{sigr}{Numeric vector of length \code{length(treatments) - 1}.
-Conditional (responsiveness) standard deviations for each non-baseline
-treatment given the baseline. Auto-scaled to
-\code{sigma_base * 0.4 * seq_len(ntreat - 1)} when \code{NULL}.}
-
-\item{beta_min}{Numeric vector of length \code{length(treatments) - 1}.
-Lower bound of the uniform distribution from which site-specific
-regression coefficients are drawn for each non-baseline treatment.
-Auto-calculated when \code{NULL}.}
-
-\item{beta_max}{Numeric vector of length \code{length(treatments) - 1}.
-Upper bound (see \code{beta_min}). Auto-calculated when \code{NULL}.}
-
-\item{rep_sd}{Numeric. Standard deviation of replicate (block) effects.
-Default \code{150}.}
-
-\item{row_sd}{Numeric. Standard deviation of row spatial effects.
-Default \code{80}.}
-
-\item{col_sd}{Numeric. Standard deviation of column spatial effects.
-Default \code{60}.}
-
-\item{error_sd}{Numeric. Standard deviation of the plot-level residual
-(within-sub-plot error). Default \code{350}.}
-
-\item{sep}{Character. Separator used when constructing the composite
-\code{TSite} factor (e.g. \code{"N0-Env01"} with \code{sep = "-"}). Must not appear
-inside any treatment or site label. Default \code{"-"}.}
-
-\item{variety_prefix}{Character. Prefix for variety labels. Default \code{"Var"}.}
-
-\item{site_prefix}{Character. Prefix for site labels. Default \code{"Env"}.}
-
-\item{seed}{Integer or \code{NULL}. Random seed passed to \code{\link[=set.seed]{set.seed()}}.
-\code{NULL} uses the current RNG state. Default \code{NULL}.}
-
-\item{outfile}{Character path or \code{NULL}. If non-\code{NULL} the data frame
-is written to this CSV path via \code{\link[=write.csv]{write.csv()}}. Default \code{NULL}.}
+\item{seed}{Integer or \code{NULL}. Passed to \code{\link[=set.seed]{set.seed()}}. Default \code{NULL}.}
 
 \item{verbose}{Logical. Print a design summary and suggested ASReml-R
-model call. Default \code{TRUE}.}
+model. Default \code{TRUE}.}
+
+\item{sim.options}{Named list of optional simulation controls. Unknown names
+produce a warning. Recognised elements (with defaults) are:
+\describe{
+\item{\code{site_mean}}{Numeric. Grand mean yield. Default \code{4500}.}
+\item{\code{site_sd}}{Numeric. SD of site mean yields. Default \code{600}.}
+\item{\code{treat_effects}}{Numeric vector (length = \code{length(treatments)})
+of fixed treatment effects, or \code{NULL} for auto-spacing from 0 to
+\code{site_mean * 0.10}. Multi-treatment only.}
+\item{\code{sigma_genetic}}{Numeric. Target mean genetic SD per group.
+Default \code{250}.}
+\item{\code{loading_min}}{Numeric >= 0. Minimum absolute FA loading before
+scaling. Default \code{0.5}.}
+\item{\code{loading_max}}{Numeric > \code{loading_min}. Maximum absolute FA
+loading before scaling. Default \code{2.5}.}
+\item{\code{specific_pct}}{Numeric in (0, 1). Specific variances as a
+fraction of mean diagonal of Lambda Lambda'. Default \code{0.20}.}
+\item{\code{rep_sd}}{Numeric. SD of replicate effects. Default \code{150}.}
+\item{\code{row_sd}}{Numeric. SD of row spatial effects. Default \code{80}.}
+\item{\code{col_sd}}{Numeric. SD of column spatial effects. Default \code{60}.}
+\item{\code{error_sd}}{Numeric. SD of plot-level residual. Default \code{350}.}
+\item{\code{sep}}{Character. Separator for \code{TSite} labels. Default \code{"-"}.}
+\item{\code{variety_prefix}}{Character. Prefix for variety labels.
+Default \code{"Var"}.}
+\item{\code{site_prefix}}{Character. Prefix for site labels.
+Default \code{"Env"}.}
+\item{\code{outfile}}{Character path or \code{NULL}. CSV output. Default \code{NULL}.}
+}}
 }
 \value{
 A named list:
 \describe{
-\item{\code{data}}{Data frame with columns \code{Site}, \code{Treatment}, \code{TSite},
-\code{Variety}, \code{Rep}, \code{Row}, \code{Column}, \code{yield}. Ordered by \code{Site}, \code{Row},
-\code{Column} for compatibility with ASReml-R spatial models.}
-\item{\code{params}}{Named list of true simulation parameters for ground-truth
-comparison with \code{\link[=randomRegress]{randomRegress()}} estimates:
+\item{\code{data}}{Data frame ordered by \code{Site}, \code{Row}, \code{Column} with columns:
+\code{Site}, \code{Variety}, \code{Rep}, \code{Row}, \code{Column}, \code{yield} (MET-only), or
+additionally \code{Treatment} and \code{TSite} (multi-treatment). Only observed
+variety x site combinations are included.}
+\item{\code{params}}{Named list of true simulation parameters:
 \describe{
-\item{\code{beta}}{\verb{nsite × (ntreat-1)} matrix of true site-specific
-regression coefficients.}
-\item{\code{sigr}}{Vector of true conditional standard deviations.}
-\item{\code{treat_effects}}{True treatment fixed effects used.}
-\item{\code{site_means}}{True site mean yields used.}
-\item{\code{g_base}}{Standardised variety genetic potentials (length
-\code{nvar}).}
-\item{\code{g_arr}}{\verb{nvar × ntreat × nsite} array of true genetic values.}
+\item{\code{G}}{True genetic covariance matrix (J x J).}
+\item{\code{Lambda}}{True loadings matrix (J x k).}
+\item{\code{Psi}}{True specific variances (length J).}
+\item{\code{site_means}}{True site mean yields (length \code{nsite}).}
+\item{\code{n_fa}}{Number of FA factors used.}
+\item{\code{incidence}}{Integer \verb{nvar x nsite} incidence matrix used.}
+\item{\code{treat_effects}}{True treatment fixed effects
+(multi-treatment only).}
+\item{\code{g_arr}}{\verb{nvar x ngroup} matrix of true genetic BLUPs
+(multi-treatment only).}
 }}
 }
 }
 \description{
-Generates a balanced split-plot field trial dataset suitable for fitting
-ASReml-R mixed models and testing \code{\link[=randomRegress]{randomRegress()}}.
+Generates a balanced or unbalanced field trial dataset with a realistic
+factor-analytic genetic correlation structure across environments.
 
-\strong{Experimental design} (per environment):
-\itemize{
-\item Rectangular layout of \code{nrep * rows_per_strip} rows ×
-\code{length(treatments) * cols_per_strip} columns.
-\item \code{nrep} replicate blocks, each occupying \code{rows_per_strip} consecutive
-rows.
-\item Within each replicate: one treatment strip per treatment
-(\verb{rows_per_strip × cols_per_strip = nvar} sub-plots), with
-treatments randomised to strips independently in every replicate.
-\item Varieties randomised to sub-plots within each strip.
+\strong{MET-only} (\code{treatments = NULL}): a simple randomised complete block
+design with one observation per observed Variety x Site x Rep combination.
+
+\strong{Multi-treatment} (\code{treatments} is a character vector of length >= 2):
+a split-plot design where whole plots are treatment strips and sub-plots
+are varieties, nested within replicate blocks. The genetic structure
+operates over all Treatment x Site (\code{TSite}) combinations.
+
+\strong{Genetic simulation} uses a factor-analytic (FA) covariance model:
+\deqn{
+  \mathbf{u}_v = \boldsymbol{\Lambda}\mathbf{f}_v + \boldsymbol{\delta}_v,
+  \quad \mathbf{f}_v \sim \mathcal{N}(\mathbf{0}, \mathbf{I}_{k}),
+  \quad \boldsymbol{\delta}_v \sim \mathcal{N}(\mathbf{0}, \boldsymbol{\Psi})
 }
+where \eqn{\boldsymbol{\Lambda}} (\eqn{J \times k}) is the loadings matrix,
+\eqn{k} = \code{n_fa}, \eqn{J} is the number of environments (or
+Treatment x Site combinations), and
+\eqn{\boldsymbol{\Psi} = \mathrm{diag}(\psi_1,\ldots,\psi_J)} is the
+specific variance matrix. The true genetic covariance matrix is
+\eqn{\mathbf{G} = \boldsymbol{\Lambda}\boldsymbol{\Lambda}^\top +
+\boldsymbol{\Psi}}.
 
-\strong{Genetic simulation} uses the same conditional multivariate-normal
-structure that \code{\link[=randomRegress]{randomRegress()}} is designed to recover:
-\deqn{u_1 \sim \mathcal{N}(0,\,\sigma_1^2)}
-\deqn{u_j \mid u_1 \sim \mathcal{N}(\beta_{j,s}\,u_1,\,\sigma_{r_j}^2)
-      \quad j = 2,\ldots,k}
-where \eqn{\beta_{j,s}} varies by site to create genuine
-Treatment × Genotype × Environment interaction.  The true \eqn{\beta}
-matrix is returned alongside the data for ground-truth comparison with
-model estimates.
+\strong{Incidence structure} (\code{incidence} argument) controls which varieties are
+observed at which sites. All \code{nvar} varieties have a true genetic value at
+every site but only observed varieties contribute plots. Unbalanced designs
+produce meaningful per-variety variation in prediction error variance —
+varieties present in fewer sites are predicted less accurately.
 }
 \examples{
 \dontrun{
-# Reproduce the original 3-treatment, 10-site dataset
-out <- simTrialData(seed = 2024, outfile = "plant_trial_data.csv")
-head(out$data)
-out$params$beta   # compare with randomRegress()$beta
+# MET-only balanced: 30 varieties, 8 sites, FA(2) genetic structure
+out <- simTrialData(nvar = 30, nsite = 8, n_fa = 2, seed = 42)
+round(cov2cor(out$params$G), 2)   # true genetic correlations
 
-# Two-treatment, 5-site dataset
-out2 <- simTrialData(nsite = 5, treatments = c("Dry", "Irr"), seed = 1)
+# Unbalanced: produces spread in per-variety accuracy
+out2 <- simTrialData(nvar = 30, nsite = 8, n_fa = 2,
+                     incidence = "unbalanced", seed = 42)
+table(colSums(out2$params$incidence))   # varieties per site
 
-# Four treatments, 12 varieties, 4 reps
-out4 <- simTrialData(nvar = 12, nsite = 8,
-                     treatments = c("T0","T1","T2","T3"), nrep = 4,
-                     seed = 99)
+# User-supplied incidence matrix
+inc <- matrix(1L, nrow = 20, ncol = 6)
+inc[1:5, 1:3] <- 0L   # first 5 varieties absent from first 3 sites
+out3 <- simTrialData(nvar = 20, nsite = 6, n_fa = 2,
+                     incidence = inc, seed = 1)
+
+# Multi-treatment with custom treat_effects
+out4 <- simTrialData(nvar = 20, nsite = 6,
+                     treatments  = c("T0", "T1", "T2"),
+                     n_fa        = 2,
+                     incidence   = "unbalanced",
+                     seed        = 1,
+                     sim.options = list(treat_effects = c(0, 150, 350)))
 }
 
 }
