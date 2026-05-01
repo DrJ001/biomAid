@@ -29,6 +29,7 @@ the direct return value of the chunk so that knitr embeds it correctly."></head>
     <li><a class="dropdown-item" href="../randomRegress.html">Multivariate Random Regression</a></li>
     <li><a class="dropdown-item" href="../fixedRegress.html">Multivariate Fixed-Effects Regression</a></li>
     <li><a class="dropdown-item" href="../padTrial.html">Extracting and Padding Field Trial Layouts</a></li>
+    <li><a class="dropdown-item" href="../accuracy.html">BLUP Accuracy in Multi-Environment Trials</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"></ul></div>
 
@@ -70,7 +71,7 @@ the direct return value of the chunk so that knitr embeds it correctly.</p>
 default height (~400 px), which is often too short when the plot has
 multiple facet panels each showing many varieties.  A sensible rule of
 thumb: 180 px per panel row (e.g. <code>height = 700</code> for 4 panels in a
-2 × 2 grid).</p></dd>
+2 x 2 grid).</p></dd>
 
 
 <dt id="arg-width">width<a class="anchor" aria-label="anchor" href="#arg-width"></a></dt>
@@ -90,10 +91,10 @@ uses 100 % of the container width.</p></dd>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="co"># Single-group dotplot — default height is fine</span></span></span>
+<span class="r-in"><span><span class="co"># Single-group dotplot -- default height is fine</span></span></span>
 <span class="r-in"><span><span class="fu">as_plotly</span><span class="op">(</span><span class="fu"><a href="plot_compare.html">plot_compare</a></span><span class="op">(</span><span class="va">res</span>, type <span class="op">=</span> <span class="st">"dotplot"</span>, interactive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Four-panel dotplot — set a taller height so panels don't overlap</span></span></span>
+<span class="r-in"><span><span class="co"># Four-panel dotplot -- set a taller height so panels don't overlap</span></span></span>
 <span class="r-in"><span><span class="fu">as_plotly</span><span class="op">(</span><span class="fu"><a href="plot_compare.html">plot_compare</a></span><span class="op">(</span><span class="va">res</span>, type <span class="op">=</span> <span class="st">"dotplot"</span>, interactive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>          height <span class="op">=</span> <span class="fl">700</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
