@@ -1,0 +1,601 @@
+---
+title: "BLUP Accuracy in Multi-Environment Trials"
+subtitle: "`accuracy()` and `plot_accuracy()`"
+author: "Julian Taylor"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: false
+    smooth-scroll: true
+    embed-resources: true
+    theme: litera
+    css: custom.css
+    highlight-style: github
+    code-fold: false
+    fig-width: 8
+    fig-height: 5
+    fig-dpi: 150
+    html-math-method: katex
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| include: false
+asreml_ok <- requireNamespace("asreml", quietly = TRUE)
+library(biomAid)
+library(ggplot2)
+if (asreml_ok) {
+  library(asreml)
+  asreml.options(trace = FALSE)
+}
+```
+
+---
+
+## Overview
+
+`accuracy()` computes model-based BLUP accuracy for each environment (or group)
+in a multi-environment trial (MET) fitted with ASReml-R V4. Two complementary
+metrics are available:
+
+- **Mrode accuracy** — per-variety accuracy derived from the prediction error
+  variance (PEV) and the genetic variance.
+- **Cullis H²** — a reliability analogue based on the mean squared standard
+  error of difference (SED) between BLUPs.
+
+Both metrics are bounded between 0 and 1, with values closer to 1 indicating
+better prediction. The function handles all major ASReml-R V4 random
+structures for the variety term:
+`fa()`, `diag()`, `corgh()`, `corh()`, `us()`, and single-environment `id()`.
+
+`plot_accuracy()` visualises these results with six complementary plot types
+covering single-model summaries and head-to-head model comparisons.
+
+---
+
+## Mathematical Framework
+
+### Genetic variance and BLUP prediction error
+
+Let $\hat{u}_{ij}$ be the BLUP for variety $i$ in environment $j$, with
+prediction error variance
+
+$$
+\operatorname{PEV}_{ij}
+  = \operatorname{Var}(\hat{u}_{ij} - u_{ij}).
+$$
+
+The genetic (co)variance for environment $j$ is denoted $G_{jj}$ — the
+$j$-th diagonal of the **G-matrix** (or the corresponding variance component
+for simpler structures such as `diag()`).
+
+---
+
+### Mrode accuracy
+
+Following Mrode (2014), the accuracy for variety $i$ in environment $j$ is
+
+$$
+r_{ij} = \sqrt{1 - \frac{\operatorname{PEV}_{ij}}{G_{jj}}},
+$$
+
+which is the square root of the **reliability** — the proportion of true
+genetic variance that is recovered by the BLUP. The **mean accuracy** for
+environment $j$ is
+
+$$
+\bar{r}_j = \frac{1}{n_j}\sum_{i=1}^{n_j} r_{ij},
+$$
+
+where $n_j$ is the number of varieties with observed data in environment $j$.
+
+Values of $\text{PEV}_{ij} > G_{jj}$ (which can occur when BLUPs are
+computed using `predict()` without the `only` argument) give spurious
+imaginary accuracies. `accuracy()` avoids this by passing `only =` to
+`predict.asreml()`, restricting the prediction error to the target random
+term alone.
+
+---
+
+### Cullis H²
+
+Cullis et al. (2006) proposed a heritability analogue based on the mean
+pairwise squared standard error of difference (SED):
+
+$$
+H^2_j = 1 - \frac{\overline{\text{SED}}^2_j}{2\,G_{jj}},
+$$
+
+where $\overline{\text{SED}}^2_j$ is the mean of the upper-triangular
+elements of the SED matrix for environment $j$. Unlike Mrode accuracy,
+$H^2_j$ captures the precision of **variety comparisons** rather than
+individual predictions, and is equivalent to heritability on a variety-mean
+basis.
+
+---
+
+### Extracting $G_{jj}$ from ASReml-R V4
+
+The extraction strategy depends on the random structure fitted for the
+variety term:
+
+| Structure | $G_{jj}$ | `only=` string |
+|-----------|-----------|----------------|
+| `fa(Env, k):id(Var)` | $\sum_f \lambda_{jf}^2 + \psi_j$ | `"fa(Env, k):Var"` |
+| `diag(Env):id(Var)` | $\sigma^2_j$ | `"Env:Var"` |
+| `corgh(Env):id(Var)` | $\sigma^2_j$ | `"Env:Var"` |
+| `corh(Env):id(Var)` | $\sigma^2_j$ | `"Env:Var"` |
+| `us(Env):id(Var)` | $\sigma^2_{jj}$ (diagonal of **U**) | `"Env:Var"` |
+| `id(Var)` | $\sigma^2$ | `"Var"` |
+
+For factor analytic models, $G_{jj} = \boldsymbol{\lambda}_j^\top
+\boldsymbol{\lambda}_j + \psi_j$ where $\boldsymbol{\lambda}_j$ is the
+$k$-vector of factor loadings for environment $j$ and $\psi_j$ is the
+specific variance.
+
+---
+
+## Setup
+
+### Simulated data
+
+> **Requires:** ASReml-R V4. The vignette is pre-rendered so no licence is
+> needed to read it; run the code chunks only if you have the package
+> installed.
+
+We use `simTrialData()` to generate a MET with 50 varieties across 8
+environments, 2 replicates, and an `"unbalanced"` incidence structure. The
+data-generating model uses `n_fa = 2` latent factors so environments share
+genuine genetic covariance, and the incidence ensures that varieties appear
+in different subsets of environments — producing meaningful variety-to-variety
+variation in prediction error variance that makes the per-variety accuracy
+plots informative.
+
+```{r simulate}
+#| cache: true
+#| eval: !expr asreml_ok
+out <- simTrialData(
+  nvar      = 50L,
+  nsite     = 8L,
+  n_fa      = 2L,
+  nrep      = 2L,
+  incidence = "unbalanced",
+  seed      = 11L,
+  verbose   = FALSE
+)
+dat         <- out$data
+dat$Row     <- factor(dat$Row)
+dat$Column  <- factor(dat$Column)
+dat$Site    <- factor(dat$Site)
+dat$Variety <- factor(dat$Variety)
+
+# Connectivity summary
+cat("Varieties per site: mean =", round(mean(colSums(out$params$incidence)), 1),
+    " range [", min(colSums(out$params$incidence)), ",",
+    max(colSums(out$params$incidence)), "]\n")
+cat("Sites per variety:  mean =", round(mean(rowSums(out$params$incidence)), 1),
+    " range [", min(rowSums(out$params$incidence)), ",",
+    max(rowSums(out$params$incidence)), "]\n")
+```
+
+A quick look at the data structure:
+
+```{r show_data}
+#| eval: !expr asreml_ok
+head(dat[, c("Site", "Variety", "Rep", "Row", "Column", "yield")])
+```
+
+---
+
+### Fitting three models
+
+We fit three random structures for the Site × Variety genetic term, in
+increasing order of complexity:
+
+| Model | Variety random structure | Genetic parameters |
+|-------|-------------------------|--------------------|
+| **Diag** | `diag(Site):id(Variety)` | 6 (one $\sigma^2_j$ per site) |
+| **FA(1)** | `fa(Site, 1):id(Variety)` | 12 (6 loadings + 6 specific variances) |
+| **FA(2)** | `fa(Site, 2):id(Variety)` | 18 (12 loadings + 6 specific variances) |
+
+All three models include `at(Site):Rep` for replicate effects and a
+common homogeneous residual. The `diag` model assumes no genetic correlation
+between sites — varieties are re-ranked completely independently across
+environments. The FA models borrow information across environments: FA(1)
+captures one dominant axis of GEI; FA(2) adds a second, allowing richer
+rank-change patterns.
+
+```{r fit_diag}
+#| cache: true
+#| dependson: simulate
+#| eval: !expr asreml_ok
+#| results: hide
+m_diag <- asreml(
+  yield    ~ Site,
+  random   = ~ diag(Site):id(Variety) + at(Site):Rep,
+  data     = dat,
+  maxit    = 30L
+)
+m_diag <- update(m_diag)
+```
+
+```{r fit_fa1}
+#| cache: true
+#| dependson: fit_diag
+#| eval: !expr asreml_ok
+#| results: hide
+m_fa1 <- asreml(
+  yield    ~ Site,
+  random   = ~ fa(Site, 1):id(Variety) + at(Site):Rep,
+  data     = dat,
+  maxit    = 30L
+)
+m_fa1 <- update(m_fa1)
+```
+
+```{r fit_fa2}
+#| cache: true
+#| dependson: fit_fa1
+#| eval: !expr asreml_ok
+#| results: hide
+m_fa2 <- asreml(
+  yield    ~ Site,
+  random   = ~ fa(Site, 2):id(Variety) + at(Site):Rep,
+  data     = dat,
+  maxit    = 30L
+)
+m_fa2 <- update(m_fa2)
+```
+
+A quick comparison of log-likelihoods confirms the FA models provide a
+better fit to the data. AIC is computed as $-2 \ell + 2p$ where $p$ is
+the number of variance parameters:
+
+```{r aic_compare}
+#| eval: !expr asreml_ok
+.aic <- function(m) -2 * m$loglik + 2 * nrow(summary(m)$varcomp)
+data.frame(
+  Model  = c("Diag", "FA(1)", "FA(2)"),
+  LogLik = round(c(m_diag$loglik, m_fa1$loglik, m_fa2$loglik), 2),
+  AIC    = round(c(.aic(m_diag),  .aic(m_fa1),  .aic(m_fa2)),  2)
+)
+```
+
+---
+
+## Computing accuracy with `accuracy()`
+
+### Group-level summaries
+
+The default call returns both Mrode accuracy and Cullis H² for every site.
+Results are at the group level — one row per environment.
+
+```{r acc_diag}
+#| eval: !expr asreml_ok
+acc_diag <- accuracy(m_diag, metric = c("accuracy", "cullis"))
+acc_diag
+```
+
+```{r acc_fa1}
+#| eval: !expr asreml_ok
+acc_fa1 <- accuracy(m_fa1, metric = c("accuracy", "cullis"))
+acc_fa1
+```
+
+```{r acc_fa2}
+#| eval: !expr asreml_ok
+acc_fa2 <- accuracy(m_fa2, metric = c("accuracy", "cullis"))
+acc_fa2
+```
+
+The `G_jj` column reports the environment-specific genetic variance used as
+the denominator. `mean_acc` is $\bar{r}_j$ and `sd_acc` captures the spread
+of per-variety accuracies within the environment. `cullis_h2` is $H^2_j$.
+
+### Requesting a single metric
+
+Pass a single string to `metric` when you only need one measure:
+
+```{r acc_single_metric}
+#| eval: !expr asreml_ok
+# Mrode accuracy only
+accuracy(m_fa2, metric = "accuracy")
+
+# Cullis H² only
+accuracy(m_fa2, metric = "cullis")
+```
+
+### Per-variety accuracies
+
+Set `by_variety = TRUE` to return one row per variety × environment. The
+`present` argument controls which combinations are included:
+
+- **`present = TRUE`** (default) — restrict to variety × environment
+  combinations *observed* in the data. Produces holes in heatmaps for
+  unbalanced trials.
+- **`present = FALSE`** — include *all* combinations returned by
+  `predict.asreml()`. For FA models the G-matrix supports prediction of
+  BLUPs for unobserved combinations; their PEV is higher (lower accuracy)
+  than for observed ones, reflecting reduced information.
+
+```{r acc_bv}
+#| eval: !expr asreml_ok
+# present = FALSE fills the full variety x site grid for FA models
+acc_fa2_bv    <- accuracy(m_fa2,  metric = c("accuracy", "cullis"),
+                           by_variety = TRUE, present = FALSE)
+acc_diag_bv   <- accuracy(m_diag, metric = c("accuracy", "cullis"),
+                           by_variety = TRUE, present = FALSE)
+
+head(acc_fa2_bv)
+```
+
+---
+
+## Visualising with `plot_accuracy()`
+
+### Lollipop — per-site accuracy summary
+
+The lollipop plot is the go-to summary for group-level results. Each site
+appears as a row, with the lollipop head at the mean accuracy. Horizontal
+error bars span ±1 standard deviation of the per-variety accuracies (Mrode
+metric only). When both metrics are requested the plot facets into two panels.
+
+```{r lollipop_fa2}
+#| eval: !expr asreml_ok
+#| fig-height: 4.5
+plot_accuracy(acc_fa2, type = "lollipop",
+              metric = c("accuracy", "cullis"))
+```
+
+A single-metric call gives a cleaner, unfaceted plot:
+
+```{r lollipop_fa2_acc}
+#| eval: !expr asreml_ok
+#| fig-height: 4
+plot_accuracy(acc_fa2, type = "lollipop", metric = "accuracy")
+```
+
+Note that Cullis H² is systematically lower than Mrode accuracy —
+$H^2$ measures comparison precision while $r$ measures individual prediction
+reliability, and the two capture subtly different aspects of model quality.
+
+---
+
+### Violin — per-variety accuracy distribution
+
+The violin plot requires `by_variety = TRUE` data and displays the Mrode
+Accuracy metric only. Cullis H² is a group-level constant and is suppressed
+automatically — use `type = "lollipop"` to visualise it. The width of each
+violin reflects the spread of per-variety accuracies within each environment.
+
+```{r violin_fa2}
+#| eval: !expr asreml_ok
+#| fig-height: 5
+plot_accuracy(acc_fa2_bv, type = "violin", metric = "accuracy")
+```
+
+Varieties that appear in fewer sites share less information with the rest of
+the trial — their BLUPs have higher PEV and lower accuracy. "Core" varieties
+(present in most environments) sit at the high-accuracy end; rarely-observed
+varieties sit at the low end. With `present = FALSE`, the full variety × site
+grid is included so unobserved combinations also contribute, showing an
+additional tail of lower accuracies.
+
+---
+
+### Heatmap — variety × site accuracy grid
+
+The heatmap visualises per-variety accuracy across all environments
+simultaneously using `present = FALSE` data, so the full variety × site grid
+is displayed without holes. Varieties are sorted from highest mean accuracy
+(top) to lowest (bottom); environments are ordered by increasing mean accuracy.
+The viridis colour scale maps accuracy onto a perceptually uniform gradient.
+
+```{r heatmap_fa2}
+#| eval: !expr asreml_ok
+#| fig-height: 6
+#| fig-width: 7
+plot_accuracy(acc_fa2_bv, type = "heatmap", metric = "accuracy")
+```
+
+A column that is uniformly darker than its neighbours indicates an environment
+where all varieties are predicted less reliably. Within each column, darker
+tiles correspond to varieties with fewer site appearances — their BLUPs rely
+more on the FA G-matrix and less on direct observations, so their PEV is
+higher.
+
+---
+
+## Comparing models with `res2 =`
+
+The three comparison plot types take a second accuracy object via `res2` and
+directly show the change in accuracy between models. This is where the story
+of moving from `diag` to FA models becomes clearly visible.
+
+### Dumbbell — paired group-level comparison
+
+The dumbbell plot places two dots per site connected by a horizontal segment.
+The segment colour encodes the direction of change: **green** when the second
+model improves accuracy, **red** when it declines.
+
+#### Diag → FA(1)
+
+```{r dumbbell_diag_fa1}
+#| eval: !expr asreml_ok
+#| fig-height: 4.5
+plot_accuracy(acc_diag, acc_fa1,
+              type   = "dumbbell",
+              metric = "accuracy",
+              label1 = "Diag",
+              label2 = "FA(1)")
+```
+
+#### FA(1) → FA(2)
+
+```{r dumbbell_fa1_fa2}
+#| eval: !expr asreml_ok
+#| fig-height: 4.5
+plot_accuracy(acc_fa1, acc_fa2,
+              type   = "dumbbell",
+              metric = "accuracy",
+              label1 = "FA(1)",
+              label2 = "FA(2)")
+```
+
+With both metrics faceted:
+
+```{r dumbbell_both_metrics}
+#| eval: !expr asreml_ok
+#| fig-height: 5
+plot_accuracy(acc_diag, acc_fa2,
+              type   = "dumbbell",
+              metric = c("accuracy", "cullis"),
+              label1 = "Diag",
+              label2 = "FA(2)")
+```
+
+The improvement in FA(2) over `diag` tends to be larger for environments
+with stronger GEI — those are the environments where borrowing information
+via the factor structure is most beneficial.
+
+---
+
+### Scatter — per-variety comparison
+
+The scatter plot places each variety × environment combination as a point,
+with model1 accuracy on the x-axis and model2 accuracy on the y-axis.
+Points above the dashed diagonal (x = y) represent variety × environment
+combinations where model2 is more accurate. Points are coloured by
+environment.
+
+```{r scatter_diag_fa2}
+#| eval: !expr asreml_ok
+#| fig-height: 5
+plot_accuracy(acc_diag_bv, acc_fa2_bv,
+              type   = "scatter",
+              metric = "accuracy",
+              label1 = "Diag",
+              label2 = "FA(2)")
+```
+
+The scatter plot reveals whether the accuracy gain is uniform across the
+genetic material or concentrated in particular varieties — for instance, rare
+or poorly-replicated varieties often benefit most from the additional
+shrinkage imposed by the FA structure.
+
+---
+
+### Diff — signed accuracy gain
+
+The diff plot shows (model2 − model1) for each environment as a lollipop
+centred on zero. It distils the dumbbell into a single signed quantity,
+making it easy to rank environments by how much they benefit from the more
+complex model. The x-axis is always symmetric around zero.
+
+#### Diag → FA(2)
+
+```{r diff_diag_fa2}
+#| eval: !expr asreml_ok
+#| fig-height: 4.5
+plot_accuracy(acc_diag, acc_fa2,
+              type   = "diff",
+              metric = "accuracy",
+              label1 = "Diag",
+              label2 = "FA(2)")
+```
+
+#### FA(1) → FA(2), both metrics
+
+```{r diff_fa1_fa2_both}
+#| eval: !expr asreml_ok
+#| fig-height: 5
+plot_accuracy(acc_fa1, acc_fa2,
+              type   = "diff",
+              metric = c("accuracy", "cullis"),
+              label1 = "FA(1)",
+              label2 = "FA(2)")
+```
+
+---
+
+## Extracting plot data — `return_data = TRUE`
+
+All six plot types support `return_data = TRUE`, returning a named list with
+`$plot` and `$data`. This is useful for further customisation or downstream
+analysis.
+
+```{r return_data}
+#| eval: !expr asreml_ok
+rd <- plot_accuracy(acc_diag, acc_fa2,
+                    type        = "diff",
+                    metric      = c("accuracy", "cullis"),
+                    label1      = "Diag",
+                    label2      = "FA(2)",
+                    return_data = TRUE)
+
+head(rd$data)
+```
+
+The ggplot object is fully extensible with standard `ggplot2` additions:
+
+```{r bespoke}
+#| eval: !expr asreml_ok
+#| fig-height: 4.5
+rd$plot +
+  ggplot2::ggtitle(
+    "Accuracy gain: FA(2) over Diag",
+    subtitle = "Positive values indicate FA(2) is more accurate"
+  )
+```
+
+---
+
+## Summary
+
+### `accuracy()` arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `model` | — | Fitted ASReml-R V4 model object |
+| `classify` | Auto-detected | Override the `predict()` classify string |
+| `metric` | `c("accuracy","cullis")` | Metrics to compute; one or both |
+| `pworkspace` | `"2gb"` | Passed to `predict.asreml()` |
+| `by_variety` | `FALSE` | Return one row per variety × group |
+
+### `plot_accuracy()` types
+
+| Type | Input | Best for |
+|------|-------|---------|
+| `"lollipop"` | Group-level | Compact accuracy summary per site |
+| `"violin"` | `by_variety` | Distribution of accuracy across varieties |
+| `"heatmap"` | `by_variety` | Variety × site accuracy at a glance |
+| `"dumbbell"` | Group-level + `res2` | Paired model comparison per site |
+| `"scatter"` | `by_variety` + `res2` | Per-variety model comparison |
+| `"diff"` | Group-level + `res2` | Signed accuracy gain per site |
+
+Faceting into two panels is automatic when `metric = c("accuracy","cullis")`.
+
+---
+
+## References
+
+Cullis, B.R., Smith, A.B. & Coombes, N.E. (2006). On the design of early
+generation variety trials with correlated data. *Journal of Agricultural,
+Biological and Environmental Statistics*, **11**(4), 381–393.
+<https://doi.org/10.1198/108571106X154443>
+
+Mrode, R.A. (2014). *Linear Models for the Prediction of Animal Breeding
+Values*, 3rd edition. CAB International, Wallingford.
+
+Smith, A., Cullis, B. & Thompson, R. (2001). Analysing variety by environment
+data using multiplicative mixed models and adjustments for spatial field
+trend. *Biometrics*, **57**(4), 1138–1147.
+<https://doi.org/10.1111/j.0006-341X.2001.01138.x>
+
+Gilmour, A.R., Gogel, B.J., Cullis, B.R. & Thompson, R. (2009).
+*ASReml User Guide Release 3.0*. VSN International, Hemel Hempstead.
