@@ -159,7 +159,7 @@ plots informative.
 out <- simTrialData(
   nvar      = 50L,
   nsite     = 8L,
-  n_fa      = 2L,
+
   nrep      = 2L,
   incidence = "unbalanced",
   seed      = 11L,

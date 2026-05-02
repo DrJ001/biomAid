@@ -23,7 +23,7 @@ or by-variety (\code{by_variety = TRUE}) depending on \code{type}.}
 \item{res2}{Optional second data frame from \code{accuracy()} for
 comparison plots (\code{"dumbbell"}, \code{"scatter"}, \code{"diff"}).}
 
-\item{type}{Plot type — one of \code{"lollipop"}, \code{"violin"},
+\item{type}{Plot type -- one of \code{"lollipop"}, \code{"violin"},
 \code{"heatmap"}, \code{"dumbbell"}, \code{"scatter"}, \code{"diff"}.}
 
 \item{metric}{Character vector: \code{"accuracy"}, \code{"gen.H2"}, or
