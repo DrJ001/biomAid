@@ -46,10 +46,10 @@
 #'     \item{`"balanced"`}{(Default) All `nvar` varieties are observed at every
 #'       site. Produces identical PEV for all varieties within a site.}
 #'     \item{`"unbalanced"`}{Automatically generates a two-tier incidence
-#'       structure: approximately 20\% of varieties are "core" entries that
-#'       appear in at least 75\% of sites; the remaining varieties appear in
-#'       40-85\% of sites at random. Every variety appears in at least 2 sites;
-#'       every site has at least `max(ceiling(nvar * 0.4), 2)` varieties.}
+#'       structure. The proportions governing the structure are controlled by
+#'       five \code{sim.options} entries: \code{core_pct},
+#'       \code{core_min_sites_pct}, \code{reg_min_sites_pct},
+#'       \code{reg_max_sites_pct}, and \code{min_vars_pct} (see below).}
 #'     \item{Matrix}{An `nvar x nsite` matrix of `0`/`1` or `TRUE`/`FALSE`
 #'       supplied by the user. Entry `[v, s] = 1` means variety `v` is
 #'       observed at site `s`. Every variety must appear in at least 1 site;
@@ -83,7 +83,20 @@
 #'       Default `"Var"`.}
 #'     \item{`site_prefix`}{Character. Prefix for site labels.
 #'       Default `"Env"`.}
-#'     \item{`outfile`}{Character path or `NULL`. CSV output. Default `NULL`.}
+  #'     \item{`outfile`}{Character path or `NULL`. CSV output. Default `NULL`.}
+#'     \item{`core_pct`}{Numeric in (0, 1). Proportion of varieties designated
+#'       as "core" entries when \code{incidence = "unbalanced"}. Core varieties
+#'       appear in at least \code{core_min_sites_pct} of sites. Default
+#'       \code{0.20}.}
+#'     \item{`core_min_sites_pct`}{Numeric in (0, 1]. Minimum proportion of
+#'       sites that each core variety must appear in. Default \code{0.75}.}
+#'     \item{`reg_min_sites_pct`}{Numeric in (0, 1]. Minimum proportion of
+#'       sites for regular (non-core) varieties. Default \code{0.40}.}
+#'     \item{`reg_max_sites_pct`}{Numeric in (0, 1]. Maximum proportion of
+#'       sites for regular varieties. Must be >= \code{reg_min_sites_pct}.
+#'       Default \code{0.85}.}
+#'     \item{`min_vars_pct`}{Numeric in (0, 1]. Minimum proportion of
+#'       \code{nvar} that every site must contain. Default \code{0.40}.}
 #'   }
 #'
 #' @return A named list:
@@ -146,21 +159,27 @@ simTrialData <- function(nvar        = 20L,
 
   # ---- Merge sim.options with defaults -------------------------------------
   .defaults <- list(
-    site_mean      = 4500,
-    site_sd        = 600,
-    treat_effects  = NULL,
-    sigma_genetic  = 250,
-    loading_min    = 0.5,
-    loading_max    = 2.5,
-    specific_pct   = 0.20,
-    rep_sd         = 150,
-    row_sd         = 80,
-    col_sd         = 60,
-    error_sd       = 350,
-    sep            = "-",
-    variety_prefix = "Var",
-    site_prefix    = "Env",
-    outfile        = NULL
+    site_mean           = 4500,
+    site_sd             = 600,
+    treat_effects       = NULL,
+    sigma_genetic       = 250,
+    loading_min         = 0.5,
+    loading_max         = 2.5,
+    specific_pct        = 0.20,
+    rep_sd              = 150,
+    row_sd              = 80,
+    col_sd              = 60,
+    error_sd            = 350,
+    sep                 = "-",
+    variety_prefix      = "Var",
+    site_prefix         = "Env",
+    outfile             = NULL,
+    # unbalanced incidence controls (used only when incidence = "unbalanced")
+    core_pct            = 0.20,
+    core_min_sites_pct  = 0.75,
+    reg_min_sites_pct   = 0.40,
+    reg_max_sites_pct   = 0.85,
+    min_vars_pct        = 0.40
   )
 
   unknown <- setdiff(names(sim.options), names(.defaults))
@@ -196,6 +215,26 @@ simTrialData <- function(nvar        = 20L,
   if (!is.null(opts$treat_effects) && length(opts$treat_effects) != ntreat)
     stop("'treat_effects' must have length ", ntreat, ".")
 
+  # Validate unbalanced incidence proportions (only meaningful when used)
+  if (identical(incidence, "unbalanced")) {
+    if (!is.numeric(opts$core_pct) || opts$core_pct <= 0 || opts$core_pct >= 1)
+      stop("sim.options$core_pct must be a number in (0, 1).")
+    if (!is.numeric(opts$core_min_sites_pct) ||
+        opts$core_min_sites_pct <= 0 || opts$core_min_sites_pct > 1)
+      stop("sim.options$core_min_sites_pct must be a number in (0, 1].")
+    if (!is.numeric(opts$reg_min_sites_pct) ||
+        opts$reg_min_sites_pct <= 0 || opts$reg_min_sites_pct > 1)
+      stop("sim.options$reg_min_sites_pct must be a number in (0, 1].")
+    if (!is.numeric(opts$reg_max_sites_pct) ||
+        opts$reg_max_sites_pct <= 0 || opts$reg_max_sites_pct > 1)
+      stop("sim.options$reg_max_sites_pct must be a number in (0, 1].")
+    if (opts$reg_max_sites_pct < opts$reg_min_sites_pct)
+      stop("sim.options$reg_max_sites_pct must be >= reg_min_sites_pct.")
+    if (!is.numeric(opts$min_vars_pct) ||
+        opts$min_vars_pct <= 0 || opts$min_vars_pct > 1)
+      stop("sim.options$min_vars_pct must be a number in (0, 1].")
+  }
+
   # ---- Labels --------------------------------------------------------------
   ndig_var  <- nchar(as.character(nvar))
   ndig_site <- nchar(as.character(nsite))
@@ -214,28 +253,26 @@ simTrialData <- function(nvar        = 20L,
   # ---- Incidence matrix ----------------------------------------------------
 
   # Auto-generate a two-tier unbalanced incidence matrix.
-  # ~20% "core" varieties appear in >= 75% of sites; the rest appear in
-  # 40-85% of sites at random.  Constraints: every variety in >= 2 sites;
-  # every site has >= max(ceiling(nvar*0.4), 2) varieties.
-  .gen_unbalanced_inc <- function(nv, ns) {
-    n_core  <- max(1L, ceiling(nv * 0.20))
+  # Proportions are controlled by sim.options entries passed via opts.
+  .gen_unbalanced_inc <- function(nv, ns, opts) {
+    n_core  <- max(1L, ceiling(nv * opts$core_pct))
     mat     <- matrix(0L, nrow = nv, ncol = ns)
 
-    # Core varieties: appear in >= 75% of sites
-    n_core_sites <- max(2L, ceiling(ns * 0.75))
+    # Core varieties: appear in >= core_min_sites_pct of sites
+    n_core_sites <- max(2L, ceiling(ns * opts$core_min_sites_pct))
     for (v in seq_len(n_core))
       mat[v, sample.int(ns, min(n_core_sites, ns))] <- 1L
 
-    # Regular varieties: appear in 40-85% of sites
-    lo <- max(2L, ceiling(ns * 0.40))
-    hi <- max(lo, floor(ns * 0.85))
+    # Regular varieties: appear in reg_min_sites_pct to reg_max_sites_pct of sites
+    lo <- max(2L, ceiling(ns * opts$reg_min_sites_pct))
+    hi <- max(lo, floor(ns * opts$reg_max_sites_pct))
     for (v in seq(n_core + 1L, nv)) {
       k <- sample.int(hi - lo + 1L, 1L) + lo - 1L
       mat[v, sample.int(ns, k)] <- 1L
     }
 
-    # Ensure every site meets minimum variety count
-    min_per_site <- max(ceiling(nv * 0.40), 2L)
+    # Ensure every site meets minimum variety count (min_vars_pct * nvar)
+    min_per_site <- max(ceiling(nv * opts$min_vars_pct), 2L)
     for (s in seq_len(ns)) {
       deficit <- min_per_site - sum(mat[, s])
       if (deficit > 0L) {
@@ -275,7 +312,7 @@ simTrialData <- function(nvar        = 20L,
   if (identical(incidence, "balanced")) {
     inc_mat <- matrix(1L, nrow = nvar, ncol = nsite)
   } else if (identical(incidence, "unbalanced")) {
-    inc_mat <- .gen_unbalanced_inc(nvar, nsite)
+    inc_mat <- .gen_unbalanced_inc(nvar, nsite, opts)
   } else if (is.matrix(incidence)) {
     inc_mat <- .validate_inc(incidence, nvar, nsite)
   } else {

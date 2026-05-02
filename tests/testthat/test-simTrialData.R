@@ -550,3 +550,86 @@ test_that("multi-treatment: G rownames match TSite levels", {
                       seed = 37L, verbose = FALSE)
   expect_equal(rownames(out$params$G), levels(out$data$TSite))
 })
+
+# ---------------------------------------------------------------------------
+# 25. sim.options — unbalanced incidence controls
+# ---------------------------------------------------------------------------
+
+test_that("core_pct=0.50 increases proportion of core varieties", {
+  # With a larger core_pct, more varieties get the dense coverage pattern.
+  # We can verify the structure computes without error and incidence is valid.
+  out <- simTrialData(nvar = 20L, nsite = 6L, n_fa = 2L, nrep = 2L,
+                      incidence   = "unbalanced",
+                      sim.options = list(core_pct = 0.50),
+                      seed = 70L, verbose = FALSE)
+  inc <- out$params$incidence
+  expect_equal(dim(inc), c(20L, 6L))
+  expect_true(all(inc %in% c(0L, 1L)))
+  expect_true(all(rowSums(inc) >= 1L))
+  expect_true(all(colSums(inc) >= 2L))
+})
+
+test_that("reg_max_sites_pct=1.0 keeps all varieties fully connected", {
+  # Setting both min and max to 1.0 forces every variety into every site
+  out <- simTrialData(nvar = 10L, nsite = 5L, n_fa = 2L, nrep = 2L,
+                      incidence   = "unbalanced",
+                      sim.options = list(core_pct           = 0.20,
+                                         reg_min_sites_pct  = 1.00,
+                                         reg_max_sites_pct  = 1.00),
+                      seed = 71L, verbose = FALSE)
+  # All regular varieties must appear in all sites
+  inc <- out$params$incidence
+  n_core <- max(1L, ceiling(10L * 0.20))
+  expect_true(all(rowSums(inc[(n_core + 1L):10L, ]) == 5L))
+})
+
+test_that("min_vars_pct=0.90 ensures sites have >= 90% of nvar varieties", {
+  nvar <- 20L; nsite <- 6L
+  out <- simTrialData(nvar = nvar, nsite = nsite, n_fa = 2L, nrep = 2L,
+                      incidence   = "unbalanced",
+                      sim.options = list(min_vars_pct = 0.90),
+                      seed = 72L, verbose = FALSE)
+  min_expected <- ceiling(nvar * 0.90)
+  expect_true(all(colSums(out$params$incidence) >= min_expected))
+})
+
+test_that("unbalanced incidence options ignored when incidence = 'balanced'", {
+  # Passing unbalanced options with balanced incidence should not warn or error
+  expect_no_warning(
+    simTrialData(nvar = 6L, nsite = 3L, n_fa = 1L, nrep = 2L,
+                 incidence   = "balanced",
+                 sim.options = list(core_pct = 0.50),
+                 seed = 73L, verbose = FALSE)
+  )
+})
+
+test_that("invalid core_pct errors informatively", {
+  expect_error(
+    simTrialData(nvar = 10L, nsite = 4L, n_fa = 1L,
+                 incidence   = "unbalanced",
+                 sim.options = list(core_pct = 1.5),
+                 verbose = FALSE),
+    "core_pct"
+  )
+})
+
+test_that("reg_max_sites_pct < reg_min_sites_pct errors", {
+  expect_error(
+    simTrialData(nvar = 10L, nsite = 4L, n_fa = 1L,
+                 incidence   = "unbalanced",
+                 sim.options = list(reg_min_sites_pct = 0.70,
+                                    reg_max_sites_pct = 0.50),
+                 verbose = FALSE),
+    "reg_max_sites_pct.*>=.*reg_min_sites_pct"
+  )
+})
+
+test_that("invalid min_vars_pct errors informatively", {
+  expect_error(
+    simTrialData(nvar = 10L, nsite = 4L, n_fa = 1L,
+                 incidence   = "unbalanced",
+                 sim.options = list(min_vars_pct = 0),
+                 verbose = FALSE),
+    "min_vars_pct"
+  )
+})

@@ -36,10 +36,10 @@ One of:
 \item{\code{"balanced"}}{(Default) All \code{nvar} varieties are observed at every
 site. Produces identical PEV for all varieties within a site.}
 \item{\code{"unbalanced"}}{Automatically generates a two-tier incidence
-structure: approximately 20\\% of varieties are "core" entries that
-appear in at least 75\\% of sites; the remaining varieties appear in
-40-85\\% of sites at random. Every variety appears in at least 2 sites;
-every site has at least \code{max(ceiling(nvar * 0.4), 2)} varieties.}
+structure. The proportions governing the structure are controlled by
+five \code{sim.options} entries: \code{core_pct},
+\code{core_min_sites_pct}, \code{reg_min_sites_pct},
+\code{reg_max_sites_pct}, and \code{min_vars_pct} (see below).}
 \item{Matrix}{An \verb{nvar x nsite} matrix of \code{0}/\code{1} or \code{TRUE}/\code{FALSE}
 supplied by the user. Entry \verb{[v, s] = 1} means variety \code{v} is
 observed at site \code{s}. Every variety must appear in at least 1 site;
@@ -77,6 +77,19 @@ Default \code{"Var"}.}
 \item{\code{site_prefix}}{Character. Prefix for site labels.
 Default \code{"Env"}.}
 \item{\code{outfile}}{Character path or \code{NULL}. CSV output. Default \code{NULL}.}
+\item{\code{core_pct}}{Numeric in (0, 1). Proportion of varieties designated
+as "core" entries when \code{incidence = "unbalanced"}. Core varieties
+appear in at least \code{core_min_sites_pct} of sites. Default
+\code{0.20}.}
+\item{\code{core_min_sites_pct}}{Numeric in (0, 1]. Minimum proportion of
+sites that each core variety must appear in. Default \code{0.75}.}
+\item{\code{reg_min_sites_pct}}{Numeric in (0, 1]. Minimum proportion of
+sites for regular (non-core) varieties. Default \code{0.40}.}
+\item{\code{reg_max_sites_pct}}{Numeric in (0, 1]. Maximum proportion of
+sites for regular varieties. Must be >= \code{reg_min_sites_pct}.
+Default \code{0.85}.}
+\item{\code{min_vars_pct}}{Numeric in (0, 1]. Minimum proportion of
+\code{nvar} that every site must contain. Default \code{0.40}.}
 }}
 }
 \value{
