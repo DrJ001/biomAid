@@ -56,9 +56,10 @@ from an ASReml-R V4 mixed model. Supports <code>fa()</code>, <code><a href="http
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">accuracy</span><span class="op">(</span></span>
 <span>  <span class="va">model</span>,</span>
 <span>  classify <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  metric <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"accuracy"</span>, <span class="st">"cullis"</span><span class="op">)</span>,</span>
+<span>  metric <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"accuracy"</span>, <span class="st">"gen.H2"</span><span class="op">)</span>,</span>
 <span>  pworkspace <span class="op">=</span> <span class="st">"2gb"</span>,</span>
-<span>  by_variety <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  by_variety <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  present <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -76,7 +77,7 @@ from an ASReml-R V4 mixed model. Supports <code>fa()</code>, <code><a href="http
 
 
 <dt id="arg-metric">metric<a class="anchor" aria-label="anchor" href="#arg-metric"></a></dt>
-<dd><p>Character vector: <code>"accuracy"</code>, <code>"cullis"</code>,
+<dd><p>Character vector: <code>"accuracy"</code>, <code>"gen.H2"</code>,
 or both (default). Controls which columns appear in the output.</p></dd>
 
 
@@ -89,12 +90,28 @@ Default <code>"2gb"</code>.</p></dd>
 <dd><p>Logical. If <code>TRUE</code>, return one row per variety x
 group instead of group-level summaries. Default <code>FALSE</code>.</p></dd>
 
+
+<dt id="arg-present">present<a class="anchor" aria-label="anchor" href="#arg-present"></a></dt>
+<dd><p>Logical. Controls which variety x group combinations are
+included in the output when <code>by_variety = TRUE</code>.</p><ul><li><p><code>TRUE</code> (default) — restrict to variety x group combinations
+that are <em>observed</em> in the data. Unobserved combinations
+(varieties absent from a site) are excluded, which can produce holes
+in heatmaps for unbalanced trials.</p></li>
+<li><p><code>FALSE</code> — include <em>all</em> combinations returned by
+<code>predict.asreml()</code>, including unobserved ones. For factor-analytic
+models the G-matrix allows prediction of BLUPs for unobserved variety x
+site combinations; their PEV is higher than for observed combinations,
+reflecting reduced information. For simpler structures (e.g.
+<code><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag()</a></code>), unobserved combinations may receive the same SE as
+observed ones.</p></li>
+</ul></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame with columns <code>group</code>, <code>n_vars</code>, <code>G_jj</code>,
 and one or both of <code>mean_acc</code>/<code>sd_acc</code> (Mrode accuracy) and
-<code>cullis_h2</code> (Cullis H\(^2\)). When <code>by_variety = TRUE</code> the
+<code>gen.H2</code> (Cullis H\(^2\)). When <code>by_variety = TRUE</code> the
 <code>variety</code> and <code>pev</code> columns replace <code>n_vars</code>/<code>sd_acc</code>.</p>
     </div>
 
@@ -103,7 +120,8 @@ and one or both of <code>mean_acc</code>/<code>sd_acc</code> (Mrode accuracy) an
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
 <span class="r-in"><span><span class="va">acc</span> <span class="op">&lt;-</span> <span class="fu">accuracy</span><span class="op">(</span><span class="va">model_fa</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">acc_bv</span> <span class="op">&lt;-</span> <span class="fu">accuracy</span><span class="op">(</span><span class="va">model_fa</span>, by_variety <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu">accuracy</span><span class="op">(</span><span class="va">model_fa</span>, metric <span class="op">=</span> <span class="st">"cullis"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">acc_bv_all</span> <span class="op">&lt;-</span> <span class="fu">accuracy</span><span class="op">(</span><span class="va">model_fa</span>, by_variety <span class="op">=</span> <span class="cn">TRUE</span>, present <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">accuracy</span><span class="op">(</span><span class="va">model_fa</span>, metric <span class="op">=</span> <span class="st">"gen.H2"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
