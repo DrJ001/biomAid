@@ -47,7 +47,7 @@ build the plot rather than the plot itself. Default \code{FALSE}.}
 \value{
 A \code{ggplot} object (when \code{interactive = FALSE} and
 \code{return_data = FALSE}), a \code{pc_interactive} object (when
-\code{interactive = TRUE} — auto-converts to plotly on \code{print()}; supports
+\code{interactive = TRUE} -- auto-converts to plotly on \code{print()}; supports
 \code{+} for ggplot2 layer extensions before conversion), or a \code{data.frame}
 (when \code{return_data = TRUE}).
 }
@@ -61,7 +61,7 @@ The four \code{type} options are:
 \describe{
 \item{\code{"dotplot"}}{Varieties sorted by predicted value (highest at top)
 within each group.  A shaded band of width equal to the comparison
-criterion is drawn below the top-ranked variety — any variety whose
+criterion is drawn below the top-ranked variety -- any variety whose
 point falls within the band is \strong{not} significantly different from the
 best.  Points outside the band are coloured red.  The dashed vertical
 line marks the top-ranked predicted value.}
@@ -70,7 +70,7 @@ A horizontal line segment spanning
 \eqn{[\hat\tau - \text{crit}/2,\; \hat\tau + \text{crit}/2]}
 is drawn for each variety, with the predicted value marked by a point.
 Two varieties are significantly different if and only if their bars
-do not overlap — an exact visual equivalent of the criterion test.}
+do not overlap -- an exact visual equivalent of the criterion test.}
 \item{\code{"letters"}}{Compact letter display (CLD) overlaid on the sorted
 dot plot.  Varieties sharing at least one letter are not significantly
 different.  Letters are assigned by the standard descending sweep
@@ -82,7 +82,7 @@ significantly different.  Useful for large variety sets where a letter
 display becomes unreadable.}
 }
 
-\strong{Group detection} — \code{plot_compare()} infers which columns are grouping
+\strong{Group detection} -- \code{plot_compare()} infers which columns are grouping
 variables and which is the comparison variable directly from \code{res}.
 Factor columns that are constant within every group (i.e. within every
 block of rows sharing the same criterion value) are treated as \code{by}
@@ -117,7 +117,7 @@ df <- plot_compare(res, return_data = TRUE)
 
 # Extend with a custom title
 plot_compare(res, type = "letters") +
-  ggplot2::ggtitle("Variety comparison — HSD (Tukey)")
+  ggplot2::ggtitle("Variety comparison -- HSD (Tukey)")
 }
 
 }

@@ -193,13 +193,14 @@ effects to vary across sites, which is reflected in the by-group testing section
 ```{r simulate_simple}
 #| cache: true
 out <- simTrialData(
-  nvar          = 20L,
-  nsite         = 4L,
-  treatments    = c("Control", "LowN", "MidN", "HighN"),
-  treat_effects = c(0, 50, 120, 250),
-  nrep          = 3L,
-  seed          = 42L,
-  verbose       = FALSE
+  nvar        = 20L,
+  nsite       = 4L,
+  treatments  = c("Control", "LowN", "MidN", "HighN"),
+  n_fa        = 2L,
+  nrep        = 3L,
+  seed        = 42L,
+  verbose     = FALSE,
+  sim.options = list(treat_effects = c(0, 50, 120, 250))
 )
 dat            <- out$data
 treatments     <- c("Control", "LowN", "MidN", "HighN")

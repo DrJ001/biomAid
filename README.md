@@ -18,6 +18,7 @@ with **ASReml-R V4** mixed models. Watch this space, there are a lot more functi
 | [Multi-treatment Fixed-Effects Regression](https://DrJ001.github.io/biomAid/fixedRegress.html) | OLS conditioning schemes, efficiency/response index decomposition, and plot types for `fixedRegress()` and `plot_fixedRegress()` |
 | [Extracting and Padding Field Trial Layouts](https://DrJ001.github.io/biomAid/padTrial.html) | Step-by-step guide to guard-row removal, missing-plot padding, and Before/After visualisation with `padTrial()` and `plot_padTrial()` |
 | [Multiple Comparison Criteria](https://DrJ001.github.io/biomAid/compare.html) | HSD, LSD, and Bonferroni criteria, by-group comparisons, and all three plot types for `compare()` and `plot_compare()` |
+| [BLUP Accuracy in Multi-Environment Trials](https://DrJ001.github.io/biomAid/accuracy.html) | Mrode accuracy and Cullis H², supported random structures, and all six plot types for `accuracy()` and `plot_accuracy()` |
 
 ## Function reference
 
@@ -319,60 +320,137 @@ fast(model, term = "fa(Site, 4):Genotype",
 
 ### `simTrialData()` — Simulate trial data
 
-Generates a balanced split-plot dataset for testing and demonstration, with
-known ground-truth genetic parameters for comparison against model estimates.
+Generates a balanced MET or split-plot dataset with a realistic
+**factor-analytic genetic covariance structure** across environments.
+Variety BLUPs are drawn from `G = ΛΛᵀ + Ψ` where `Λ` is an `n_fa`-factor
+loadings matrix — so fitted FA models have genuine signal to recover.
+
+Set `treatments = NULL` for a pure MET (simple RCB, no Treatment column).
+Supply `treatments = c("T0", "T1", ...)` for a split-plot design; the FA
+structure then operates over all Treatment × Site (`TSite`) combinations.
 
 ```r
-simTrialData(nvar           = 20L,
-             nsite          = 10L,
-             treatments     = c("N0", "N1", "N2"),
-             nrep           = 3L,
-             rows_per_strip = NULL,
-             cols_per_strip = NULL,
-             site_mean      = 4500,
-             site_sd        = 600,
-             treat_effects  = NULL,
-             sigma_base     = 250,
-             sigr           = NULL,
-             beta_min       = NULL,
-             beta_max       = NULL,
-             rep_sd         = 150,
-             row_sd         = 80,
-             col_sd         = 60,
-             error_sd       = 350,
-             sep            = "-",
-             variety_prefix = "Var",
-             site_prefix    = "Env",
-             seed           = NULL,
-             outfile        = NULL,
-             verbose        = TRUE)
+simTrialData(nvar        = 20L,
+             nsite       = 10L,
+             treatments  = NULL,
+             nrep        = 2L,
+             n_fa        = 2L,
+             incidence   = "balanced",
+             seed        = NULL,
+             verbose     = TRUE,
+             sim.options = list())
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `nvar` | Number of varieties. Default `20` |
 | `nsite` | Number of sites. Default `10` |
-| `treatments` | Character vector of treatment labels. Default `c("N0","N1","N2")` |
-| `nrep` | Number of replicates per site. Default `3` |
-| `rows_per_strip` | Rows per treatment strip. `NULL` = auto |
-| `cols_per_strip` | Columns per treatment strip. `NULL` = auto |
-| `site_mean` | Mean yield across sites. Default `4500` |
-| `site_sd` | Site-to-site SD. Default `600` |
-| `treat_effects` | Named numeric vector of treatment mean shifts. `NULL` = auto |
-| `sigma_base` | Base genetic SD. Default `250` |
-| `sigr` | Per-treatment residual SDs. `NULL` = auto |
-| `beta_min` | Minimum regression coefficient. `NULL` = auto |
-| `beta_max` | Maximum regression coefficient. `NULL` = auto |
-| `rep_sd` | Replicate effect SD. Default `150` |
-| `row_sd` | Row spatial effect SD. Default `80` |
-| `col_sd` | Column spatial effect SD. Default `60` |
-| `error_sd` | Residual error SD. Default `350` |
-| `sep` | Separator for composite site-treatment labels. Default `"-"` |
-| `variety_prefix` | Prefix for variety labels. Default `"Var"` |
-| `site_prefix` | Prefix for site labels. Default `"Env"` |
-| `seed` | Random seed for reproducibility. `NULL` = no fixed seed |
-| `outfile` | Optional path to write the simulated data as a CSV |
-| `verbose` | `TRUE` (default) prints simulation progress |
+| `treatments` | Character vector of treatment labels, or `NULL` for MET-only. Default `NULL` |
+| `nrep` | Number of replicates per site. Default `2` |
+| `n_fa` | Number of FA factors in the data-generating model. Default `2` |
+| `incidence` | `"balanced"` (default) — all varieties at every site; `"unbalanced"` — auto two-tier structure; or a user-supplied `nvar × nsite` matrix of 0/1 |
+| `seed` | Random seed. `NULL` = no fixed seed |
+| `verbose` | Print design summary and suggested model. Default `TRUE` |
+| `sim.options` | Named list of optional controls (see below) |
+
+Key `sim.options` elements (all have built-in defaults):
+
+| Element | Description | Default |
+|---------|-------------|---------|
+| `site_mean` / `site_sd` | Grand mean and SD of site means | `4500` / `600` |
+| `sigma_genetic` | Target mean genetic SD per group | `250` |
+| `loading_min` / `loading_max` | Range of FA loadings before scaling | `0.5` / `2.5` |
+| `specific_pct` | Specific variance as fraction of mean `diag(ΛΛᵀ)` | `0.20` |
+| `treat_effects` | Fixed treatment effects vector (multi-treatment only) | auto-spaced |
+| `error_sd` / `rep_sd` / `row_sd` / `col_sd` | Error SD components | `350`/`150`/`80`/`60` |
+| `sep` | Separator for `TSite` labels | `"-"` |
+| `variety_prefix` / `site_prefix` | Label prefixes | `"Var"` / `"Env"` |
+| `outfile` | Optional CSV output path | `NULL` |
+
+Returns a list with `$data` (the field layout data frame) and `$params`
+(the true `G`, `Lambda`, `Psi`, `site_means`, `incidence`, and for
+multi-treatment: `treat_effects`, `g_arr`).
+
+---
+
+### `accuracy()` — Model-based BLUP accuracy
+
+Computes per-environment mean BLUP accuracy from a fitted ASReml-R V4
+mixed model. Two complementary metrics are available:
+
+- **Mrode accuracy** — `r = mean[sqrt(1 - PEV / G_jj)]` per variety,
+  averaged over environments.
+- **Generalised H²** — `1 - mean(SED²) / (2 G_jj)`, a variety-comparison
+  reliability analogue from Cullis et al. (2006)
+
+Supports `fa()`, `diag()`, `corgh()`, `corh()`, `us()`, and single-environment
+`id()` random structures. The `only =` argument to `predict.asreml()` is invoked
+internally to avoid fixed-effect inflation of the PEV.
+
+```r
+accuracy(model,
+         classify   = NULL,
+         metric     = c("accuracy", "gen.H2"),
+         pworkspace = "2gb",
+         by_variety = FALSE,
+         present    = TRUE)
+```
+
+| Argument | Description |
+|----------|-------------|
+| `model` | Fitted ASReml-R V4 model object |
+| `classify` | Override the auto-detected `predict()` classify string |
+| `metric` | One or both of `"accuracy"` and `"gen.H2"` (Cullis H²). Default = both |
+| `pworkspace` | Passed to `predict.asreml()`. Default `"2gb"` |
+| `by_variety` | `TRUE` returns one row per variety × environment |
+| `present` | `TRUE` (default) restricts to observed variety × environment combinations; `FALSE` includes all `predict.asreml()` rows (FA models can predict unobserved combinations via the G-matrix) |
+
+---
+
+### `plot_accuracy()` — Visualise BLUP accuracy
+
+Six plot types for visualising and comparing accuracy results.
+Pass a second accuracy object via `res2` for head-to-head model comparisons.
+
+```r
+plot_accuracy(res,
+              res2        = NULL,
+              type        = c("lollipop", "violin", "heatmap",
+                              "dumbbell", "scatter", "diff"),
+              metric      = c("accuracy", "gen.H2"),
+              label1      = "Model 1",
+              label2      = "Model 2",
+              theme       = ggplot2::theme_bw(),
+              return_data = FALSE,
+              ...)
+```
+
+| Type | Input | Description |
+|------|-------|-------------|
+| `"lollipop"` | Group-level | Mean accuracy per environment with ±SD error bars |
+| `"violin"` | `by_variety` | Distribution of per-variety accuracies per environment |
+| `"heatmap"` | `by_variety` | Variety × environment accuracy grid (viridis fill) |
+| `"dumbbell"` | Group-level + `res2` | Paired dots per environment; segment colour = improvement direction |
+| `"scatter"` | `by_variety` + `res2` | Per-variety model1 vs model2 accuracy scatter |
+| `"diff"` | Group-level + `res2` | Signed accuracy gain (model2 − model1) per environment |
+
+When `metric = c("accuracy", "gen.H2")` the plot is automatically faceted
+into two panels. All types support `return_data = TRUE`.
+
+```r
+acc_diag <- accuracy(m_diag, metric = c("accuracy", "gen.H2"))
+acc_fa2  <- accuracy(m_fa2,  metric = c("accuracy", "gen.H2"))
+
+# Single model
+plot_accuracy(acc_fa2, type = "lollipop")
+plot_accuracy(acc_fa2_bv, type = "violin")
+
+# Model comparison
+plot_accuracy(acc_diag, acc_fa2, type = "dumbbell",
+              label1 = "Diag", label2 = "FA(2)")
+plot_accuracy(acc_diag, acc_fa2, type = "diff",
+              label1 = "Diag", label2 = "FA(2)")
+```
 
 ---
 

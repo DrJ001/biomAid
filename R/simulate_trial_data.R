@@ -1,283 +1,454 @@
-#' Simulate Multi-Treatment Multi-Environment Plant Breeding Trial Data
+#' Simulate Multi-Environment Plant Breeding Trial Data
 #'
 #' @description
-#' Generates a balanced split-plot field trial dataset suitable for fitting
-#' ASReml-R mixed models and testing [randomRegress()].
+#' Generates a balanced or unbalanced field trial dataset with a realistic
+#' factor-analytic genetic correlation structure across environments.
 #'
-#' **Experimental design** (per environment):
-#' \itemize{
-#'   \item Rectangular layout of `nrep * rows_per_strip` rows ×
-#'         `length(treatments) * cols_per_strip` columns.
-#'   \item `nrep` replicate blocks, each occupying `rows_per_strip` consecutive
-#'         rows.
-#'   \item Within each replicate: one treatment strip per treatment
-#'         (`rows_per_strip × cols_per_strip = nvar` sub-plots), with
-#'         treatments randomised to strips independently in every replicate.
-#'   \item Varieties randomised to sub-plots within each strip.
+#' **MET-only** (`treatments = NULL`): a simple randomised complete block
+#' design with one observation per observed Variety x Site x Rep combination.
+#'
+#' **Multi-treatment** (`treatments` is a character vector of length >= 2):
+#' a split-plot design where whole plots are treatment strips and sub-plots
+#' are varieties, nested within replicate blocks. The genetic structure
+#' operates over all Treatment x Site (`TSite`) combinations.
+#'
+#' **Genetic simulation** uses a factor-analytic (FA) covariance model:
+#' \deqn{
+#'   \mathbf{u}_v = \boldsymbol{\Lambda}\mathbf{f}_v + \boldsymbol{\delta}_v,
+#'   \quad \mathbf{f}_v \sim \mathcal{N}(\mathbf{0}, \mathbf{I}_{k}),
+#'   \quad \boldsymbol{\delta}_v \sim \mathcal{N}(\mathbf{0}, \boldsymbol{\Psi})
 #' }
+#' where \eqn{\boldsymbol{\Lambda}} (\eqn{J \times k}) is the loadings matrix,
+#' \eqn{k} = `n_fa`, \eqn{J} is the number of environments (or
+#' Treatment x Site combinations), and
+#' \eqn{\boldsymbol{\Psi} = \mathrm{diag}(\psi_1,\ldots,\psi_J)} is the
+#' specific variance matrix. The true genetic covariance matrix is
+#' \eqn{\mathbf{G} = \boldsymbol{\Lambda}\boldsymbol{\Lambda}^\top +
+#' \boldsymbol{\Psi}}.
 #'
-#' **Genetic simulation** uses the same conditional multivariate-normal
-#' structure that [randomRegress()] is designed to recover:
-#' \deqn{u_1 \sim \mathcal{N}(0,\,\sigma_1^2)}
-#' \deqn{u_j \mid u_1 \sim \mathcal{N}(\beta_{j,s}\,u_1,\,\sigma_{r_j}^2)
-#'       \quad j = 2,\ldots,k}
-#' where \eqn{\beta_{j,s}} varies by site to create genuine
-#' Treatment × Genotype × Environment interaction.  The true \eqn{\beta}
-#' matrix is returned alongside the data for ground-truth comparison with
-#' model estimates.
+#' **Incidence structure** (`incidence` argument) controls which varieties are
+#' observed at which sites. All `nvar` varieties have a true genetic value at
+#' every site but only observed varieties contribute plots. Unbalanced designs
+#' produce meaningful per-variety variation in prediction error variance —
+#' varieties present in fewer sites are predicted less accurately.
 #'
-#' @param nvar        Integer. Number of varieties. Should be composite (not
-#'   prime) for a tidy rectangular sub-plot layout; a warning is issued
-#'   otherwise.  Default `20`.
+#' @param nvar        Integer. Maximum number of varieties. Default `20`.
 #' @param nsite       Integer. Number of environments (sites). Default `10`.
-#' @param treatments  Character vector of length ≥ 2 giving treatment labels.
-#'   The **first element** is the baseline; all others are regressed onto it
-#'   in [randomRegress()].  Default `c("N0", "N1", "N2")`.
-#' @param nrep        Integer. Number of complete replicates per environment.
-#'   Default `3`.
-#' @param rows_per_strip Integer or `NULL`. Rows allocated to each treatment
-#'   strip within a replicate block. With `cols_per_strip` must satisfy
-#'   `rows_per_strip * cols_per_strip == nvar`. Auto-calculated to the
-#'   near-square factor pair when `NULL`.
-#' @param cols_per_strip Integer or `NULL`. Columns per treatment strip.
-#'   Auto-calculated when `NULL` (see `rows_per_strip`).
-#' @param site_mean   Numeric. Grand mean yield across all sites (same units
-#'   as the simulated trait). Default `4500`.
-#' @param site_sd     Numeric. Standard deviation of site mean yields.
-#'   Default `600`.
-#' @param treat_effects Numeric vector of length `length(treatments)` giving
-#'   the fixed treatment main effects, with `treat_effects[1] = 0` for
-#'   identifiability.  Auto-spaced from 0 to `0.25 * site_mean` when `NULL`.
-#' @param sigma_base  Numeric. Genetic standard deviation for the baseline
-#'   treatment BLUP. Default `250`.
-#' @param sigr        Numeric vector of length `length(treatments) - 1`.
-#'   Conditional (responsiveness) standard deviations for each non-baseline
-#'   treatment given the baseline. Auto-scaled to
-#'   `sigma_base * 0.4 * seq_len(ntreat - 1)` when `NULL`.
-#' @param beta_min    Numeric vector of length `length(treatments) - 1`.
-#'   Lower bound of the uniform distribution from which site-specific
-#'   regression coefficients are drawn for each non-baseline treatment.
-#'   Auto-calculated when `NULL`.
-#' @param beta_max    Numeric vector of length `length(treatments) - 1`.
-#'   Upper bound (see `beta_min`). Auto-calculated when `NULL`.
-#' @param rep_sd      Numeric. Standard deviation of replicate (block) effects.
-#'   Default `150`.
-#' @param row_sd      Numeric. Standard deviation of row spatial effects.
-#'   Default `80`.
-#' @param col_sd      Numeric. Standard deviation of column spatial effects.
-#'   Default `60`.
-#' @param error_sd    Numeric. Standard deviation of the plot-level residual
-#'   (within-sub-plot error). Default `350`.
-#' @param sep         Character. Separator used when constructing the composite
-#'   `TSite` factor (e.g. `"N0-Env01"` with `sep = "-"`). Must not appear
-#'   inside any treatment or site label. Default `"-"`.
-#' @param variety_prefix Character. Prefix for variety labels. Default `"Var"`.
-#' @param site_prefix    Character. Prefix for site labels. Default `"Env"`.
-#' @param seed        Integer or `NULL`. Random seed passed to [set.seed()].
-#'   `NULL` uses the current RNG state. Default `NULL`.
-#' @param outfile     Character path or `NULL`. If non-`NULL` the data frame
-#'   is written to this CSV path via [write.csv()]. Default `NULL`.
+#' @param treatments  Character vector of treatment labels (length >= 2), or
+#'   `NULL` (default) for a MET-only trial with no treatment structure.
+#' @param nrep        Integer. Replicates per environment. Default `2`.
+#' @param n_fa        Integer. Number of FA factors used in the data-generating
+#'   genetic model. Must be less than the number of groups (environments or
+#'   Treatment x Site combinations). Default `2`.
+#' @param incidence   Controls which varieties are observed at which sites.
+#'   One of:
+#'   \describe{
+#'     \item{`"balanced"`}{(Default) All `nvar` varieties are observed at every
+#'       site. Produces identical PEV for all varieties within a site.}
+#'     \item{`"unbalanced"`}{Automatically generates a two-tier incidence
+#'       structure: approximately 20\% of varieties are "core" entries that
+#'       appear in at least 75\% of sites; the remaining varieties appear in
+#'       40-85\% of sites at random. Every variety appears in at least 2 sites;
+#'       every site has at least `max(ceiling(nvar * 0.4), 2)` varieties.}
+#'     \item{Matrix}{An `nvar x nsite` matrix of `0`/`1` or `TRUE`/`FALSE`
+#'       supplied by the user. Entry `[v, s] = 1` means variety `v` is
+#'       observed at site `s`. Every variety must appear in at least 1 site;
+#'       every site must have at least 2 varieties.}
+#'   }
+#' @param seed        Integer or `NULL`. Passed to [set.seed()]. Default `NULL`.
 #' @param verbose     Logical. Print a design summary and suggested ASReml-R
-#'   model call. Default `TRUE`.
+#'   model. Default `TRUE`.
+#' @param sim.options Named list of optional simulation controls. Unknown names
+#'   produce a warning. Recognised elements (with defaults) are:
+#'   \describe{
+#'     \item{`site_mean`}{Numeric. Grand mean yield. Default `4500`.}
+#'     \item{`site_sd`}{Numeric. SD of site mean yields. Default `600`.}
+#'     \item{`treat_effects`}{Numeric vector (length = `length(treatments)`)
+#'       of fixed treatment effects, or `NULL` for auto-spacing from 0 to
+#'       `site_mean * 0.10`. Multi-treatment only.}
+#'     \item{`sigma_genetic`}{Numeric. Target mean genetic SD per group.
+#'       Default `250`.}
+#'     \item{`loading_min`}{Numeric >= 0. Minimum absolute FA loading before
+#'       scaling. Default `0.5`.}
+#'     \item{`loading_max`}{Numeric > `loading_min`. Maximum absolute FA
+#'       loading before scaling. Default `2.5`.}
+#'     \item{`specific_pct`}{Numeric in (0, 1). Specific variances as a
+#'       fraction of mean diagonal of Lambda Lambda'. Default `0.20`.}
+#'     \item{`rep_sd`}{Numeric. SD of replicate effects. Default `150`.}
+#'     \item{`row_sd`}{Numeric. SD of row spatial effects. Default `80`.}
+#'     \item{`col_sd`}{Numeric. SD of column spatial effects. Default `60`.}
+#'     \item{`error_sd`}{Numeric. SD of plot-level residual. Default `350`.}
+#'     \item{`sep`}{Character. Separator for `TSite` labels. Default `"-"`.}
+#'     \item{`variety_prefix`}{Character. Prefix for variety labels.
+#'       Default `"Var"`.}
+#'     \item{`site_prefix`}{Character. Prefix for site labels.
+#'       Default `"Env"`.}
+#'     \item{`outfile`}{Character path or `NULL`. CSV output. Default `NULL`.}
+#'   }
 #'
 #' @return A named list:
 #' \describe{
-#'   \item{`data`}{Data frame with columns `Site`, `Treatment`, `TSite`,
-#'     `Variety`, `Rep`, `Row`, `Column`, `yield`. Ordered by `Site`, `Row`,
-#'     `Column` for compatibility with ASReml-R spatial models.}
-#'   \item{`params`}{Named list of true simulation parameters for ground-truth
-#'     comparison with [randomRegress()] estimates:
+#'   \item{`data`}{Data frame ordered by `Site`, `Row`, `Column` with columns:
+#'     `Site`, `Variety`, `Rep`, `Row`, `Column`, `yield` (MET-only), or
+#'     additionally `Treatment` and `TSite` (multi-treatment). Only observed
+#'     variety x site combinations are included.}
+#'   \item{`params`}{Named list of true simulation parameters:
 #'     \describe{
-#'       \item{`beta`}{`nsite × (ntreat-1)` matrix of true site-specific
-#'         regression coefficients.}
-#'       \item{`sigr`}{Vector of true conditional standard deviations.}
-#'       \item{`treat_effects`}{True treatment fixed effects used.}
-#'       \item{`site_means`}{True site mean yields used.}
-#'       \item{`g_base`}{Standardised variety genetic potentials (length
-#'         `nvar`).}
-#'       \item{`g_arr`}{`nvar × ntreat × nsite` array of true genetic values.}
+#'       \item{`G`}{True genetic covariance matrix (J x J).}
+#'       \item{`Lambda`}{True loadings matrix (J x k).}
+#'       \item{`Psi`}{True specific variances (length J).}
+#'       \item{`site_means`}{True site mean yields (length `nsite`).}
+#'       \item{`n_fa`}{Number of FA factors used.}
+#'       \item{`incidence`}{Integer `nvar x nsite` incidence matrix used.}
+#'       \item{`treat_effects`}{True treatment fixed effects
+#'         (multi-treatment only).}
+#'       \item{`g_arr`}{`nvar x ngroup` matrix of true genetic BLUPs
+#'         (multi-treatment only).}
 #'     }}
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' # Reproduce the original 3-treatment, 10-site dataset
-#' out <- simTrialData(seed = 2024, outfile = "plant_trial_data.csv")
-#' head(out$data)
-#' out$params$beta   # compare with randomRegress()$beta
+#' # MET-only balanced: 30 varieties, 8 sites, FA(2) genetic structure
+#' out <- simTrialData(nvar = 30, nsite = 8, n_fa = 2, seed = 42)
+#' round(cov2cor(out$params$G), 2)   # true genetic correlations
 #'
-#' # Two-treatment, 5-site dataset
-#' out2 <- simTrialData(nsite = 5, treatments = c("Dry", "Irr"), seed = 1)
+#' # Unbalanced: produces spread in per-variety accuracy
+#' out2 <- simTrialData(nvar = 30, nsite = 8, n_fa = 2,
+#'                      incidence = "unbalanced", seed = 42)
+#' table(colSums(out2$params$incidence))   # varieties per site
 #'
-#' # Four treatments, 12 varieties, 4 reps
-#' out4 <- simTrialData(nvar = 12, nsite = 8,
-#'                      treatments = c("T0","T1","T2","T3"), nrep = 4,
-#'                      seed = 99)
+#' # User-supplied incidence matrix
+#' inc <- matrix(1L, nrow = 20, ncol = 6)
+#' inc[1:5, 1:3] <- 0L   # first 5 varieties absent from first 3 sites
+#' out3 <- simTrialData(nvar = 20, nsite = 6, n_fa = 2,
+#'                      incidence = inc, seed = 1)
+#'
+#' # Multi-treatment with custom treat_effects
+#' out4 <- simTrialData(nvar = 20, nsite = 6,
+#'                      treatments  = c("T0", "T1", "T2"),
+#'                      n_fa        = 2,
+#'                      incidence   = "unbalanced",
+#'                      seed        = 1,
+#'                      sim.options = list(treat_effects = c(0, 150, 350)))
 #' }
 #'
 #' @export
-simTrialData <- function(nvar           = 20L,
-                         nsite          = 10L,
-                         treatments     = c("N0", "N1", "N2"),
-                         nrep           = 3L,
-                         rows_per_strip = NULL,
-                         cols_per_strip = NULL,
-                         site_mean      = 4500,
-                         site_sd        = 600,
-                         treat_effects  = NULL,
-                         sigma_base     = 250,
-                         sigr           = NULL,
-                         beta_min       = NULL,
-                         beta_max       = NULL,
-                         rep_sd         = 150,
-                         row_sd         = 80,
-                         col_sd         = 60,
-                         error_sd       = 350,
-                         sep            = "-",
-                         variety_prefix = "Var",
-                         site_prefix    = "Env",
-                         seed           = NULL,
-                         outfile        = NULL,
-                         verbose        = TRUE) {
+simTrialData <- function(nvar        = 20L,
+                         nsite       = 10L,
+                         treatments  = NULL,
+                         nrep        = 2L,
+                         n_fa        = 2L,
+                         incidence   = "balanced",
+                         seed        = NULL,
+                         verbose     = TRUE,
+                         sim.options = list()) {
 
-  # ---- Input validation --------------------------------------------------
-  ntreat <- length(treatments)
-  if (ntreat < 2L)
-    stop("'treatments' must have at least 2 elements.")
-  if (any(grepl(sep, treatments, fixed = TRUE)))
-    stop("'sep' (\"", sep, "\") must not appear inside any treatment label.")
-  if (!is.null(seed))
-    set.seed(seed)
+  # ---- Merge sim.options with defaults -------------------------------------
+  .defaults <- list(
+    site_mean      = 4500,
+    site_sd        = 600,
+    treat_effects  = NULL,
+    sigma_genetic  = 250,
+    loading_min    = 0.5,
+    loading_max    = 2.5,
+    specific_pct   = 0.20,
+    rep_sd         = 150,
+    row_sd         = 80,
+    col_sd         = 60,
+    error_sd       = 350,
+    sep            = "-",
+    variety_prefix = "Var",
+    site_prefix    = "Env",
+    outfile        = NULL
+  )
 
-  nresp <- ntreat - 1L   # number of non-baseline (responsiveness) treatments
+  unknown <- setdiff(names(sim.options), names(.defaults))
+  if (length(unknown))
+    warning("Unknown sim.options element(s) ignored: ",
+            paste(unknown, collapse = ", "), ".")
 
-  # ---- Auto layout: near-square factor pair for nvar sub-plots -----------
+  opts <- modifyList(.defaults,
+                     sim.options[intersect(names(sim.options),
+                                           names(.defaults))])
+
+  # ---- Validation ----------------------------------------------------------
+  if (!is.null(seed)) set.seed(seed)
+
+  has_treatments <- !is.null(treatments) && length(treatments) >= 2L
+
+  if (!is.null(treatments) && length(treatments) < 2L)
+    stop("'treatments' must have at least 2 elements, or NULL for MET-only.")
+
+  if (has_treatments && any(grepl(opts$sep, treatments, fixed = TRUE)))
+    stop("'sep' (\"", opts$sep,
+         "\") must not appear inside any treatment label.")
+
+  ntreat <- if (has_treatments) length(treatments) else 1L
+  ngroup <- ntreat * nsite
+
+  if (n_fa < 1L)
+    stop("'n_fa' must be at least 1.")
+  if (n_fa >= ngroup)
+    stop("'n_fa' (", n_fa, ") must be less than the number of groups (",
+         ngroup, ").")
+
+  if (!is.null(opts$treat_effects) && length(opts$treat_effects) != ntreat)
+    stop("'treat_effects' must have length ", ntreat, ".")
+
+  # ---- Labels --------------------------------------------------------------
+  ndig_var  <- nchar(as.character(nvar))
+  ndig_site <- nchar(as.character(nsite))
+  varieties <- paste0(opts$variety_prefix,
+                      sprintf(paste0("%0", ndig_var,  "d"), seq_len(nvar)))
+  sites     <- paste0(opts$site_prefix,
+                      sprintf(paste0("%0", ndig_site, "d"), seq_len(nsite)))
+
+  if (has_treatments) {
+    tsite_levs <- as.vector(outer(treatments, sites, paste, sep = opts$sep))
+    grp_names  <- tsite_levs
+  } else {
+    grp_names <- sites
+  }
+
+  # ---- Incidence matrix ----------------------------------------------------
+
+  # Auto-generate a two-tier unbalanced incidence matrix.
+  # ~20% "core" varieties appear in >= 75% of sites; the rest appear in
+  # 40-85% of sites at random.  Constraints: every variety in >= 2 sites;
+  # every site has >= max(ceiling(nvar*0.4), 2) varieties.
+  .gen_unbalanced_inc <- function(nv, ns) {
+    n_core  <- max(1L, ceiling(nv * 0.20))
+    mat     <- matrix(0L, nrow = nv, ncol = ns)
+
+    # Core varieties: appear in >= 75% of sites
+    n_core_sites <- max(2L, ceiling(ns * 0.75))
+    for (v in seq_len(n_core))
+      mat[v, sample.int(ns, min(n_core_sites, ns))] <- 1L
+
+    # Regular varieties: appear in 40-85% of sites
+    lo <- max(2L, ceiling(ns * 0.40))
+    hi <- max(lo, floor(ns * 0.85))
+    for (v in seq(n_core + 1L, nv)) {
+      k <- sample.int(hi - lo + 1L, 1L) + lo - 1L
+      mat[v, sample.int(ns, k)] <- 1L
+    }
+
+    # Ensure every site meets minimum variety count
+    min_per_site <- max(ceiling(nv * 0.40), 2L)
+    for (s in seq_len(ns)) {
+      deficit <- min_per_site - sum(mat[, s])
+      if (deficit > 0L) {
+        cands <- which(mat[, s] == 0L)
+        if (length(cands) > 0L)
+          mat[sample(cands, min(deficit, length(cands))), s] <- 1L
+      }
+    }
+    mat
+  }
+
+  # Validate a user-supplied incidence matrix.
+  .validate_inc <- function(inc, nv, ns) {
+    if (!is.matrix(inc))
+      stop("User-supplied 'incidence' must be a matrix.")
+    if (!identical(dim(inc), c(nv, ns)))
+      stop(sprintf(
+        "'incidence' must be %d x %d (nvar x nsite); got %d x %d.",
+        nv, ns, nrow(inc), ncol(inc)))
+    if (is.logical(inc)) storage.mode(inc) <- "integer"
+    vals <- unique(as.vector(inc))
+    if (!all(vals %in% c(0L, 1L)))
+      stop("'incidence' values must be 0/1 or TRUE/FALSE.")
+    bad_var  <- which(rowSums(inc) == 0L)
+    if (length(bad_var))
+      stop("Varieties in row(s) ", paste(bad_var, collapse = ", "),
+           " appear in no sites.")
+    bad_site <- which(colSums(inc) < 2L)
+    if (length(bad_site))
+      stop("Sites in column(s) ", paste(bad_site, collapse = ", "),
+           " have fewer than 2 varieties.")
+    storage.mode(inc) <- "integer"
+    inc
+  }
+
+  # Resolve incidence argument
+  if (identical(incidence, "balanced")) {
+    inc_mat <- matrix(1L, nrow = nvar, ncol = nsite)
+  } else if (identical(incidence, "unbalanced")) {
+    inc_mat <- .gen_unbalanced_inc(nvar, nsite)
+  } else if (is.matrix(incidence)) {
+    inc_mat <- .validate_inc(incidence, nvar, nsite)
+  } else {
+    stop("'incidence' must be \"balanced\", \"unbalanced\", or an ",
+         nvar, " x ", nsite, " matrix of 0s and 1s.")
+  }
+
+  rownames(inc_mat) <- varieties
+  colnames(inc_mat) <- sites
+
+  # ---- Layout helper (per-site) --------------------------------------------
   .best_dims <- function(n) {
     sq  <- floor(sqrt(n))
     fac <- which(n %% seq_len(sq) == 0L)
-    if (!length(fac)) {
-      warning("nvar = ", n, " is prime; strip layout will be 1 x ", n,
-              ". Consider choosing a composite nvar for a tidier design.")
-      return(c(rows = 1L, cols = as.integer(n)))
-    }
+    if (!length(fac)) return(c(rows = 1L, cols = as.integer(n)))
     r <- max(fac)
     c(rows = as.integer(r), cols = as.integer(n %/% r))
   }
 
-  if (is.null(rows_per_strip) || is.null(cols_per_strip)) {
-    dims           <- .best_dims(nvar)
-    rows_per_strip <- dims["rows"]
-    cols_per_strip <- dims["cols"]
-  } else {
-    if (rows_per_strip * cols_per_strip != nvar)
-      stop("rows_per_strip * cols_per_strip must equal nvar (", nvar, ").")
+  # ---- FA genetic simulation -----------------------------------------------
+  Lambda_raw <- matrix(
+    runif(ngroup * n_fa, min = opts$loading_min, max = opts$loading_max),
+    nrow = ngroup, ncol = n_fa
+  )
+
+  if (n_fa >= 2L) {
+    for (f in 2L:n_fa) {
+      flip <- sample(ngroup, floor(ngroup * 0.4))
+      Lambda_raw[flip, f] <- -Lambda_raw[flip, f]
+    }
   }
 
-  nrow_e <- nrep   * rows_per_strip   # total rows per environment
-  ncol_e <- ntreat * cols_per_strip   # total columns per environment
+  G_unscaled <- Lambda_raw %*% t(Lambda_raw)
+  psi_raw    <- rep(mean(diag(G_unscaled)) * opts$specific_pct, ngroup)
+  G_raw      <- G_unscaled + diag(psi_raw)
 
-  # ---- Default parameter fills -------------------------------------------
-  if (is.null(treat_effects))
-    treat_effects <- seq(0, site_mean * 0.25, length.out = ntreat)
+  scale_f <- opts$sigma_genetic^2 / mean(diag(G_raw))
+  Lambda  <- Lambda_raw * sqrt(scale_f)
+  Psi     <- psi_raw    * scale_f
+  G       <- G_raw      * scale_f
 
-  if (length(treat_effects) != ntreat)
-    stop("'treat_effects' must have length equal to length(treatments).")
+  rownames(G)      <- colnames(G) <- grp_names
+  rownames(Lambda) <- grp_names
+  names(Psi)       <- grp_names
 
-  if (is.null(sigr))
-    sigr <- sigma_base * 0.4 * seq_len(nresp)
+  # All nvar varieties get true BLUPs at all groups (even unobserved sites)
+  F_mat <- matrix(rnorm(n_fa * nvar), nrow = n_fa, ncol = nvar)
+  U_fa  <- t(Lambda %*% F_mat)
+  U_psi <- matrix(
+    rnorm(nvar * ngroup, 0, rep(sqrt(Psi), each = nvar)),
+    nrow = nvar, ncol = ngroup
+  )
+  U <- U_fa + U_psi
+  rownames(U) <- varieties
+  colnames(U) <- grp_names
 
-  if (length(sigr) != nresp)
-    stop("'sigr' must have length ", nresp, " (one per non-baseline treatment).")
-
-  # Default beta ranges: each subsequent treatment has a higher expected beta
-  # beta_j in [0.65 + 0.35*(j-1),  1.30 + 0.65*(j-1)]
-  if (is.null(beta_min))
-    beta_min <- 0.65 + 0.35 * (seq_len(nresp) - 1L)
-  if (is.null(beta_max))
-    beta_max <- 1.30 + 0.65 * (seq_len(nresp) - 1L)
-
-  if (length(beta_min) != nresp || length(beta_max) != nresp)
-    stop("'beta_min' and 'beta_max' must each have length ", nresp, ".")
-  if (any(beta_min >= beta_max))
-    stop("All elements of 'beta_min' must be strictly less than 'beta_max'.")
-
-  # ---- Labels ------------------------------------------------------------
-  ndig_var  <- nchar(as.character(nvar))
-  ndig_site <- nchar(as.character(nsite))
-  varieties  <- paste0(variety_prefix, sprintf(paste0("%0", ndig_var,  "d"), seq_len(nvar)))
-  sites      <- paste0(site_prefix,    sprintf(paste0("%0", ndig_site, "d"), seq_len(nsite)))
-
-  # ---- Genetic simulation ------------------------------------------------
-  # Standardised variety genetic potential (common across all treatments/sites)
-  g_base <- rnorm(nvar, 0, 1)
-
-  # Site-specific regression coefficients: beta_js ~ Uniform(min_j, max_j)
-  beta_mat <- matrix(NA_real_, nrow = nsite, ncol = nresp,
-                     dimnames = list(sites, treatments[-1L]))
-  for (j in seq_len(nresp))
-    beta_mat[, j] <- runif(nsite, min = beta_min[j], max = beta_max[j])
-
-  # Genetic values: nvar x ntreat x nsite array
-  g_arr <- array(NA_real_,
-                 dim      = c(nvar, ntreat, nsite),
-                 dimnames = list(varieties, treatments, sites))
-
-  for (s in seq_len(nsite)) {
-    u_base <- sigma_base * g_base                      # baseline BLUPs
-    g_arr[, 1L, s] <- u_base
-    for (j in seq_len(nresp))
-      g_arr[, j + 1L, s] <- beta_mat[s, j] * u_base + rnorm(nvar, 0, sigr[j])
+  # ---- Treatment fixed effects ---------------------------------------------
+  if (has_treatments) {
+    treat_effects <- opts$treat_effects
+    if (is.null(treat_effects))
+      treat_effects <- seq(0, opts$site_mean * 0.10, length.out = ntreat)
+    names(treat_effects) <- treatments
   }
 
-  # ---- Build plot-level observations -------------------------------------
-  site_means <- rnorm(nsite, mean = site_mean, sd = site_sd)
-  plots      <- vector("list", nsite * nrep * ntreat * nvar)
-  idx        <- 1L
+  # ---- Site means ----------------------------------------------------------
+  site_means <- setNames(rnorm(nsite, opts$site_mean, opts$site_sd), sites)
+
+  # ---- Build plot-level observations ---------------------------------------
+  # Pre-allocate for the maximum possible number of plots
+  plots <- vector("list", nvar * nsite * nrep * ntreat)
+  idx   <- 1L
 
   for (s in seq_len(nsite)) {
 
-    row_eff <- rnorm(nrow_e, 0, row_sd)
-    col_eff <- rnorm(ncol_e, 0, col_sd)
-    rep_eff <- rnorm(nrep,   0, rep_sd)
+    # Varieties present at this site
+    vars_s <- which(inc_mat[, s] == 1L)
+    n_s    <- length(vars_s)
+    if (n_s == 0L) next
 
-    for (r in seq_len(nrep)) {
+    # Per-site layout dimensions based on actual variety count
+    dims_s <- .best_dims(n_s)
 
-      treat_order <- sample(ntreat)   # randomise treatments to strips
+    if (has_treatments) {
+      rows_strip_s <- dims_s["rows"]
+      cols_strip_s <- dims_s["cols"]
+      nrow_e_s     <- nrep   * rows_strip_s
+      ncol_e_s     <- ntreat * cols_strip_s
+    } else {
+      rows_block_s <- dims_s["rows"]
+      cols_block_s <- dims_s["cols"]
+      nrow_e_s     <- nrep * rows_block_s
+      ncol_e_s     <- cols_block_s
+    }
 
-      for (t_pos in seq_len(ntreat)) {
+    row_eff <- rnorm(nrow_e_s, 0, opts$row_sd)
+    col_eff <- rnorm(ncol_e_s, 0, opts$col_sd)
+    rep_eff <- rnorm(nrep,     0, opts$rep_sd)
 
-        t <- treat_order[t_pos]
+    if (has_treatments) {
 
-        rows_in_rep   <- ((r      - 1L) * rows_per_strip + 1L) : (r      * rows_per_strip)
-        cols_in_strip <- ((t_pos  - 1L) * cols_per_strip + 1L) : (t_pos  * cols_per_strip)
+      for (r in seq_len(nrep)) {
+        treat_order <- sample(ntreat)
 
-        sub_grid <- expand.grid(Row = rows_in_rep, Column = cols_in_strip)
+        for (t_pos in seq_len(ntreat)) {
+          t        <- treat_order[t_pos]
+          ts_label <- paste(treatments[t], sites[s], sep = opts$sep)
+          u_col    <- match(ts_label, grp_names)
+
+          rows_in_rep   <- ((r     - 1L) * rows_strip_s + 1L) :
+                            (r            * rows_strip_s)
+          cols_in_strip <- ((t_pos - 1L) * cols_strip_s + 1L) :
+                            (t_pos        * cols_strip_s)
+          sub_grid <- expand.grid(Row = rows_in_rep, Column = cols_in_strip)
+          sub_grid <- sub_grid[order(sub_grid$Row, sub_grid$Column), ]
+          var_perm <- sample(vars_s)   # only varieties at this site
+
+          for (p in seq_len(n_s)) {
+            v   <- var_perm[p]
+            row <- sub_grid$Row[p]
+            col <- sub_grid$Column[p]
+
+            yld <- site_means[s]    +
+                   treat_effects[t] +
+                   U[v, u_col]      +
+                   rep_eff[r]       +
+                   row_eff[row]     +
+                   col_eff[col]     +
+                   rnorm(1L, 0, opts$error_sd)
+
+            plots[[idx]] <- data.frame(
+              Site      = sites[s],
+              Treatment = treatments[t],
+              TSite     = ts_label,
+              Variety   = varieties[v],
+              Rep       = r,
+              Row       = row,
+              Column    = col,
+              yield     = round(yld, 1L),
+              stringsAsFactors = FALSE
+            )
+            idx <- idx + 1L
+          }
+        }
+      }
+
+    } else {
+
+      for (r in seq_len(nrep)) {
+        rows_in_block <- ((r - 1L) * rows_block_s + 1L) : (r * rows_block_s)
+        sub_grid <- expand.grid(Row    = rows_in_block,
+                                Column = seq_len(cols_block_s))
         sub_grid <- sub_grid[order(sub_grid$Row, sub_grid$Column), ]
+        var_perm <- sample(vars_s)   # only varieties at this site
 
-        var_perm <- sample(nvar)   # randomise varieties to sub-plots
-
-        for (p in seq_len(nvar)) {
+        for (p in seq_len(n_s)) {
           v   <- var_perm[p]
           row <- sub_grid$Row[p]
           col <- sub_grid$Column[p]
 
-          yld <- site_means[s]       +   # environment mean
-                 treat_effects[t]    +   # treatment fixed effect
-                 g_arr[v, t, s]      +   # GxTxE genetic value
-                 rep_eff[r]          +   # block effect
-                 row_eff[row]        +   # row spatial effect
-                 col_eff[col]        +   # column spatial effect
-                 rnorm(1L, 0, error_sd)  # plot residual
+          yld <- site_means[s] +
+                 U[v, s]       +
+                 rep_eff[r]    +
+                 row_eff[row]  +
+                 col_eff[col]  +
+                 rnorm(1L, 0, opts$error_sd)
 
           plots[[idx]] <- data.frame(
-            Site      = sites[s],
-            Treatment = treatments[t],
-            TSite     = paste(treatments[t], sites[s], sep = sep),
-            Variety   = varieties[v],
-            Rep       = r,
-            Row       = row,
-            Column    = col,
-            yield     = round(yld, 1L),
+            Site    = sites[s],
+            Variety = varieties[v],
+            Rep     = r,
+            Row     = row,
+            Column  = col,
+            yield   = round(yld, 1L),
             stringsAsFactors = FALSE
           )
           idx <- idx + 1L
@@ -286,123 +457,90 @@ simTrialData <- function(nvar           = 20L,
     }
   }
 
-  dat <- do.call(rbind, plots)
+  dat <- do.call(rbind, plots[seq_len(idx - 1L)])
 
-  # ---- Factor levels and ordering ----------------------------------------
-  tsite_levs    <- sort(unique(dat$TSite))
-  dat$Site      <- factor(dat$Site,      levels = sites)
-  dat$Treatment <- factor(dat$Treatment, levels = treatments)
-  dat$TSite     <- factor(dat$TSite,     levels = tsite_levs)
-  dat$Variety   <- factor(dat$Variety,   levels = varieties)
-  dat$Rep       <- factor(dat$Rep,       levels = as.character(seq_len(nrep)))
+  # ---- Factor levels and ordering ------------------------------------------
+  # Drop varieties that appear in no sites (possible with user matrix)
+  obs_vars <- unique(dat$Variety)
+  dat$Site    <- factor(dat$Site,    levels = sites)
+  dat$Variety <- factor(dat$Variety, levels = varieties[varieties %in% obs_vars])
+  dat$Rep     <- factor(dat$Rep,     levels = as.character(seq_len(nrep)))
 
-  # Order by Site, Row, Column -- required for ASReml-R spatial residual models
+  if (has_treatments) {
+    dat$Treatment <- factor(dat$Treatment, levels = treatments)
+    dat$TSite     <- factor(dat$TSite,     levels = tsite_levs)
+  }
+
   dat <- dat[order(dat$Site, dat$Row, dat$Column), ]
   rownames(dat) <- NULL
 
-  # ---- Optional CSV output -----------------------------------------------
-  if (!is.null(outfile)) {
-    write.csv(dat, outfile, row.names = FALSE)
-    if (verbose) cat("CSV written to:", outfile, "\n")
+  # ---- Optional CSV output -------------------------------------------------
+  if (!is.null(opts$outfile)) {
+    write.csv(dat, opts$outfile, row.names = FALSE)
+    if (verbose) cat("CSV written to:", opts$outfile, "\n")
   }
 
-  # ---- Verbose summary ---------------------------------------------------
+  # ---- Verbose summary -----------------------------------------------------
   if (verbose) {
-    cat("\n=== simTrialData summary ===\n")
-    cat(sprintf("  Environments  : %d\n", nsite))
-    cat(sprintf("  Treatments    : %d  ->  %s\n", ntreat, paste(treatments, collapse = ", ")))
-    cat(sprintf("  Varieties     : %d\n", nvar))
-    cat(sprintf("  Replicates    : %d\n", nrep))
-    cat(sprintf("  Layout        : %d rows x %d cols per environment  (%d plots)\n",
-                nrow_e, ncol_e, nrow_e * ncol_e))
-    cat(sprintf("  Strip size    : %d rows x %d cols = %d sub-plots\n",
-                rows_per_strip, cols_per_strip, rows_per_strip * cols_per_strip))
-    cat(sprintf("  Total plots   : %d\n", nrow(dat)))
-    cat("\n  True beta matrix (site-specific regression coefficients):\n")
-    print(round(beta_mat, 3))
-    cat("\n  True conditional SDs (sigr):\n")
-    print(setNames(round(sigr, 1), treatments[-1L]))
-    cat("\n  True treatment fixed effects:\n")
-    print(setNames(round(treat_effects, 1), treatments))
-    cat("\n  Yield summary by Treatment:\n")
-    print(tapply(dat$yield, dat$Treatment, function(x)
-      round(c(Min = min(x), Mean = mean(x), Max = max(x), SD = sd(x)), 1)))
-    # --- Context-aware variance structure recommendation ------------------
-    # us(TSite) has ntsite*(ntsite+1)/2 parameters; this becomes infeasible
-    # quickly.  Use corgh() for moderate sizes and fa() for large ones.
-    ntsite     <- ntreat * nsite
-    n_us_pars  <- ntsite * (ntsite + 1L) / 2L
-    var_struct <- if (ntsite <= 8L) {
-      "us(TSite)"
-    } else if (ntsite <= 16L) {
-      "corgh(TSite)"
-    } else {
-      k <- min(3L, max(1L, as.integer(floor(sqrt(ntsite * 0.15)))))
-      paste0("fa(TSite, ", k, ")")
-    }
-    n_var_pars <- if (ntsite <= 8L) {
-      n_us_pars
-    } else if (ntsite <= 16L) {
-      2L * ntsite - 1L                            # ntsite variances + ntsite-1 correlations
-    } else {
-      k <- min(3L, max(1L, as.integer(floor(sqrt(ntsite * 0.15)))))
-      ntsite * k + ntsite                         # k loadings + ntsite specific variances
-    }
+    R_off      <- cov2cor(G)[upper.tri(G)]
+    vars_per_s <- colSums(inc_mat)
+    sites_per_v <- rowSums(inc_mat)
+    inc_label  <- if (identical(incidence, "balanced"))   "balanced" else
+                  if (identical(incidence, "unbalanced")) "unbalanced (auto)" else
+                  "user-supplied matrix"
 
+    cat("\n=== simTrialData summary ===\n")
+    cat(sprintf("  Environments    : %d\n", nsite))
+    if (has_treatments)
+      cat(sprintf("  Treatments      : %d  ->  %s\n",
+                  ntreat, paste(treatments, collapse = ", ")))
+    cat(sprintf("  Varieties (max) : %d\n", nvar))
+    cat(sprintf("  Replicates      : %d\n", nrep))
+    cat(sprintf("  FA factors (k)  : %d\n", n_fa))
+    cat(sprintf("  Groups          : %d  (%s)\n", ngroup,
+                if (has_treatments) "Treatment x Site" else "Site"))
+    cat(sprintf("  Incidence       : %s\n", inc_label))
+    cat(sprintf("  Vars/site       : mean = %.1f,  range [%d, %d]\n",
+                mean(vars_per_s), min(vars_per_s), max(vars_per_s)))
+    cat(sprintf("  Sites/variety   : mean = %.1f,  range [%d, %d]\n",
+                mean(sites_per_v), min(sites_per_v), max(sites_per_v)))
+    cat(sprintf("  Total plots     : %d\n", nrow(dat)))
+    cat(sprintf("  True G_jj       : mean = %.1f,  range [%.1f, %.1f]\n",
+                mean(diag(G)), min(diag(G)), max(diag(G))))
+    cat(sprintf("  Genetic corr    : mean = %.3f,  range [%.3f, %.3f]\n",
+                mean(R_off), min(R_off), max(R_off)))
+    k_sug <- min(3L, n_fa + 1L)
     cat("\n  Suggested ASReml-R model:\n")
-    cat(sprintf("    ## TSite has %d levels -> %s  (%d variance params vs %d for us())\n",
-                ntsite, var_struct, n_var_pars, n_us_pars))
-    if (ntsite > 16L) {
-      k <- min(3L, max(1L, as.integer(floor(sqrt(ntsite * 0.15)))))
-      cat(sprintf("    ## Build FA order up: start fa(TSite,1), then fa(TSite,2) ... fa(TSite,%d)\n", k))
-      cat(  "    ## Use AIC/BIC or LRT to choose final order.\n")
+    if (has_treatments) {
+      cat(sprintf("    asreml(yield ~ TSite,\n"))
+      cat(sprintf("           random   = ~ fa(TSite, %d):id(Variety) + at(Site):Rep,\n",
+                  k_sug))
+      cat(sprintf("           data     = dat)\n"))
+      cat(sprintf("    randomRegress(model, Env = \"TSite:Variety\",\n"))
+      cat(sprintf("                  levs = c(%s), sep = \"%s\")\n",
+                  paste(sprintf('"%s"', treatments), collapse = ", "),
+                  opts$sep))
+    } else {
+      cat(sprintf("    asreml(yield ~ Site,\n"))
+      cat(sprintf("           random   = ~ fa(Site, %d):id(Variety) + at(Site):Rep,\n",
+                  k_sug))
+      cat(sprintf("           data     = dat)\n"))
+      cat(sprintf("    accuracy(model)\n"))
     }
-    cat("    asreml(\n")
-    cat("      fixed    = yield ~ TSite,\n")
-    cat(sprintf("      random   = ~ %s:Variety + at(Site):Rep +\n", var_struct))
-    cat("                   at(Site):Rep:Treatment,\n")
-    cat("      residual = ~ dsum(~ ar1(Row):ar1(Column) | Site),\n")
-    cat("      data     = dat\n")
-    cat("    )\n")
-    cat(sprintf("\n    randomRegress(model, Env = \"TSite:Variety\",\n"))
-    cat(sprintf("                    levs = c(%s), sep = \"%s\")\n",
-                paste(sprintf('"%s"', treatments), collapse = ", "), sep))
     cat("============================\n\n")
   }
 
-  # ---- Return ------------------------------------------------------------
-  list(
-    data   = dat,
-    params = list(
-      beta          = beta_mat,
-      sigr          = setNames(sigr, treatments[-1L]),
-      treat_effects = setNames(treat_effects, treatments),
-      site_means    = setNames(site_means, sites),
-      g_base        = setNames(g_base, varieties),
-      g_arr         = g_arr
-    )
-  )
-}
+  # ---- Return --------------------------------------------------------------
+  params <- list(G          = G,
+                 Lambda     = Lambda,
+                 Psi        = Psi,
+                 site_means = site_means,
+                 n_fa       = n_fa,
+                 incidence  = inc_mat)
+  if (has_treatments) {
+    params$treat_effects <- treat_effects
+    params$g_arr         <- U
+  }
 
-
-# ---- Reproduce the original plant_trial_data.csv -------------------------
-if (FALSE) {
-  out <- simTrialData(
-    nvar       = 20,
-    nsite      = 10,
-    treatments = c("N0", "N1", "N2"),
-    nrep       = 3,
-    site_mean  = 4500,
-    site_sd    = 600,
-    sigma_base = 250,
-    error_sd   = 350,
-    seed       = 2024,
-    outfile    = "plant_trial_data.csv"
-  )
-
-  # Quick sanity check: treatment means should increase N0 -> N1 -> N2
-  print(tapply(out$data$yield, out$data$Treatment, mean))
-
-  # True betas to compare against randomRegress() estimates
-  print(out$params$beta)
+  list(data = dat, params = params)
 }

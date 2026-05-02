@@ -35,6 +35,8 @@ navbar:
           href: fixedRegress.html
         - text: "Extracting and Padding Field Trial Layouts"
           href: padTrial.html
+        - text: "BLUP Accuracy in Multi-Environment Trials"
+          href: accuracy.html
 
 reference:
   - title: "Pairwise Comparison Criteria"
@@ -80,10 +82,21 @@ reference:
     contents:
       - fast
 
+  - title: "BLUP Accuracy"
+    desc: >
+      Compute model-based BLUP accuracy (Mrode) and Cullis H2 from
+      ASReml-R V4 mixed models, with six plot types for single-model
+      summaries and head-to-head model comparisons.
+    contents:
+      - accuracy
+      - plot_accuracy
+      - pc_add
+
   - title: "Field Trial Utilities"
     desc: >
-      Simulate balanced split-plot multi-environment trial data, and extract
-      or pad field trial layouts from partially observed grids.
+      Simulate balanced multi-environment trial data with a factor-analytic
+      genetic covariance structure, and extract or pad field trial layouts
+      from partially observed grids.
     contents:
       - simTrialData
       - padTrial

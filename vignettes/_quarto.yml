@@ -18,6 +18,8 @@ website:
             href: padTrial.html
           - text: "Multiple Comparison Criteria"
             href: compare.html
+          - text: "BLUP Accuracy in Multi-Environment Trials"
+            href: accuracy.html
 
 format:
   html:

@@ -15,7 +15,7 @@ as_plotly(x, height = NULL, width = NULL, ...)
 default height (~400 px), which is often too short when the plot has
 multiple facet panels each showing many varieties.  A sensible rule of
 thumb: 180 px per panel row (e.g. \code{height = 700} for 4 panels in a
-2 × 2 grid).}
+2 x 2 grid).}
 
 \item{width}{Numeric or \code{NULL}. Widget width in pixels.  \code{NULL} (default)
 uses 100 \% of the container width.}
@@ -33,10 +33,10 @@ the direct return value of the chunk so that knitr embeds it correctly.
 }
 \examples{
 \dontrun{
-# Single-group dotplot — default height is fine
+# Single-group dotplot -- default height is fine
 as_plotly(plot_compare(res, type = "dotplot", interactive = TRUE))
 
-# Four-panel dotplot — set a taller height so panels don't overlap
+# Four-panel dotplot -- set a taller height so panels don't overlap
 as_plotly(plot_compare(res, type = "dotplot", interactive = TRUE),
           height = 700)
 }

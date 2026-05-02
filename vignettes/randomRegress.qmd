@@ -165,6 +165,7 @@ out <- simTrialData(
   nsite      = 4L,
   treatments = c("T0", "T1", "T2"),
   nrep       = 3L,
+  incidence  = "balanced",   # all varieties at every site (default)
   seed       = 42L,
   verbose    = FALSE
 )
