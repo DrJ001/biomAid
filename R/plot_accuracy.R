@@ -124,7 +124,7 @@ plot_accuracy <- function(res,
 # =============================================================================
 
 # Colour palette used throughout
-.pa_metric_cols <- c("Mrode Accuracy" = "#2166AC", "Cullis H\u00b2" = "#D6604D")
+.pa_metric_cols <- c("Mrode Accuracy" = "#2166AC", "Gen. H\u00b2" = "#D6604D")
 .pa_gain_cols   <- c("Improved" = "#1A9641", "Declined"  = "#D7191C")
 
 # Convert group-level accuracy() output to long format
@@ -146,7 +146,7 @@ plot_accuracy <- function(res,
       n_vars       = if ("n_vars" %in% names(res)) res$n_vars else NA_integer_,
       value        = res$gen.H2,
       sd_val       = NA_real_,
-      metric_label = "Cullis H\u00b2",
+      metric_label = "Gen. H\u00b2",
       stringsAsFactors = FALSE
     )
   }
@@ -171,7 +171,7 @@ plot_accuracy <- function(res,
       group        = res$group,
       variety      = res$variety,
       value        = res$gen.H2,
-      metric_label = "Cullis H\u00b2",
+      metric_label = "Gen. H\u00b2",
       stringsAsFactors = FALSE
     )
   }
@@ -265,7 +265,7 @@ plot_accuracy <- function(res,
   # Cullis H² (gen.H2) is a group-level constant in by_variety data — it
   # produces a degenerate flat display in a violin. Suppress it automatically
   # when Mrode Accuracy is also present; direct users to lollipop instead.
-  H2_lbl     <- "Cullis H\u00b2"
+  H2_lbl     <- "Gen. H\u00b2"
   acc_lbl    <- "Mrode Accuracy"
   has_H2     <- H2_lbl  %in% unique(d$metric_label)
   has_acc    <- acc_lbl %in% unique(d$metric_label)
