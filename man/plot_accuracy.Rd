@@ -8,7 +8,7 @@ plot_accuracy(
   res,
   res2 = NULL,
   type = c("lollipop", "violin", "heatmap", "dumbbell", "scatter", "diff"),
-  metric = c("accuracy", "cullis"),
+  metric = c("accuracy", "gen.H2"),
   label1 = "Model 1",
   label2 = "Model 2",
   theme = ggplot2::theme_bw(),
@@ -26,7 +26,7 @@ comparison plots (\code{"dumbbell"}, \code{"scatter"}, \code{"diff"}).}
 \item{type}{Plot type — one of \code{"lollipop"}, \code{"violin"},
 \code{"heatmap"}, \code{"dumbbell"}, \code{"scatter"}, \code{"diff"}.}
 
-\item{metric}{Character vector: \code{"accuracy"}, \code{"cullis"}, or
+\item{metric}{Character vector: \code{"accuracy"}, \code{"gen.H2"}, or
 both (default). When both are selected the plot is faceted into two panels.}
 
 \item{label1}{Legend label for \code{res}  (comparison plots only).}
@@ -50,8 +50,8 @@ and three two-model comparison plots (dumbbell, scatter, diff).
 }
 \examples{
 \dontrun{
-acc  <- accuracy(model_fa,   metric = c("accuracy","cullis"))
-acc2 <- accuracy(model_diag, metric = c("accuracy","cullis"))
+acc  <- accuracy(model_fa,   metric = c("accuracy","gen.H2"))
+acc2 <- accuracy(model_diag, metric = c("accuracy","gen.H2"))
 
 plot_accuracy(acc,       type = "lollipop")
 plot_accuracy(acc_bv,    type = "violin")

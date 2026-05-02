@@ -7,7 +7,7 @@
 accuracy(
   model,
   classify = NULL,
-  metric = c("accuracy", "cullis"),
+  metric = c("accuracy", "gen.H2"),
   pworkspace = "2gb",
   by_variety = FALSE,
   present = TRUE
@@ -19,7 +19,7 @@ accuracy(
 \item{classify}{Character. Override the \code{predict()} classify string
 (auto-detected from the random formula when \code{NULL}).}
 
-\item{metric}{Character vector: \code{"accuracy"}, \code{"cullis"},
+\item{metric}{Character vector: \code{"accuracy"}, \code{"gen.H2"},
 or both (default). Controls which columns appear in the output.}
 
 \item{pworkspace}{Character. Passed to \code{predict.asreml()}.
@@ -47,7 +47,7 @@ observed ones.
 \value{
 A data frame with columns \code{group}, \code{n_vars}, \code{G_jj},
 and one or both of \code{mean_acc}/\code{sd_acc} (Mrode accuracy) and
-\code{cullis_h2} (Cullis H\eqn{^2}). When \code{by_variety = TRUE} the
+\code{gen.H2} (Cullis H\eqn{^2}). When \code{by_variety = TRUE} the
 \code{variety} and \code{pev} columns replace \code{n_vars}/\code{sd_acc}.
 }
 \description{
@@ -60,7 +60,8 @@ from an ASReml-R V4 mixed model. Supports \code{fa()}, \code{diag()},
 \dontrun{
 acc <- accuracy(model_fa)
 acc_bv <- accuracy(model_fa, by_variety = TRUE)
-accuracy(model_fa, metric = "cullis")
+acc_bv_all <- accuracy(model_fa, by_variety = TRUE, present = FALSE)
+accuracy(model_fa, metric = "gen.H2")
 }
 
 }

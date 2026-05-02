@@ -335,6 +335,7 @@ simTrialData(nvar        = 20L,
              treatments  = NULL,
              nrep        = 2L,
              n_fa        = 2L,
+             incidence   = "balanced",
              seed        = NULL,
              verbose     = TRUE,
              sim.options = list())
@@ -347,6 +348,7 @@ simTrialData(nvar        = 20L,
 | `treatments` | Character vector of treatment labels, or `NULL` for MET-only. Default `NULL` |
 | `nrep` | Number of replicates per site. Default `2` |
 | `n_fa` | Number of FA factors in the data-generating model. Default `2` |
+| `incidence` | `"balanced"` (default) — all varieties at every site; `"unbalanced"` — auto two-tier structure; or a user-supplied `nvar × nsite` matrix of 0/1 |
 | `seed` | Random seed. `NULL` = no fixed seed |
 | `verbose` | Print design summary and suggested model. Default `TRUE` |
 | `sim.options` | Named list of optional controls (see below) |
@@ -371,8 +373,13 @@ out <- simTrialData(nvar = 30, nsite = 8, n_fa = 2, seed = 42)
 head(out$data)
 round(cov2cor(out$params$G), 2)   # true genetic correlations
 
+# Unbalanced MET: varieties appear at different subsets of sites
+out2 <- simTrialData(nvar = 30, nsite = 8, n_fa = 2,
+                     incidence = "unbalanced", seed = 42)
+table(rowSums(out2$params$incidence))   # sites per variety
+
 # Multi-treatment with custom error SD
-out2 <- simTrialData(nvar = 20, nsite = 6,
+out3 <- simTrialData(nvar = 20, nsite = 6,
                      treatments  = c("T0", "T1", "T2"),
                      n_fa        = 2,
                      seed        = 1,
@@ -381,8 +388,8 @@ out2 <- simTrialData(nvar = 20, nsite = 6,
 ```
 
 Returns a list with `$data` (the field layout data frame) and `$params`
-(the true `G`, `Lambda`, `Psi`, `site_means`, and for multi-treatment:
-`treat_effects`, `g_arr`).
+(the true `G`, `Lambda`, `Psi`, `site_means`, `incidence`, and for
+multi-treatment: `treat_effects`, `g_arr`).
 
 ---
 
@@ -403,28 +410,33 @@ internally to avoid fixed-effect inflation of the PEV.
 ```r
 accuracy(model,
          classify   = NULL,
-         metric     = c("accuracy", "cullis"),
+         metric     = c("accuracy", "gen.H2"),
          pworkspace = "2gb",
-         by_variety = FALSE)
+         by_variety = FALSE,
+         present    = TRUE)
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `model` | Fitted ASReml-R V4 model object |
 | `classify` | Override the auto-detected `predict()` classify string |
-| `metric` | One or both of `"accuracy"` and `"cullis"`. Default = both |
+| `metric` | One or both of `"accuracy"` and `"gen.H2"` (Cullis H²). Default = both |
 | `pworkspace` | Passed to `predict.asreml()`. Default `"2gb"` |
 | `by_variety` | `TRUE` returns one row per variety × environment |
+| `present` | `TRUE` (default) restricts to observed variety × environment combinations; `FALSE` includes all `predict.asreml()` rows (FA models can predict unobserved combinations via the G-matrix) |
 
 ```r
 # Group-level summaries (one row per environment)
-acc <- accuracy(model_fa, metric = c("accuracy", "cullis"))
+acc <- accuracy(model_fa, metric = c("accuracy", "gen.H2"))
 
-# Per-variety accuracies
+# Per-variety accuracies — observed combinations only (default)
 acc_bv <- accuracy(model_fa, by_variety = TRUE)
 
+# Per-variety, include unobserved combos (FA models — fills heatmap grid)
+acc_bv_all <- accuracy(model_fa, by_variety = TRUE, present = FALSE)
+
 # Cullis H² only
-accuracy(model_fa, metric = "cullis")
+accuracy(model_fa, metric = "gen.H2")
 ```
 
 ---
@@ -439,7 +451,7 @@ plot_accuracy(res,
               res2        = NULL,
               type        = c("lollipop", "violin", "heatmap",
                               "dumbbell", "scatter", "diff"),
-              metric      = c("accuracy", "cullis"),
+              metric      = c("accuracy", "gen.H2"),
               label1      = "Model 1",
               label2      = "Model 2",
               theme       = ggplot2::theme_bw(),
@@ -456,12 +468,12 @@ plot_accuracy(res,
 | `"scatter"` | `by_variety` + `res2` | Per-variety model1 vs model2 accuracy scatter |
 | `"diff"` | Group-level + `res2` | Signed accuracy gain (model2 − model1) per environment |
 
-When `metric = c("accuracy", "cullis")` the plot is automatically faceted
+When `metric = c("accuracy", "gen.H2")` the plot is automatically faceted
 into two panels. All types support `return_data = TRUE`.
 
 ```r
-acc_diag <- accuracy(m_diag, metric = c("accuracy", "cullis"))
-acc_fa2  <- accuracy(m_fa2,  metric = c("accuracy", "cullis"))
+acc_diag <- accuracy(m_diag, metric = c("accuracy", "gen.H2"))
+acc_fa2  <- accuracy(m_fa2,  metric = c("accuracy", "gen.H2"))
 
 # Single model
 plot_accuracy(acc_fa2, type = "lollipop")

@@ -16,7 +16,7 @@
 # Usage:
 #   accuracy(model)                              # both metrics (default)
 #   accuracy(model, metric = "accuracy")         # Mrode accuracy only
-#   accuracy(model, metric = "cullis")           # Cullis H2 only
+#   accuracy(model, metric = "gen.H2")           # Cullis (2006) generalised H2 only
 #   accuracy(model, by_variety = TRUE)           # per-variety rows
 # =============================================================================
 
@@ -31,7 +31,7 @@
 #' @param model      A fitted \code{asreml} model object.
 #' @param classify   Character. Override the \code{predict()} classify string
 #'   (auto-detected from the random formula when \code{NULL}).
-#' @param metric     Character vector: \code{"accuracy"}, \code{"cullis"},
+#' @param metric     Character vector: \code{"accuracy"}, \code{"gen.H2"},
 #'   or both (default). Controls which columns appear in the output.
 #' @param pworkspace Character. Passed to \code{predict.asreml()}.
 #'   Default \code{"2gb"}.
@@ -55,27 +55,28 @@
 #'
 #' @return A data frame with columns \code{group}, \code{n_vars}, \code{G_jj},
 #'   and one or both of \code{mean_acc}/\code{sd_acc} (Mrode accuracy) and
-#'   \code{cullis_h2} (Cullis H\eqn{^2}). When \code{by_variety = TRUE} the
+#'   \code{gen.H2} (Cullis H\eqn{^2}). When \code{by_variety = TRUE} the
 #'   \code{variety} and \code{pev} columns replace \code{n_vars}/\code{sd_acc}.
 #'
 #' @examples
 #' \dontrun{
 #' acc <- accuracy(model_fa)
 #' acc_bv <- accuracy(model_fa, by_variety = TRUE)
-#' accuracy(model_fa, metric = "cullis")
+#' acc_bv_all <- accuracy(model_fa, by_variety = TRUE, present = FALSE)
+#' accuracy(model_fa, metric = "gen.H2")
 #' }
 #'
 #' @export
 accuracy <- function(model,
                      classify   = NULL,
-                     metric     = c("accuracy", "cullis"),
+                     metric     = c("accuracy", "gen.H2"),
                      pworkspace = "2gb",
                      by_variety = FALSE,
                      present    = TRUE) {
 
   metric <- match.arg(metric, several.ok = TRUE)
-  want_cullis  <- "cullis"   %in% metric
-  want_acc     <- "accuracy" %in% metric
+  want_H2  <- "gen.H2"   %in% metric
+  want_acc <- "accuracy" %in% metric
 
   p   <- .parse_met_formula(model)
   if (!is.null(classify)) p$classify <- classify
@@ -95,7 +96,7 @@ accuracy <- function(model,
 
   # predict(only=) returns pure BLUP SEs — avoids fixed-effect inflation
   # that causes PEV > G_jj and spurious zero accuracies
-  need_sed <- want_cullis
+  need_sed <- want_H2
   out <- predict(model, classify = p$classify, only = p$only_term,
                  sed = need_sed, pworkspace = pworkspace)
   pv  <- out$pvals
@@ -138,12 +139,12 @@ accuracy <- function(model,
         # Return zero-row frame with the correct columns
         row <- data.frame(group = character(0), variety = character(0),
                           G_jj = numeric(0),   pev     = numeric(0))
-        if (want_acc)    row$accuracy   <- numeric(0)
-        if (want_cullis) row$cullis_h2  <- numeric(0)
+        if (want_acc) row$accuracy  <- numeric(0)
+        if (want_H2)  row$gen.H2   <- numeric(0)
       } else {
         row <- data.frame(group = grp, n_vars = 0L, G_jj = gjj)
-        if (want_acc)    { row$mean_acc <- NA_real_; row$sd_acc <- NA_real_ }
-        if (want_cullis)   row$cullis_h2 <- NA_real_
+        if (want_acc)  { row$mean_acc <- NA_real_; row$sd_acc <- NA_real_ }
+        if (want_H2)     row$gen.H2  <- NA_real_
       }
       return(row)
     }
@@ -151,8 +152,8 @@ accuracy <- function(model,
     # Mrode accuracy
     a <- sqrt(pmax(0, 1 - pv$pev[idx] / gjj))
 
-    # Cullis (2006): H² = 1 - (mean_SED)² / (2 * G_jj)
-    h2 <- if (want_cullis) {
+    # Cullis (2006) generalised H²: 1 - (mean_SED)² / (2 * G_jj)
+    h2 <- if (want_H2) {
       if (!is.null(out$sed) && max(idx) <= nrow(out$sed)) {
         ut <- out$sed[idx, idx]
         ut <- ut[upper.tri(ut)]
@@ -167,8 +168,8 @@ accuracy <- function(model,
                            G_jj     = gjj,
                            pev      = pv$pev[idx],
                            stringsAsFactors = FALSE)
-      if (want_acc)    out_bv$accuracy   <- a
-      if (want_cullis) out_bv$cullis_h2  <- h2   # group-level statistic
+      if (want_acc) out_bv$accuracy <- a
+      if (want_H2)  out_bv$gen.H2  <- h2   # group-level statistic (Cullis H²)
       return(out_bv)
     }
 
@@ -179,7 +180,7 @@ accuracy <- function(model,
       row$mean_acc <- mean(a, na.rm = TRUE)
       row$sd_acc   <- sd(a,   na.rm = TRUE)
     }
-    if (want_cullis) row$cullis_h2 <- h2
+    if (want_H2) row$gen.H2 <- h2
     row
   })
 

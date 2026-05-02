@@ -4,7 +4,7 @@
 #
 # Single-model types  (res2 not required):
 #   "lollipop"  Group-level mean accuracy; lollipop + optional sd error bars.
-#               Faceted by metric when both accuracy and cullis are present.
+#               Faceted by metric when both accuracy and gen.H2 are present.
 #   "violin"    Per-variety accuracy distribution per group (requires by_variety
 #               data). Faceted by metric when both are present.
 #   "heatmap"   Variety × Group accuracy grid (requires by_variety data).
@@ -40,7 +40,7 @@ utils::globalVariables(c(
 #'   comparison plots (\code{"dumbbell"}, \code{"scatter"}, \code{"diff"}).
 #' @param type     Plot type — one of \code{"lollipop"}, \code{"violin"},
 #'   \code{"heatmap"}, \code{"dumbbell"}, \code{"scatter"}, \code{"diff"}.
-#' @param metric   Character vector: \code{"accuracy"}, \code{"cullis"}, or
+#' @param metric   Character vector: \code{"accuracy"}, \code{"gen.H2"}, or
 #'   both (default). When both are selected the plot is faceted into two panels.
 #' @param label1   Legend label for \code{res}  (comparison plots only).
 #' @param label2   Legend label for \code{res2} (comparison plots only).
@@ -54,8 +54,8 @@ utils::globalVariables(c(
 #'
 #' @examples
 #' \dontrun{
-#' acc  <- accuracy(model_fa,   metric = c("accuracy","cullis"))
-#' acc2 <- accuracy(model_diag, metric = c("accuracy","cullis"))
+#' acc  <- accuracy(model_fa,   metric = c("accuracy","gen.H2"))
+#' acc2 <- accuracy(model_diag, metric = c("accuracy","gen.H2"))
 #'
 #' plot_accuracy(acc,       type = "lollipop")
 #' plot_accuracy(acc_bv,    type = "violin")
@@ -68,7 +68,7 @@ plot_accuracy <- function(res,
                            res2        = NULL,
                            type        = c("lollipop", "violin", "heatmap",
                                            "dumbbell", "scatter", "diff"),
-                           metric      = c("accuracy", "cullis"),
+                           metric      = c("accuracy", "gen.H2"),
                            label1      = "Model 1",
                            label2      = "Model 2",
                            theme       = ggplot2::theme_bw(),
@@ -101,9 +101,9 @@ plot_accuracy <- function(res,
     if ("accuracy" %in% m && !acc_col %in% names(d))
       stop(sprintf(
         "[plot_accuracy] 'accuracy' not in %s — run accuracy(..., metric='accuracy').", lbl))
-    if ("cullis" %in% m && !"cullis_h2" %in% names(d))
+    if ("gen.H2" %in% m && !"gen.H2" %in% names(d))
       stop(sprintf(
-        "[plot_accuracy] 'cullis' not in %s — run accuracy(..., metric='cullis').", lbl))
+        "[plot_accuracy] 'gen.H2' not in %s — run accuracy(..., metric='gen.H2').", lbl))
   }
   .check_metric(res, metric, "res")
   if (!is.null(res2)) .check_metric(res2, metric, "res2")
@@ -140,11 +140,11 @@ plot_accuracy <- function(res,
       stringsAsFactors = FALSE
     )
   }
-  if ("cullis" %in% metric && "cullis_h2" %in% names(res)) {
-    out[["cullis"]] <- data.frame(
+  if ("gen.H2" %in% metric && "gen.H2" %in% names(res)) {
+    out[["gen.H2"]] <- data.frame(
       group        = res$group,
       n_vars       = if ("n_vars" %in% names(res)) res$n_vars else NA_integer_,
-      value        = res$cullis_h2,
+      value        = res$gen.H2,
       sd_val       = NA_real_,
       metric_label = "Cullis H\u00b2",
       stringsAsFactors = FALSE
@@ -166,11 +166,11 @@ plot_accuracy <- function(res,
       stringsAsFactors = FALSE
     )
   }
-  if ("cullis" %in% metric && "cullis_h2" %in% names(res)) {
-    out[["cullis"]] <- data.frame(
+  if ("gen.H2" %in% metric && "gen.H2" %in% names(res)) {
+    out[["gen.H2"]] <- data.frame(
       group        = res$group,
       variety      = res$variety,
-      value        = res$cullis_h2,
+      value        = res$gen.H2,
       metric_label = "Cullis H\u00b2",
       stringsAsFactors = FALSE
     )
@@ -219,7 +219,7 @@ plot_accuracy <- function(res,
       size = 3.5, show.legend = !use_facet
     )
 
-  # Horizontal error bars for accuracy metric only (sd_val is NA for cullis)
+  # Horizontal error bars for accuracy metric only (sd_val is NA for gen.H2)
   d_err <- d[!is.na(d$sd_val) & d$sd_val > 0, ]
   if (nrow(d_err) > 0L) {
     p <- p + ggplot2::geom_errorbar(
@@ -262,16 +262,16 @@ plot_accuracy <- function(res,
 
   d <- .pa_long_bv(res, metric)
 
-  # Cullis H² is a group-level constant in by_variety data — it produces a
-  # degenerate flat display in a violin. Suppress it automatically when
-  # Mrode Accuracy is also present; direct users to lollipop instead.
-  cullis_lbl  <- "Cullis H\u00b2"
-  acc_lbl     <- "Mrode Accuracy"
-  has_cullis  <- cullis_lbl %in% unique(d$metric_label)
-  has_acc     <- acc_lbl    %in% unique(d$metric_label)
+  # Cullis H² (gen.H2) is a group-level constant in by_variety data — it
+  # produces a degenerate flat display in a violin. Suppress it automatically
+  # when Mrode Accuracy is also present; direct users to lollipop instead.
+  H2_lbl     <- "Cullis H\u00b2"
+  acc_lbl    <- "Mrode Accuracy"
+  has_H2     <- H2_lbl  %in% unique(d$metric_label)
+  has_acc    <- acc_lbl %in% unique(d$metric_label)
 
-  if (has_cullis && has_acc) {
-    message("[plot_accuracy] violin: Cullis H\u00b2 is a group-level statistic ",
+  if (has_H2 && has_acc) {
+    message("[plot_accuracy] violin: Cullis H\u00b2 (gen.H2) is a group-level statistic ",
             "and is suppressed in violin mode. ",
             "Use type = \"lollipop\" to visualise it alongside Mrode Accuracy.")
     d <- d[d$metric_label == acc_lbl, ]
@@ -281,8 +281,8 @@ plot_accuracy <- function(res,
 
   use_facet <- length(unique(d$metric_label)) > 1L
 
-  # Detect if a metric's values are constant within every group (cullis case
-  # when only cullis was requested and accuracy was absent)
+  # Detect if a metric's values are constant within every group (gen.H2 case
+  # when only gen.H2 was requested and accuracy was absent)
   .is_const <- function(sub) {
     all(tapply(sub$value, sub$group,
                function(x) length(unique(round(x, 10)))) == 1L)
@@ -296,7 +296,7 @@ plot_accuracy <- function(res,
       sub <- d[d$metric_label == ml, ]
       col <- .pa_metric_cols[ml]
       if (.is_const(sub)) {
-        # Cullis: one point per group (constant within group)
+        # Cullis H² (gen.H2): one point per group (constant within group)
         grp_sum <- aggregate(value ~ group, data = sub, FUN = mean)
         p <- p +
           ggplot2::geom_point(

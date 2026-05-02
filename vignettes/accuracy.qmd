@@ -277,25 +277,25 @@ Results are at the group level — one row per environment.
 
 ```{r acc_diag}
 #| eval: !expr asreml_ok
-acc_diag <- accuracy(m_diag, metric = c("accuracy", "cullis"))
+acc_diag <- accuracy(m_diag, metric = c("accuracy", "gen.H2"))
 acc_diag
 ```
 
 ```{r acc_fa1}
 #| eval: !expr asreml_ok
-acc_fa1 <- accuracy(m_fa1, metric = c("accuracy", "cullis"))
+acc_fa1 <- accuracy(m_fa1, metric = c("accuracy", "gen.H2"))
 acc_fa1
 ```
 
 ```{r acc_fa2}
 #| eval: !expr asreml_ok
-acc_fa2 <- accuracy(m_fa2, metric = c("accuracy", "cullis"))
+acc_fa2 <- accuracy(m_fa2, metric = c("accuracy", "gen.H2"))
 acc_fa2
 ```
 
 The `G_jj` column reports the environment-specific genetic variance used as
 the denominator. `mean_acc` is $\bar{r}_j$ and `sd_acc` captures the spread
-of per-variety accuracies within the environment. `cullis_h2` is $H^2_j$.
+of per-variety accuracies within the environment. `gen.H2` is $H^2_j$.
 
 ### Requesting a single metric
 
@@ -306,8 +306,8 @@ Pass a single string to `metric` when you only need one measure:
 # Mrode accuracy only
 accuracy(m_fa2, metric = "accuracy")
 
-# Cullis H² only
-accuracy(m_fa2, metric = "cullis")
+# Cullis H² (gen.H2) only
+accuracy(m_fa2, metric = "gen.H2")
 ```
 
 ### Per-variety accuracies
@@ -326,9 +326,9 @@ Set `by_variety = TRUE` to return one row per variety × environment. The
 ```{r acc_bv}
 #| eval: !expr asreml_ok
 # present = FALSE fills the full variety x site grid for FA models
-acc_fa2_bv    <- accuracy(m_fa2,  metric = c("accuracy", "cullis"),
+acc_fa2_bv    <- accuracy(m_fa2,  metric = c("accuracy", "gen.H2"),
                            by_variety = TRUE, present = FALSE)
-acc_diag_bv   <- accuracy(m_diag, metric = c("accuracy", "cullis"),
+acc_diag_bv   <- accuracy(m_diag, metric = c("accuracy", "gen.H2"),
                            by_variety = TRUE, present = FALSE)
 
 head(acc_fa2_bv)
@@ -349,7 +349,7 @@ metric only). When both metrics are requested the plot facets into two panels.
 #| eval: !expr asreml_ok
 #| fig-height: 4.5
 plot_accuracy(acc_fa2, type = "lollipop",
-              metric = c("accuracy", "cullis"))
+              metric = c("accuracy", "gen.H2"))
 ```
 
 A single-metric call gives a cleaner, unfaceted plot:
@@ -454,7 +454,7 @@ With both metrics faceted:
 #| fig-height: 5
 plot_accuracy(acc_diag, acc_fa2,
               type   = "dumbbell",
-              metric = c("accuracy", "cullis"),
+              metric = c("accuracy", "gen.H2"),
               label1 = "Diag",
               label2 = "FA(2)")
 ```
@@ -516,7 +516,7 @@ plot_accuracy(acc_diag, acc_fa2,
 #| fig-height: 5
 plot_accuracy(acc_fa1, acc_fa2,
               type   = "diff",
-              metric = c("accuracy", "cullis"),
+              metric = c("accuracy", "gen.H2"),
               label1 = "FA(1)",
               label2 = "FA(2)")
 ```
@@ -533,7 +533,7 @@ analysis.
 #| eval: !expr asreml_ok
 rd <- plot_accuracy(acc_diag, acc_fa2,
                     type        = "diff",
-                    metric      = c("accuracy", "cullis"),
+                    metric      = c("accuracy", "gen.H2"),
                     label1      = "Diag",
                     label2      = "FA(2)",
                     return_data = TRUE)
@@ -563,9 +563,10 @@ rd$plot +
 |----------|---------|-------------|
 | `model` | — | Fitted ASReml-R V4 model object |
 | `classify` | Auto-detected | Override the `predict()` classify string |
-| `metric` | `c("accuracy","cullis")` | Metrics to compute; one or both |
+| `metric` | `c("accuracy","gen.H2")` | Metrics to compute; one or both |
 | `pworkspace` | `"2gb"` | Passed to `predict.asreml()` |
 | `by_variety` | `FALSE` | Return one row per variety × group |
+| `present` | `TRUE` | `TRUE` restricts to observed variety × group combinations; `FALSE` includes all `predict.asreml()` rows (FA models support unobserved combos via the G-matrix) |
 
 ### `plot_accuracy()` types
 
@@ -578,7 +579,7 @@ rd$plot +
 | `"scatter"` | `by_variety` + `res2` | Per-variety model comparison |
 | `"diff"` | Group-level + `res2` | Signed accuracy gain per site |
 
-Faceting into two panels is automatic when `metric = c("accuracy","cullis")`.
+Faceting into two panels is automatic when `metric = c("accuracy","gen.H2")`.
 
 ---
 
