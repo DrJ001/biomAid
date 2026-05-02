@@ -437,33 +437,6 @@ plot_accuracy(res,
 When `metric = c("accuracy", "gen.H2")` the plot is automatically faceted
 into two panels. All types support `return_data = TRUE`.
 
-```r
-acc_diag <- accuracy(m_diag, metric = c("accuracy", "gen.H2"))
-acc_fa2  <- accuracy(m_fa2,  metric = c("accuracy", "gen.H2"))
-
-# Single model
-plot_accuracy(acc_fa2, type = "lollipop")
-plot_accuracy(acc_fa2_bv, type = "violin")
-
-# Model comparison
-plot_accuracy(acc_diag, acc_fa2, type = "dumbbell",
-              label1 = "Diag", label2 = "FA(2)")
-plot_accuracy(acc_diag, acc_fa2, type = "diff",
-              label1 = "Diag", label2 = "FA(2)")
-```
-
----
-
-## References
-
-Smith, A.B. & Cullis, B.R. (2018). Plant breeding selection tools built on
-factor analytic mixed models for multi-environment trial data.
-*Euphytica*, **214**, 143.
-
-Smith, A.B., Norman, A., Kuchel, H. & Cullis, B.R. (2021). Plant variety
-selection using interaction classes derived from factor analytic linear mixed
-models. *Frontiers in Plant Science*, **12**, 737462.
-
 ---
 
 ## License
