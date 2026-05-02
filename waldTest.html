@@ -4573,16 +4573,15 @@ W = \hat{\boldsymbol{\tau}}^\top \mathbf{Z}^\top
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">nvar        =</span> <span class="dv">20</span>L,</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">nsite       =</span> <span class="dv">4</span>L,</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">treatments  =</span> <span class="fu">c</span>(<span class="st">&quot;Control&quot;</span>, <span class="st">&quot;LowN&quot;</span>, <span class="st">&quot;MidN&quot;</span>, <span class="st">&quot;HighN&quot;</span>),</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">n_fa        =</span> <span class="dv">2</span>L,</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">nrep        =</span> <span class="dv">3</span>L,</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">seed        =</span> <span class="dv">42</span>L,</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose     =</span> <span class="cn">FALSE</span>,</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">sim.options =</span> <span class="fu">list</span>(<span class="at">treat_effects =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">50</span>, <span class="dv">120</span>, <span class="dv">250</span>))</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>dat            <span class="ot">&lt;-</span> out<span class="sc">$</span>data</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>treatments     <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;Control&quot;</span>, <span class="st">&quot;LowN&quot;</span>, <span class="st">&quot;MidN&quot;</span>, <span class="st">&quot;HighN&quot;</span>)</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>dat<span class="sc">$</span>Row        <span class="ot">&lt;-</span> <span class="fu">factor</span>(dat<span class="sc">$</span>Row)</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>dat<span class="sc">$</span>Column     <span class="ot">&lt;-</span> <span class="fu">factor</span>(dat<span class="sc">$</span>Column)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">nrep        =</span> <span class="dv">3</span>L,</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">seed        =</span> <span class="dv">42</span>L,</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose     =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">sim.options =</span> <span class="fu">list</span>(<span class="at">treat_effects =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">50</span>, <span class="dv">120</span>, <span class="dv">250</span>))</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>dat            <span class="ot">&lt;-</span> out<span class="sc">$</span>data</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>treatments     <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;Control&quot;</span>, <span class="st">&quot;LowN&quot;</span>, <span class="st">&quot;MidN&quot;</span>, <span class="st">&quot;HighN&quot;</span>)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>dat<span class="sc">$</span>Row        <span class="ot">&lt;-</span> <span class="fu">factor</span>(dat<span class="sc">$</span>Row)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>dat<span class="sc">$</span>Column     <span class="ot">&lt;-</span> <span class="fu">factor</span>(dat<span class="sc">$</span>Column)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">asreml.options</span>(<span class="at">trace =</span> <span class="cn">FALSE</span>)</span>
