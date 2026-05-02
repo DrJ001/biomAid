@@ -367,26 +367,6 @@ Key `sim.options` elements (all have built-in defaults):
 | `variety_prefix` / `site_prefix` | Label prefixes | `"Var"` / `"Env"` |
 | `outfile` | Optional CSV output path | `NULL` |
 
-```r
-# MET-only: 30 varieties, 8 sites, FA(2) genetic structure
-out <- simTrialData(nvar = 30, nsite = 8, n_fa = 2, seed = 42)
-head(out$data)
-round(cov2cor(out$params$G), 2)   # true genetic correlations
-
-# Unbalanced MET: varieties appear at different subsets of sites
-out2 <- simTrialData(nvar = 30, nsite = 8, n_fa = 2,
-                     incidence = "unbalanced", seed = 42)
-table(rowSums(out2$params$incidence))   # sites per variety
-
-# Multi-treatment with custom error SD
-out3 <- simTrialData(nvar = 20, nsite = 6,
-                     treatments  = c("T0", "T1", "T2"),
-                     n_fa        = 2,
-                     seed        = 1,
-                     sim.options = list(treat_effects = c(0, 150, 350),
-                                        error_sd      = 200))
-```
-
 Returns a list with `$data` (the field layout data frame) and `$params`
 (the true `G`, `Lambda`, `Psi`, `site_means`, `incidence`, and for
 multi-treatment: `treat_effects`, `g_arr`).
@@ -400,11 +380,11 @@ mixed model. Two complementary metrics are available:
 
 - **Mrode accuracy** — `r = mean[sqrt(1 - PEV / G_jj)]` per variety,
   averaged over environments.
-- **Cullis H²** — `1 - mean(SED²) / (2 G_jj)`, a variety-comparison
-  reliability analogue.
+- **Generalised H²** — `1 - mean(SED²) / (2 G_jj)`, a variety-comparison
+  reliability analogue from Cullis et al. (2006)
 
 Supports `fa()`, `diag()`, `corgh()`, `corh()`, `us()`, and single-environment
-`id()` random structures. The `only =` argument to `predict.asreml()` is used
+`id()` random structures. The `only =` argument to `predict.asreml()` is invoked
 internally to avoid fixed-effect inflation of the PEV.
 
 ```r
@@ -424,20 +404,6 @@ accuracy(model,
 | `pworkspace` | Passed to `predict.asreml()`. Default `"2gb"` |
 | `by_variety` | `TRUE` returns one row per variety × environment |
 | `present` | `TRUE` (default) restricts to observed variety × environment combinations; `FALSE` includes all `predict.asreml()` rows (FA models can predict unobserved combinations via the G-matrix) |
-
-```r
-# Group-level summaries (one row per environment)
-acc <- accuracy(model_fa, metric = c("accuracy", "gen.H2"))
-
-# Per-variety accuracies — observed combinations only (default)
-acc_bv <- accuracy(model_fa, by_variety = TRUE)
-
-# Per-variety, include unobserved combos (FA models — fills heatmap grid)
-acc_bv_all <- accuracy(model_fa, by_variety = TRUE, present = FALSE)
-
-# Cullis H² only
-accuracy(model_fa, metric = "gen.H2")
-```
 
 ---
 

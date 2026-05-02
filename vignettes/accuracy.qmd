@@ -94,15 +94,12 @@ $$
 
 where $n_j$ is the number of varieties with observed data in environment $j$.
 
-Values of $\text{PEV}_{ij} > G_{jj}$ (which can occur when BLUPs are
-computed using `predict()` without the `only` argument) give spurious
-imaginary accuracies. `accuracy()` avoids this by passing `only =` to
-`predict.asreml()`, restricting the prediction error to the target random
-term alone.
+`accuracy()` invokes the argument `only =` in `predict.asreml()` to ensure the correct
+$\operatorname{PEV}_{ij}$ are returned for the target random term supplied.
 
 ---
 
-### Cullis H²
+### Generalised H²
 
 Cullis et al. (2006) proposed a heritability analogue based on the mean
 pairwise squared standard error of difference (SED):
