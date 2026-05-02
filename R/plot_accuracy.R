@@ -1,5 +1,5 @@
 # =============================================================================
-# plot_accuracy.R  —  ggplot2 visualisations for accuracy() output
+# plot_accuracy.R  --  ggplot2 visualisations for accuracy() output
 # =============================================================================
 #
 # Single-model types  (res2 not required):
@@ -7,7 +7,7 @@
 #               Faceted by metric when both accuracy and gen.H2 are present.
 #   "violin"    Per-variety accuracy distribution per group (requires by_variety
 #               data). Faceted by metric when both are present.
-#   "heatmap"   Variety × Group accuracy grid (requires by_variety data).
+#   "heatmap"   Variety x Group accuracy grid (requires by_variety data).
 #               Faceted by metric when both are present.
 #
 # Comparison types  (res2 required):
@@ -15,7 +15,7 @@
 #               (green = model2 improved, red = model2 declined).
 #   "scatter"   Per-variety model1 (x) vs model2 (y) accuracy scatter with a
 #               diagonal reference line (requires by_variety data in both).
-#   "diff"      Signed accuracy gain (model2 − model1) lollipop per group.
+#   "diff"      Signed accuracy gain (model2 - model1) lollipop per group.
 # =============================================================================
 
 utils::globalVariables(c(
@@ -38,7 +38,7 @@ utils::globalVariables(c(
 #'   or by-variety (\code{by_variety = TRUE}) depending on \code{type}.
 #' @param res2     Optional second data frame from \code{accuracy()} for
 #'   comparison plots (\code{"dumbbell"}, \code{"scatter"}, \code{"diff"}).
-#' @param type     Plot type — one of \code{"lollipop"}, \code{"violin"},
+#' @param type     Plot type -- one of \code{"lollipop"}, \code{"violin"},
 #'   \code{"heatmap"}, \code{"dumbbell"}, \code{"scatter"}, \code{"diff"}.
 #' @param metric   Character vector: \code{"accuracy"}, \code{"gen.H2"}, or
 #'   both (default). When both are selected the plot is faceted into two panels.
@@ -100,10 +100,10 @@ plot_accuracy <- function(res,
     acc_col <- if (is_bv(d)) "accuracy" else "mean_acc"
     if ("accuracy" %in% m && !acc_col %in% names(d))
       stop(sprintf(
-        "[plot_accuracy] 'accuracy' not in %s — run accuracy(..., metric='accuracy').", lbl))
+        "[plot_accuracy] 'accuracy' not in %s -- run accuracy(..., metric='accuracy').", lbl))
     if ("gen.H2" %in% m && !"gen.H2" %in% names(d))
       stop(sprintf(
-        "[plot_accuracy] 'gen.H2' not in %s — run accuracy(..., metric='gen.H2').", lbl))
+        "[plot_accuracy] 'gen.H2' not in %s -- run accuracy(..., metric='gen.H2').", lbl))
   }
   .check_metric(res, metric, "res")
   if (!is.null(res2)) .check_metric(res2, metric, "res2")
@@ -179,7 +179,7 @@ plot_accuracy <- function(res,
   do.call(rbind, c(out, make.row.names = FALSE))
 }
 
-# Set group factor levels ordered by mean value (ascending → best at top of y)
+# Set group factor levels ordered by mean value (ascending -> best at top of y)
 # Uses the first metric_label present if multiple exist.
 .pa_order_groups <- function(d) {
   ref_metric <- unique(d$metric_label)[1L]
@@ -189,7 +189,7 @@ plot_accuracy <- function(res,
   d
 }
 
-# Set variety factor levels ordered by mean value (descending → best at top of y)
+# Set variety factor levels ordered by mean value (descending -> best at top of y)
 .pa_order_varieties <- function(d) {
   ref_metric <- unique(d$metric_label)[1L]
   ref        <- d[d$metric_label == ref_metric, ]
@@ -262,7 +262,7 @@ plot_accuracy <- function(res,
 
   d <- .pa_long_bv(res, metric)
 
-  # Cullis H² (gen.H2) is a group-level constant in by_variety data — it
+  # Cullis H2 (gen.H2) is a group-level constant in by_variety data -- it
   # produces a degenerate flat display in a violin. Suppress it automatically
   # when Mrode Accuracy is also present; direct users to lollipop instead.
   H2_lbl     <- "Gen. H\u00b2"
@@ -296,7 +296,7 @@ plot_accuracy <- function(res,
       sub <- d[d$metric_label == ml, ]
       col <- .pa_metric_cols[ml]
       if (.is_const(sub)) {
-        # Cullis H² (gen.H2): one point per group (constant within group)
+        # Cullis H2 (gen.H2): one point per group (constant within group)
         grp_sum <- aggregate(value ~ group, data = sub, FUN = mean)
         p <- p +
           ggplot2::geom_point(
@@ -398,7 +398,7 @@ plot_accuracy <- function(res,
   d2         <- .pa_long_grp(res2, metric); d2$model_label <- label2
   dall       <- rbind(d1, d2)
 
-  # Segment data: one row per group × metric
+  # Segment data: one row per group x metric
   seg <- merge(
     d1[, c("group", "value", "metric_label")],
     d2[, c("group", "value", "metric_label")],
@@ -409,7 +409,7 @@ plot_accuracy <- function(res,
   names(seg)[names(seg) == "value_2"] <- "x2"
   seg$gain_dir <- ifelse(seg$x2 >= seg$x1, "Improved", "Declined")
 
-  # Order groups by model1 accuracy value (ascending → best at top)
+  # Order groups by model1 accuracy value (ascending -> best at top)
   ref_metric     <- unique(dall$metric_label)[1L]
   ref_d1         <- d1[d1$metric_label == ref_metric, ]
   grp_ord        <- names(sort(tapply(ref_d1$value, ref_d1$group, mean, na.rm = TRUE)))
@@ -423,7 +423,7 @@ plot_accuracy <- function(res,
   names(model_fills) <- c(label1, label2)
 
   p <- ggplot2::ggplot() +
-    # Connecting segment — colour encodes direction of change
+    # Connecting segment -- colour encodes direction of change
     ggplot2::geom_segment(
       data = seg,
       ggplot2::aes(x     = x1, xend  = x2,
@@ -431,7 +431,7 @@ plot_accuracy <- function(res,
                    colour = gain_dir),
       linewidth = 1.4, alpha = 0.85
     ) +
-    # Model points — shape + fill distinguish models
+    # Model points -- shape + fill distinguish models
     ggplot2::geom_point(
       data = dall,
       ggplot2::aes(x    = value,
@@ -553,7 +553,7 @@ plot_accuracy <- function(res,
   d$diff_val <- d$value_2 - d$value_1
   d$gain_dir <- ifelse(d$diff_val >= 0, "Improved", "Declined")
 
-  # Order by diff_val within the first metric (ascending → biggest gain at top)
+  # Order by diff_val within the first metric (ascending -> biggest gain at top)
   ref_metric <- unique(d$metric_label)[1L]
   ref_d      <- d[d$metric_label == ref_metric, ]
   grp_ord    <- names(sort(tapply(ref_d$diff_val, ref_d$group, mean, na.rm = TRUE)))
