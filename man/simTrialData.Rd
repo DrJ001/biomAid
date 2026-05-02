@@ -10,6 +10,7 @@ simTrialData(
   treatments = NULL,
   nrep = 2L,
   n_fa = 2L,
+  G = NULL,
   incidence = "balanced",
   seed = NULL,
   verbose = TRUE,
@@ -28,7 +29,22 @@ simTrialData(
 
 \item{n_fa}{Integer. Number of FA factors used in the data-generating
 genetic model. Must be less than the number of groups (environments or
-Treatment x Site combinations). Default \code{2}.}
+Treatment x Site combinations). Default \code{2}. Ignored when \code{G} is
+not \code{NULL}.}
+
+\item{G}{Controls the true genetic covariance structure. One of:
+\describe{
+\item{\code{NULL}}{(Default) Use factor-analytic simulation with
+\code{n_fa} factors.}
+\item{\code{"auto"}}{Auto-generate a random SPD covariance matrix with
+pairwise correlations approximately in the range
+(\code{g_cor_min}, \code{g_cor_max}) set via \code{sim.options}.
+The scale is controlled by \code{sigma_genetic}.}
+\item{Matrix}{A user-supplied J x J symmetric positive-definite
+covariance matrix, where J = \code{nsite} for MET-only designs
+or J = \code{nsite * length(treatments)} for multi-treatment
+designs. Group order must match \code{outer(treatments, sites)}.}
+}}
 
 \item{incidence}{Controls which varieties are observed at which sites.
 One of:
@@ -77,6 +93,12 @@ Default \code{"Var"}.}
 \item{\code{site_prefix}}{Character. Prefix for site labels.
 Default \code{"Env"}.}
 \item{\code{outfile}}{Character path or \code{NULL}. CSV output. Default \code{NULL}.}
+\item{\code{g_cor_min}}{Numeric in (-1, 1). Minimum pairwise genetic
+correlation for the auto-generated G matrix. Used only when
+\code{G = "auto"}. Default \code{0.20}.}
+\item{\code{g_cor_max}}{Numeric in (-1, 1]. Maximum pairwise genetic
+correlation. Must be > \code{g_cor_min}. Used only when
+\code{G = "auto"}. Default \code{0.90}.}
 \item{\code{core_pct}}{Numeric in (0, 1). Proportion of varieties designated
 as "core" entries when \code{incidence = "unbalanced"}. Core varieties
 appear in at least \code{core_min_sites_pct} of sites. Default
@@ -102,10 +124,13 @@ variety x site combinations are included.}
 \item{\code{params}}{Named list of true simulation parameters:
 \describe{
 \item{\code{G}}{True genetic covariance matrix (J x J).}
-\item{\code{Lambda}}{True loadings matrix (J x k).}
-\item{\code{Psi}}{True specific variances (length J).}
+\item{\code{Lambda}}{True FA loadings matrix (J x k). \code{NULL} when
+\code{G} is not \code{NULL}.}
+\item{\code{Psi}}{True FA specific variances (length J). \code{NULL} when
+\code{G} is not \code{NULL}.}
 \item{\code{site_means}}{True site mean yields (length \code{nsite}).}
-\item{\code{n_fa}}{Number of FA factors used.}
+\item{\code{n_fa}}{Number of FA factors used. \code{0L} when \code{G} is
+not \code{NULL}.}
 \item{\code{incidence}}{Integer \verb{nvar x nsite} incidence matrix used.}
 \item{\code{treat_effects}}{True treatment fixed effects
 (multi-treatment only).}
@@ -126,19 +151,28 @@ a split-plot design where whole plots are treatment strips and sub-plots
 are varieties, nested within replicate blocks. The genetic structure
 operates over all Treatment x Site (\code{TSite}) combinations.
 
-\strong{Genetic simulation} uses a factor-analytic (FA) covariance model:
+\strong{Genetic simulation} — three modes controlled by the \code{G} argument:
+
+\emph{FA mode} (\code{G = NULL}, default): variety BLUPs are drawn from a
+factor-analytic covariance model
 \deqn{
   \mathbf{u}_v = \boldsymbol{\Lambda}\mathbf{f}_v + \boldsymbol{\delta}_v,
   \quad \mathbf{f}_v \sim \mathcal{N}(\mathbf{0}, \mathbf{I}_{k}),
   \quad \boldsymbol{\delta}_v \sim \mathcal{N}(\mathbf{0}, \boldsymbol{\Psi})
 }
-where \eqn{\boldsymbol{\Lambda}} (\eqn{J \times k}) is the loadings matrix,
-\eqn{k} = \code{n_fa}, \eqn{J} is the number of environments (or
-Treatment x Site combinations), and
-\eqn{\boldsymbol{\Psi} = \mathrm{diag}(\psi_1,\ldots,\psi_J)} is the
-specific variance matrix. The true genetic covariance matrix is
-\eqn{\mathbf{G} = \boldsymbol{\Lambda}\boldsymbol{\Lambda}^\top +
-\boldsymbol{\Psi}}.
+where \eqn{k} = \code{n_fa} and
+\eqn{\mathbf{G} = \boldsymbol{\Lambda}\boldsymbol{\Lambda}^\top + \boldsymbol{\Psi}}.
+This gives fitted FA models a structural advantage in the
+\code{accuracy()} comparison story.
+
+\emph{Auto mode} (\code{G = "auto"}): a random SPD covariance matrix is
+generated directly from correlation bounds (\code{g_cor_min}, \code{g_cor_max} in
+\code{sim.options}), without requiring thought about FA factor counts.
+Recommended for small numbers of sites (e.g. 3-6) where FA structure
+would be degenerate.
+
+\emph{User mode} (\code{G = matrix}): a user-supplied \eqn{J \times J} symmetric
+positive-definite covariance matrix is used directly.
 
 \strong{Incidence structure} (\code{incidence} argument) controls which varieties are
 observed at which sites. All \code{nvar} varieties have a true genetic value at
@@ -163,8 +197,17 @@ inc[1:5, 1:3] <- 0L   # first 5 varieties absent from first 3 sites
 out3 <- simTrialData(nvar = 20, nsite = 6, n_fa = 2,
                      incidence = inc, seed = 1)
 
+# Auto-generated G: suitable for small nsite; no FA factor count needed
+out4 <- simTrialData(nvar = 20, nsite = 4, G = "auto", seed = 99,
+                     sim.options = list(g_cor_min = 0.3, g_cor_max = 0.8))
+round(cov2cor(out4$params$G), 2)   # correlations in [0.3, 0.8]
+
+# User-supplied G matrix
+G_true <- matrix(c(40000, 15000, 15000, 40000), 2, 2)
+out5 <- simTrialData(nvar = 20, nsite = 2, G = G_true, seed = 10)
+
 # Multi-treatment with custom treat_effects
-out4 <- simTrialData(nvar = 20, nsite = 6,
+out6 <- simTrialData(nvar = 20, nsite = 6,
                      treatments  = c("T0", "T1", "T2"),
                      n_fa        = 2,
                      incidence   = "unbalanced",

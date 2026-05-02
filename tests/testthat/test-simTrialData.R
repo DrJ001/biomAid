@@ -552,6 +552,165 @@ test_that("multi-treatment: G rownames match TSite levels", {
 })
 
 # ---------------------------------------------------------------------------
+# 25. G argument — auto mode
+# ---------------------------------------------------------------------------
+
+test_that("G='auto': returns data and params without error", {
+  out <- simTrialData(nvar = 10L, nsite = 4L, G = "auto",
+                      nrep = 2L, seed = 80L, verbose = FALSE)
+  expect_named(out, c("data", "params"))
+  expect_s3_class(out$data, "data.frame")
+})
+
+test_that("G='auto': G is SPD with correct dimensions", {
+  nsite <- 5L
+  out <- simTrialData(nvar = 10L, nsite = nsite, G = "auto",
+                      nrep = 2L, seed = 81L, verbose = FALSE)
+  G <- out$params$G
+  expect_equal(dim(G), c(nsite, nsite))
+  expect_true(isSymmetric(G, tol = 1e-8))
+  expect_true(all(eigen(G, only.values = TRUE)$values > 0))
+})
+
+test_that("G='auto': correlations approximately in [g_cor_min, g_cor_max]", {
+  out <- simTrialData(nvar = 10L, nsite = 5L, G = "auto", nrep = 2L,
+                      seed = 82L, verbose = FALSE,
+                      sim.options = list(g_cor_min = 0.30, g_cor_max = 0.85))
+  R   <- cov2cor(out$params$G)
+  r   <- R[upper.tri(R)]
+  expect_true(all(r >= 0.29))   # small tolerance for rescaling
+  expect_true(all(r <= 0.86))
+})
+
+test_that("G='auto': Lambda and Psi are NULL, n_fa = 0", {
+  out <- simTrialData(nvar = 8L, nsite = 4L, G = "auto",
+                      nrep = 2L, seed = 83L, verbose = FALSE)
+  expect_null(out$params$Lambda)
+  expect_null(out$params$Psi)
+  expect_equal(out$params$n_fa, 0L)
+})
+
+test_that("G='auto': n_fa argument is silently ignored", {
+  out <- simTrialData(nvar = 8L, nsite = 4L, G = "auto", n_fa = 3L,
+                      nrep = 2L, seed = 84L, verbose = FALSE)
+  expect_null(out$params$Lambda)
+  expect_equal(out$params$n_fa, 0L)
+})
+
+test_that("G='auto': data dimensions are correct (MET-only)", {
+  nvar <- 8L; nsite <- 4L; nrep <- 2L
+  out <- simTrialData(nvar = nvar, nsite = nsite, G = "auto",
+                      nrep = nrep, seed = 85L, verbose = FALSE)
+  expect_equal(nrow(out$data), nvar * nsite * nrep)
+})
+
+test_that("G='auto' with multi-treatment: G is ngroup x ngroup", {
+  nsite <- 3L; ntreat <- 2L
+  out <- simTrialData(nvar = 6L, nsite = nsite,
+                      treatments = c("T0", "T1"), G = "auto",
+                      nrep = 2L, seed = 86L, verbose = FALSE)
+  ngroup <- nsite * ntreat
+  expect_equal(dim(out$params$G), c(ngroup, ngroup))
+  expect_null(out$params$Lambda)
+})
+
+# ---------------------------------------------------------------------------
+# 26. G argument — user-supplied matrix
+# ---------------------------------------------------------------------------
+
+test_that("user-supplied G: used directly, correct dimensions in params", {
+  nsite <- 3L
+  G_true <- diag(40000, nsite) + matrix(15000, nsite, nsite)
+  out <- simTrialData(nvar = 8L, nsite = nsite, G = G_true,
+                      nrep = 2L, seed = 90L, verbose = FALSE)
+  expect_equal(out$params$G, G_true,
+               tolerance = 1e-6,
+               ignore_attr = TRUE)
+})
+
+test_that("user-supplied G: Lambda=NULL, Psi=NULL, n_fa=0", {
+  nsite <- 3L
+  G_true <- diag(50000, nsite) + matrix(10000, nsite, nsite)
+  out <- simTrialData(nvar = 6L, nsite = nsite, G = G_true,
+                      nrep = 2L, seed = 91L, verbose = FALSE)
+  expect_null(out$params$Lambda)
+  expect_null(out$params$Psi)
+  expect_equal(out$params$n_fa, 0L)
+})
+
+test_that("user-supplied G: data has correct row count", {
+  nvar <- 8L; nsite <- 3L; nrep <- 2L
+  G_true <- diag(40000, nsite) + matrix(10000, nsite, nsite)
+  out <- simTrialData(nvar = nvar, nsite = nsite, G = G_true,
+                      nrep = nrep, seed = 92L, verbose = FALSE)
+  expect_equal(nrow(out$data), nvar * nsite * nrep)
+})
+
+test_that("user-supplied G: non-matrix errors", {
+  expect_error(
+    simTrialData(nvar = 6L, nsite = 3L, G = list(a = 1),
+                 verbose = FALSE),
+    "numeric matrix"
+  )
+})
+
+test_that("user-supplied G: wrong dimensions errors", {
+  G_bad <- diag(40000, 4L)   # 4x4 but nsite=3
+  expect_error(
+    simTrialData(nvar = 6L, nsite = 3L, G = G_bad,
+                 verbose = FALSE),
+    "3 x 3"
+  )
+})
+
+test_that("user-supplied G: non-symmetric errors", {
+  G_bad <- matrix(c(40000, 5000, 15000, 40000, 5000, 40000, 5000, 40000, 40000), 3, 3)
+  expect_error(
+    simTrialData(nvar = 6L, nsite = 3L, G = G_bad,
+                 verbose = FALSE),
+    "symmetric"
+  )
+})
+
+test_that("user-supplied G: non-PD errors", {
+  G_bad <- matrix(c(1, 2, 0, 2, 1, 0, 0, 0, 1), 3, 3)   # not PD (negative eigenvalue)
+  expect_error(
+    simTrialData(nvar = 6L, nsite = 3L, G = G_bad,
+                 verbose = FALSE),
+    "positive definite"
+  )
+})
+
+# ---------------------------------------------------------------------------
+# 27. G argument — validation errors for 'auto' mode
+# ---------------------------------------------------------------------------
+
+test_that("g_cor_min >= 1 errors", {
+  expect_error(
+    simTrialData(nvar = 6L, nsite = 4L, G = "auto",
+                 sim.options = list(g_cor_min = 1.0),
+                 verbose = FALSE),
+    "g_cor_min"
+  )
+})
+
+test_that("g_cor_max <= g_cor_min errors", {
+  expect_error(
+    simTrialData(nvar = 6L, nsite = 4L, G = "auto",
+                 sim.options = list(g_cor_min = 0.6, g_cor_max = 0.5),
+                 verbose = FALSE),
+    "g_cor_max"
+  )
+})
+
+test_that("G validation not triggered when G = NULL (FA mode)", {
+  expect_no_error(
+    simTrialData(nvar = 6L, nsite = 4L, G = NULL, n_fa = 2L,
+                 nrep = 2L, seed = 95L, verbose = FALSE)
+  )
+})
+
+# ---------------------------------------------------------------------------
 # 25. sim.options — unbalanced incidence controls
 # ---------------------------------------------------------------------------
 
