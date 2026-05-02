@@ -320,21 +320,21 @@ fast(model, term = "fa(Site, 4):Genotype",
 
 ### `simTrialData()` — Simulate trial data
 
-Generates a balanced MET or split-plot dataset with a realistic
-**factor-analytic genetic covariance structure** across environments.
-Variety BLUPs are drawn from `G = ΛΛᵀ + Ψ` where `Λ` is an `n_fa`-factor
-loadings matrix — so fitted FA models have genuine signal to recover.
+Generates a balanced or unbalanced MET or split-plot dataset with a realistic
+genetic covariance structure across environments. The genetic covariance matrix
+`G` is either auto-generated from correlation bounds (`G = "auto"`, default)
+or supplied directly by the user.
 
 Set `treatments = NULL` for a pure MET (simple RCB, no Treatment column).
-Supply `treatments = c("T0", "T1", ...)` for a split-plot design; the FA
-structure then operates over all Treatment × Site (`TSite`) combinations.
+Supply `treatments = c("T0", "T1", ...)` for a split-plot design; the
+genetic structure then operates over all Treatment x Site (`TSite`) combinations.
 
 ```r
 simTrialData(nvar        = 20L,
              nsite       = 10L,
              treatments  = NULL,
              nrep        = 2L,
-             n_fa        = 2L,
+             G           = "auto",
              incidence   = "balanced",
              seed        = NULL,
              verbose     = TRUE,
@@ -347,8 +347,8 @@ simTrialData(nvar        = 20L,
 | `nsite` | Number of sites. Default `10` |
 | `treatments` | Character vector of treatment labels, or `NULL` for MET-only. Default `NULL` |
 | `nrep` | Number of replicates per site. Default `2` |
-| `n_fa` | Number of FA factors in the data-generating model. Default `2` |
-| `incidence` | `"balanced"` (default) — all varieties at every site; `"unbalanced"` — auto two-tier structure; or a user-supplied `nvar × nsite` matrix of 0/1 |
+| `G` | `"auto"` (default) — generate random SPD G from correlation bounds; or a user-supplied ngroup x ngroup SPD covariance matrix |
+| `incidence` | `"balanced"` (default) — all varieties at every site; `"unbalanced"` — auto two-tier structure; or a user-supplied `nvar x nsite` matrix of 0/1 |
 | `seed` | Random seed. `NULL` = no fixed seed |
 | `verbose` | Print design summary and suggested model. Default `TRUE` |
 | `sim.options` | Named list of optional controls (see below) |
@@ -359,8 +359,7 @@ Key `sim.options` elements (all have built-in defaults):
 |---------|-------------|---------|
 | `site_mean` / `site_sd` | Grand mean and SD of site means | `4500` / `600` |
 | `sigma_genetic` | Target mean genetic SD per group | `250` |
-| `loading_min` / `loading_max` | Range of FA loadings before scaling | `0.5` / `2.5` |
-| `specific_pct` | Specific variance as fraction of mean `diag(ΛΛᵀ)` | `0.20` |
+| `g_cor_min` / `g_cor_max` | Correlation bounds for auto-generated G | `0.20` / `0.90` |
 | `treat_effects` | Fixed treatment effects vector (multi-treatment only) | auto-spaced |
 | `error_sd` / `rep_sd` / `row_sd` / `col_sd` | Error SD components | `350`/`150`/`80`/`60` |
 | `sep` | Separator for `TSite` labels | `"-"` |
@@ -368,8 +367,8 @@ Key `sim.options` elements (all have built-in defaults):
 | `outfile` | Optional CSV output path | `NULL` |
 
 Returns a list with `$data` (the field layout data frame) and `$params`
-(the true `G`, `Lambda`, `Psi`, `site_means`, `incidence`, and for
-multi-treatment: `treat_effects`, `g_arr`).
+(the true `G`, `site_means`, `incidence`, and for multi-treatment:
+`treat_effects`, `g_arr`).
 
 ---
 

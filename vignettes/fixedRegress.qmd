@@ -193,7 +193,6 @@ out <- simTrialData(
   nvar        = 20L,
   nsite       = 4L,
   treatments  = c("T0", "T1", "T2"),
-  n_fa        = 2L,
   nrep        = 3L,
   seed        = 42L,
   verbose     = FALSE,

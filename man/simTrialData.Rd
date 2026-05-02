@@ -9,8 +9,7 @@ simTrialData(
   nsite = 10L,
   treatments = NULL,
   nrep = 2L,
-  n_fa = 2L,
-  G = NULL,
+  G = "auto",
   incidence = "balanced",
   seed = NULL,
   verbose = TRUE,
@@ -27,42 +26,37 @@ simTrialData(
 
 \item{nrep}{Integer. Replicates per environment. Default \code{2}.}
 
-\item{n_fa}{Integer. Number of FA factors used in the data-generating
-genetic model. Must be less than the number of groups (environments or
-Treatment x Site combinations). Default \code{2}. Ignored when \code{G} is
-not \code{NULL}.}
-
 \item{G}{Controls the true genetic covariance structure. One of:
 \describe{
-\item{\code{NULL}}{(Default) Use factor-analytic simulation with
-\code{n_fa} factors.}
-\item{\code{"auto"}}{Auto-generate a random SPD covariance matrix with
-pairwise correlations approximately in the range
+\item{\code{"auto"}}{(Default) Auto-generate a random SPD covariance
+matrix with pairwise correlations approximately in the range
 (\code{g_cor_min}, \code{g_cor_max}) set via \code{sim.options}.
-The scale is controlled by \code{sigma_genetic}.}
+Scale is controlled by \code{sigma_genetic}.}
 \item{Matrix}{A user-supplied J x J symmetric positive-definite
-covariance matrix, where J = \code{nsite} for MET-only designs
-or J = \code{nsite * length(treatments)} for multi-treatment
-designs. Group order must match \code{outer(treatments, sites)}.}
+covariance matrix used directly. J = \code{nsite} for MET-only designs
+or J = \code{nsite * length(treatments)} for multi-treatment designs.
+Group order must match \code{outer(treatments, sites)}.}
 }}
 
 \item{incidence}{Controls which varieties are observed at which sites.
 One of:
 \describe{
-\item{\code{"balanced"}}{(Default) All \code{nvar} varieties are observed at every
-site. Produces identical PEV for all varieties within a site.}
+\item{\code{"balanced"}}{(Default) All \code{nvar} varieties are
+observed at every site. Produces identical PEV for all varieties
+within a site.}
 \item{\code{"unbalanced"}}{Automatically generates a two-tier incidence
-structure. The proportions governing the structure are controlled by
-five \code{sim.options} entries: \code{core_pct},
-\code{core_min_sites_pct}, \code{reg_min_sites_pct},
-\code{reg_max_sites_pct}, and \code{min_vars_pct} (see below).}
-\item{Matrix}{An \verb{nvar x nsite} matrix of \code{0}/\code{1} or \code{TRUE}/\code{FALSE}
-supplied by the user. Entry \verb{[v, s] = 1} means variety \code{v} is
-observed at site \code{s}. Every variety must appear in at least 1 site;
-every site must have at least 2 varieties.}
+structure. Proportions are controlled by five \code{sim.options}
+entries: \code{core_pct}, \code{core_min_sites_pct},
+\code{reg_min_sites_pct}, \code{reg_max_sites_pct}, and
+\code{min_vars_pct} (see below).}
+\item{Matrix}{An \code{nvar x nsite} matrix of \code{0}/\code{1} or
+\code{TRUE}/\code{FALSE}. Entry \code{[v, s] = 1} means variety
+\code{v} is observed at site \code{s}. Every variety must appear in
+at least 1 site; every site must have at least 2 varieties.}
 }}
 
-\item{seed}{Integer or \code{NULL}. Passed to \code{\link[=set.seed]{set.seed()}}. Default \code{NULL}.}
+\item{seed}{Integer or \code{NULL}. Passed to \code{\link{set.seed}}.
+Default \code{NULL}.}
 
 \item{verbose}{Logical. Print a design summary and suggested ASReml-R
 model. Default \code{TRUE}.}
@@ -72,43 +66,41 @@ produce a warning. Recognised elements (with defaults) are:
 \describe{
 \item{\code{site_mean}}{Numeric. Grand mean yield. Default \code{4500}.}
 \item{\code{site_sd}}{Numeric. SD of site mean yields. Default \code{600}.}
-\item{\code{treat_effects}}{Numeric vector (length = \code{length(treatments)})
-of fixed treatment effects, or \code{NULL} for auto-spacing from 0 to
-\code{site_mean * 0.10}. Multi-treatment only.}
+\item{\code{treat_effects}}{Numeric vector (length =
+\code{length(treatments)}) of fixed treatment effects, or \code{NULL}
+for auto-spacing from 0 to \code{site_mean * 0.10}.
+Multi-treatment only.}
 \item{\code{sigma_genetic}}{Numeric. Target mean genetic SD per group.
 Default \code{250}.}
-\item{\code{loading_min}}{Numeric >= 0. Minimum absolute FA loading before
-scaling. Default \code{0.5}.}
-\item{\code{loading_max}}{Numeric > \code{loading_min}. Maximum absolute FA
-loading before scaling. Default \code{2.5}.}
-\item{\code{specific_pct}}{Numeric in (0, 1). Specific variances as a
-fraction of mean diagonal of Lambda Lambda'. Default \code{0.20}.}
 \item{\code{rep_sd}}{Numeric. SD of replicate effects. Default \code{150}.}
 \item{\code{row_sd}}{Numeric. SD of row spatial effects. Default \code{80}.}
-\item{\code{col_sd}}{Numeric. SD of column spatial effects. Default \code{60}.}
-\item{\code{error_sd}}{Numeric. SD of plot-level residual. Default \code{350}.}
-\item{\code{sep}}{Character. Separator for \code{TSite} labels. Default \code{"-"}.}
+\item{\code{col_sd}}{Numeric. SD of column spatial effects.
+Default \code{60}.}
+\item{\code{error_sd}}{Numeric. SD of plot-level residual.
+Default \code{350}.}
+\item{\code{sep}}{Character. Separator for \code{TSite} labels.
+Default \code{"-"}.}
 \item{\code{variety_prefix}}{Character. Prefix for variety labels.
 Default \code{"Var"}.}
 \item{\code{site_prefix}}{Character. Prefix for site labels.
 Default \code{"Env"}.}
-\item{\code{outfile}}{Character path or \code{NULL}. CSV output. Default \code{NULL}.}
+\item{\code{outfile}}{Character path or \code{NULL}. CSV output.
+Default \code{NULL}.}
 \item{\code{g_cor_min}}{Numeric in (-1, 1). Minimum pairwise genetic
 correlation for the auto-generated G matrix. Used only when
 \code{G = "auto"}. Default \code{0.20}.}
 \item{\code{g_cor_max}}{Numeric in (-1, 1]. Maximum pairwise genetic
 correlation. Must be > \code{g_cor_min}. Used only when
 \code{G = "auto"}. Default \code{0.90}.}
-\item{\code{core_pct}}{Numeric in (0, 1). Proportion of varieties designated
-as "core" entries when \code{incidence = "unbalanced"}. Core varieties
-appear in at least \code{core_min_sites_pct} of sites. Default
-\code{0.20}.}
-\item{\code{core_min_sites_pct}}{Numeric in (0, 1]. Minimum proportion of
-sites that each core variety must appear in. Default \code{0.75}.}
-\item{\code{reg_min_sites_pct}}{Numeric in (0, 1]. Minimum proportion of
-sites for regular (non-core) varieties. Default \code{0.40}.}
-\item{\code{reg_max_sites_pct}}{Numeric in (0, 1]. Maximum proportion of
-sites for regular varieties. Must be >= \code{reg_min_sites_pct}.
+\item{\code{core_pct}}{Numeric in (0, 1). Proportion of varieties
+designated as "core" entries when \code{incidence = "unbalanced"}.
+Default \code{0.20}.}
+\item{\code{core_min_sites_pct}}{Numeric in (0, 1]. Minimum proportion
+of sites that each core variety must appear in. Default \code{0.75}.}
+\item{\code{reg_min_sites_pct}}{Numeric in (0, 1]. Minimum proportion
+of sites for regular (non-core) varieties. Default \code{0.40}.}
+\item{\code{reg_max_sites_pct}}{Numeric in (0, 1]. Maximum proportion
+of sites for regular varieties. Must be >= \code{reg_min_sites_pct}.
 Default \code{0.85}.}
 \item{\code{min_vars_pct}}{Numeric in (0, 1]. Minimum proportion of
 \code{nvar} that every site must contain. Default \code{0.40}.}
@@ -117,99 +109,83 @@ Default \code{0.85}.}
 \value{
 A named list:
 \describe{
-\item{\code{data}}{Data frame ordered by \code{Site}, \code{Row}, \code{Column} with columns:
-\code{Site}, \code{Variety}, \code{Rep}, \code{Row}, \code{Column}, \code{yield} (MET-only), or
-additionally \code{Treatment} and \code{TSite} (multi-treatment). Only observed
+\item{\code{data}}{Data frame ordered by \code{Site}, \code{Row},
+\code{Column} with columns: \code{Site}, \code{Variety}, \code{Rep},
+\code{Row}, \code{Column}, \code{yield} (MET-only), or additionally
+\code{Treatment} and \code{TSite} (multi-treatment). Only observed
 variety x site combinations are included.}
 \item{\code{params}}{Named list of true simulation parameters:
 \describe{
 \item{\code{G}}{True genetic covariance matrix (J x J).}
-\item{\code{Lambda}}{True FA loadings matrix (J x k). \code{NULL} when
-\code{G} is not \code{NULL}.}
-\item{\code{Psi}}{True FA specific variances (length J). \code{NULL} when
-\code{G} is not \code{NULL}.}
 \item{\code{site_means}}{True site mean yields (length \code{nsite}).}
-\item{\code{n_fa}}{Number of FA factors used. \code{0L} when \code{G} is
-not \code{NULL}.}
-\item{\code{incidence}}{Integer \verb{nvar x nsite} incidence matrix used.}
+\item{\code{incidence}}{Integer \code{nvar x nsite} incidence matrix.}
 \item{\code{treat_effects}}{True treatment fixed effects
 (multi-treatment only).}
-\item{\code{g_arr}}{\verb{nvar x ngroup} matrix of true genetic BLUPs
+\item{\code{g_arr}}{\code{nvar x ngroup} matrix of true genetic BLUPs
 (multi-treatment only).}
 }}
 }
 }
 \description{
 Generates a balanced or unbalanced field trial dataset with a realistic
-factor-analytic genetic correlation structure across environments.
+genetic covariance structure across environments.
 
-\strong{MET-only} (\code{treatments = NULL}): a simple randomised complete block
-design with one observation per observed Variety x Site x Rep combination.
+\strong{Trial structure:} \code{treatments = NULL} produces a MET-only randomised
+complete block design. Supply \code{treatments = c("T0", "T1", ...)} for a
+split-plot design where whole plots are treatment strips and sub-plots are
+varieties; the genetic structure then operates over all Treatment x Site
+(\code{TSite}) combinations.
 
-\strong{Multi-treatment} (\code{treatments} is a character vector of length >= 2):
-a split-plot design where whole plots are treatment strips and sub-plots
-are varieties, nested within replicate blocks. The genetic structure
-operates over all Treatment x Site (\code{TSite}) combinations.
-
-\strong{Genetic simulation} — three modes controlled by the \code{G} argument:
-
-\emph{FA mode} (\code{G = NULL}, default): variety BLUPs are drawn from a
-factor-analytic covariance model
-\deqn{
-  \mathbf{u}_v = \boldsymbol{\Lambda}\mathbf{f}_v + \boldsymbol{\delta}_v,
-  \quad \mathbf{f}_v \sim \mathcal{N}(\mathbf{0}, \mathbf{I}_{k}),
-  \quad \boldsymbol{\delta}_v \sim \mathcal{N}(\mathbf{0}, \boldsymbol{\Psi})
+\strong{Genetic covariance} is controlled by the \code{G} argument:
+\itemize{
+\item \code{G = "auto"} (default): a random symmetric positive-definite
+covariance matrix is generated with pairwise correlations approximately
+in the range (\code{g_cor_min}, \code{g_cor_max}), set via
+\code{sim.options}. Scales to \code{sigma_genetic}.
+\item \code{G = matrix}: a user-supplied J x J symmetric positive-definite
+covariance matrix used directly. J = \code{nsite} for MET-only, or
+J = \code{nsite * length(treatments)} for multi-treatment designs.
+Group order must match \code{outer(treatments, sites)}.
 }
-where \eqn{k} = \code{n_fa} and
-\eqn{\mathbf{G} = \boldsymbol{\Lambda}\boldsymbol{\Lambda}^\top + \boldsymbol{\Psi}}.
-This gives fitted FA models a structural advantage in the
-\code{accuracy()} comparison story.
+Variety BLUPs are drawn from \eqn{\mathcal{N}(\mathbf{0}, \mathbf{G})}
+via Cholesky decomposition regardless of which mode is used.
 
-\emph{Auto mode} (\code{G = "auto"}): a random SPD covariance matrix is
-generated directly from correlation bounds (\code{g_cor_min}, \code{g_cor_max} in
-\code{sim.options}), without requiring thought about FA factor counts.
-Recommended for small numbers of sites (e.g. 3-6) where FA structure
-would be degenerate.
-
-\emph{User mode} (\code{G = matrix}): a user-supplied \eqn{J \times J} symmetric
-positive-definite covariance matrix is used directly.
-
-\strong{Incidence structure} (\code{incidence} argument) controls which varieties are
-observed at which sites. All \code{nvar} varieties have a true genetic value at
-every site but only observed varieties contribute plots. Unbalanced designs
-produce meaningful per-variety variation in prediction error variance —
-varieties present in fewer sites are predicted less accurately.
+\strong{Incidence structure} (\code{incidence} argument) controls which varieties
+are observed at which sites. All \code{nvar} varieties have a true genetic
+value at every site but only observed varieties contribute plots.
 }
 \examples{
 \dontrun{
-# MET-only balanced: 30 varieties, 8 sites, FA(2) genetic structure
-out <- simTrialData(nvar = 30, nsite = 8, n_fa = 2, seed = 42)
+# Simplest call — just run it
+out <- simTrialData(verbose = FALSE)
+head(out$data)
+
+# MET-only: 30 varieties, 8 sites
+out <- simTrialData(nvar = 30, nsite = 8, seed = 42)
 round(cov2cor(out$params$G), 2)   # true genetic correlations
 
 # Unbalanced: produces spread in per-variety accuracy
-out2 <- simTrialData(nvar = 30, nsite = 8, n_fa = 2,
+out2 <- simTrialData(nvar = 30, nsite = 8,
                      incidence = "unbalanced", seed = 42)
-table(colSums(out2$params$incidence))   # varieties per site
+table(rowSums(out2$params$incidence))   # sites per variety
 
-# User-supplied incidence matrix
-inc <- matrix(1L, nrow = 20, ncol = 6)
-inc[1:5, 1:3] <- 0L   # first 5 varieties absent from first 3 sites
-out3 <- simTrialData(nvar = 20, nsite = 6, n_fa = 2,
-                     incidence = inc, seed = 1)
-
-# Auto-generated G: suitable for small nsite; no FA factor count needed
-out4 <- simTrialData(nvar = 20, nsite = 4, G = "auto", seed = 99,
+# Custom correlation range
+out3 <- simTrialData(nvar = 20, nsite = 6, seed = 99,
                      sim.options = list(g_cor_min = 0.3, g_cor_max = 0.8))
-round(cov2cor(out4$params$G), 2)   # correlations in [0.3, 0.8]
+round(cov2cor(out3$params$G), 2)
 
 # User-supplied G matrix
 G_true <- matrix(c(40000, 15000, 15000, 40000), 2, 2)
-out5 <- simTrialData(nvar = 20, nsite = 2, G = G_true, seed = 10)
+out4 <- simTrialData(nvar = 20, nsite = 2, G = G_true, seed = 10)
 
-# Multi-treatment with custom treat_effects
+# User-supplied incidence matrix
+inc <- matrix(1L, nrow = 20, ncol = 6)
+inc[1:5, 1:3] <- 0L
+out5 <- simTrialData(nvar = 20, nsite = 6, incidence = inc, seed = 1)
+
+# Multi-treatment split-plot
 out6 <- simTrialData(nvar = 20, nsite = 6,
                      treatments  = c("T0", "T1", "T2"),
-                     n_fa        = 2,
                      incidence   = "unbalanced",
                      seed        = 1,
                      sim.options = list(treat_effects = c(0, 150, 350)))
