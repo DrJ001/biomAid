@@ -726,3 +726,163 @@ test_that("invalid min_vars_pct errors informatively", {
     "min_vars_pct"
   )
 })
+
+
+# ---------------------------------------------------------------------------
+# AR1 spatial structure
+# ---------------------------------------------------------------------------
+
+test_that("no spatial: params$ar1 absent, data unchanged in structure", {
+  out <- simTrialData(nvar = 6L, nsite = 3L, seed = 1L, verbose = FALSE)
+  expect_false("ar1" %in% names(out$params))
+})
+
+test_that("fixed rho: params$ar1 returned with correct structure", {
+  out <- simTrialData(nvar = 6L, nsite = 3L, seed = 1L, verbose = FALSE,
+                      sim.options = list(ar1_rho_row = 0.5, ar1_rho_col = 0.3))
+  expect_true("ar1" %in% names(out$params))
+  ar1 <- out$params$ar1
+  expect_named(ar1, c("rho_row", "rho_col", "sigma_spatial"))
+})
+
+test_that("fixed rho: all sites get the same rho_row and rho_col", {
+  out <- simTrialData(nvar = 6L, nsite = 4L, seed = 2L, verbose = FALSE,
+                      sim.options = list(ar1_rho_row = 0.7, ar1_rho_col = 0.2))
+  expect_true(all(out$params$ar1$rho_row == 0.7))
+  expect_true(all(out$params$ar1$rho_col == 0.2))
+})
+
+test_that("fixed rho: rho vectors are named with site labels", {
+  out <- simTrialData(nvar = 6L, nsite = 3L, seed = 1L, verbose = FALSE,
+                      sim.options = list(ar1_rho_row = 0.4, ar1_rho_col = 0.4))
+  sites <- levels(out$data$Site)
+  expect_equal(names(out$params$ar1$rho_row), sites)
+  expect_equal(names(out$params$ar1$rho_col), sites)
+})
+
+test_that("range rho: per-site draws lie within supplied range", {
+  lo <- 0.2; hi <- 0.8
+  out <- simTrialData(nvar = 6L, nsite = 6L, seed = 5L, verbose = FALSE,
+                      sim.options = list(ar1_rho_row = c(lo, hi),
+                                         ar1_rho_col = c(0.1, 0.5)))
+  expect_true(all(out$params$ar1$rho_row >= lo & out$params$ar1$rho_row <= hi))
+  expect_true(all(out$params$ar1$rho_col >= 0.1 & out$params$ar1$rho_col <= 0.5))
+})
+
+test_that("range rho: per-site values are not all identical (probabilistic)", {
+  out <- simTrialData(nvar = 6L, nsite = 10L, seed = 7L, verbose = FALSE,
+                      sim.options = list(ar1_rho_row = c(0.1, 0.9)))
+  expect_gt(var(out$params$ar1$rho_row), 0)
+})
+
+test_that("only rho_row supplied: spatial active, rho_col defaults to 0", {
+  out <- simTrialData(nvar = 6L, nsite = 3L, seed = 1L, verbose = FALSE,
+                      sim.options = list(ar1_rho_row = 0.6))
+  expect_true("ar1" %in% names(out$params))
+  expect_true(all(out$params$ar1$rho_col == 0))
+})
+
+test_that("only rho_col supplied: spatial active, rho_row defaults to 0", {
+  out <- simTrialData(nvar = 6L, nsite = 3L, seed = 1L, verbose = FALSE,
+                      sim.options = list(ar1_rho_col = 0.5))
+  expect_true("ar1" %in% names(out$params))
+  expect_true(all(out$params$ar1$rho_row == 0))
+})
+
+test_that("sigma_spatial defaults to error_sd * 0.5 when not supplied", {
+  out <- simTrialData(nvar = 6L, nsite = 3L, seed = 1L, verbose = FALSE,
+                      sim.options = list(ar1_rho_row = 0.5))
+  # default error_sd at site_mean=4500 is 350, so sigma_spatial = 175
+  expect_equal(out$params$ar1$sigma_spatial, 350 * 0.5)
+})
+
+test_that("explicit sigma_spatial is used as supplied", {
+  out <- simTrialData(nvar = 6L, nsite = 3L, seed = 1L, verbose = FALSE,
+                      sim.options = list(ar1_rho_row = 0.5, sigma_spatial = 80))
+  expect_equal(out$params$ar1$sigma_spatial, 80)
+})
+
+test_that("sigma_spatial auto-scales with site_mean", {
+  out <- simTrialData(nvar = 6L, nsite = 3L, seed = 1L, verbose = FALSE,
+                      sim.options = list(site_mean = 9000, ar1_rho_row = 0.5))
+  # error_sd scales to 350 * 2 = 700; sigma_spatial = 700 * 0.5 = 350
+  expect_equal(out$params$ar1$sigma_spatial, 350)
+})
+
+test_that("spatial + site_mean scaling: sigma_spatial explicit not scaled", {
+  out <- simTrialData(nvar = 6L, nsite = 3L, seed = 1L, verbose = FALSE,
+                      sim.options = list(site_mean = 9000, ar1_rho_row = 0.5,
+                                         sigma_spatial = 200))
+  expect_equal(out$params$ar1$sigma_spatial, 200)
+})
+
+test_that("spatial produces different yields than non-spatial with same seed", {
+  o_plain <- simTrialData(nvar = 6L, nsite = 3L, seed = 42L, verbose = FALSE)
+  o_spat  <- simTrialData(nvar = 6L, nsite = 3L, seed = 42L, verbose = FALSE,
+                           sim.options = list(ar1_rho_row = 0.8, ar1_rho_col = 0.8))
+  expect_false(isTRUE(all.equal(o_plain$data$yield, o_spat$data$yield)))
+})
+
+test_that("spatial works with multi-treatment design", {
+  out <- simTrialData(nvar = 6L, nsite = 3L,
+                      treatments  = c("T0", "T1"),
+                      seed        = 1L, verbose = FALSE,
+                      sim.options = list(ar1_rho_row = 0.5, ar1_rho_col = 0.3))
+  expect_true("ar1" %in% names(out$params))
+  expect_equal(length(out$params$ar1$rho_row), 3L)
+})
+
+test_that("spatial works with unbalanced incidence", {
+  out <- simTrialData(nvar = 15L, nsite = 4L,
+                      incidence   = "unbalanced",
+                      seed        = 10L, verbose = FALSE,
+                      sim.options = list(ar1_rho_row = c(0.2, 0.7),
+                                         ar1_rho_col = 0.4))
+  expect_true("ar1" %in% names(out$params))
+  expect_equal(length(out$params$ar1$rho_row), 4L)
+})
+
+test_that("validation: scalar rho out of range errors", {
+  expect_error(
+    simTrialData(nvar = 4L, nsite = 2L, verbose = FALSE,
+                 sim.options = list(ar1_rho_row = 1.0)),
+    "ar1_rho_row"
+  )
+  expect_error(
+    simTrialData(nvar = 4L, nsite = 2L, verbose = FALSE,
+                 sim.options = list(ar1_rho_col = -1.0)),
+    "ar1_rho_col"
+  )
+})
+
+test_that("validation: range rho with lo >= hi errors", {
+  expect_error(
+    simTrialData(nvar = 4L, nsite = 2L, verbose = FALSE,
+                 sim.options = list(ar1_rho_row = c(0.5, 0.5))),
+    "ar1_rho_row"
+  )
+})
+
+test_that("validation: rho of wrong length errors", {
+  expect_error(
+    simTrialData(nvar = 4L, nsite = 2L, verbose = FALSE,
+                 sim.options = list(ar1_rho_row = c(0.1, 0.5, 0.9))),
+    "ar1_rho_row"
+  )
+})
+
+test_that("validation: negative sigma_spatial errors", {
+  expect_error(
+    simTrialData(nvar = 4L, nsite = 2L, verbose = FALSE,
+                 sim.options = list(ar1_rho_row = 0.5, sigma_spatial = -10)),
+    "sigma_spatial"
+  )
+})
+
+test_that("validation: sigma_spatial without rho warns", {
+  expect_warning(
+    simTrialData(nvar = 4L, nsite = 2L, seed = 1L, verbose = FALSE,
+                 sim.options = list(sigma_spatial = 100)),
+    "ignored"
+  )
+})
