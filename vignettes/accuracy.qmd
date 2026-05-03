@@ -147,8 +147,9 @@ specific variance.
 
 We use `simTrialData()` to generate a MET with 50 varieties across 8
 environments, 2 replicates, and an `"unbalanced"` incidence structure. The
-data-generating model uses `n_fa = 2` latent factors so environments share
-genuine genetic covariance, and the incidence ensures that varieties appear
+auto-generated genetic covariance matrix `G` ensures environments share
+genuine genetic covariance (pairwise correlations in the default range
+[0.20, 0.90]), and the unbalanced incidence ensures that varieties appear
 in different subsets of environments — producing meaningful variety-to-variety
 variation in prediction error variance that makes the per-variety accuracy
 plots informative.
@@ -159,7 +160,6 @@ plots informative.
 out <- simTrialData(
   nvar      = 50L,
   nsite     = 8L,
-
   nrep      = 2L,
   incidence = "unbalanced",
   seed      = 11L,
