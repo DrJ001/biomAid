@@ -1,0 +1,533 @@
+---
+title: "Simulating Multi-Environment Plant Breeding Trials"
+subtitle: "`simTrialData()` and `plot_simTrialData()`"
+author: "Julian Taylor"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: false
+    smooth-scroll: true
+    embed-resources: true
+    theme: litera
+    css: custom.css
+    highlight-style: github
+    code-fold: false
+    fig-width: 9
+    fig-height: 5
+    fig-dpi: 150
+    html-math-method: katex
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| include: false
+library(biomAid)
+library(ggplot2)
+```
+
+---
+
+## Overview
+
+`simTrialData()` generates realistic multi-environment trial (MET) datasets
+for plant breeding research. It produces data whose true genetic covariance structure
+is known, making it ideal for demonstrating the other biomAid functions,
+exploring model behaviour, and designing simulation studies.
+
+Two trial structures are supported:
+
+| Structure | Description |
+|-----------|-------------|
+| **MET-only** (`treatments = NULL`) | Randomised complete block design (RCB). Varieties are the sole genetic treatment. One `yield` column is returned. |
+| **Split-plot MET** (`treatments = c(...)`) | Whole-plot treatment strips with variety sub-plots. Adds `Treatment` and `TSite` columns to the data. |
+
+The genetic structure can be controlled in two ways:
+
+| Mode | Argument | Description |
+|------|----------|-------------|
+| **Auto** | `G = "auto"` (default) | A random symmetric positive-definite (SPD) covariance matrix with pairwise genetic correlations in a user-specified range. |
+| **User-supplied** | `G = matrix` | A validated SPD matrix supplied by the analyst — useful when a known genetic structure is required. |
+
+The incidence structure (which varieties appear at which sites) can be
+**balanced** (every variety at every site), **unbalanced** (auto-generated
+two-tier structure with core and regular varieties), or supplied by the user
+as a binary matrix.
+
+`plot_simTrialData()` provides four complementary visualisations that together
+describe the simulated data structure from every angle: field layout, variety
+connectivity, genetic correlations, and the true underlying genetic values.
+
+---
+
+## Mathematical Framework
+
+### Trial structure
+
+Consider a MET with $n$ varieties, $s$ environments (sites), $r$ replicates,
+and $N = \sum_{j=1}^s n_j r$ total plots, where $n_j \le n$ is the number of
+varieties observed at site $j$. Stack all observations in site order into
+
+$$
+\mathbf{y} = \begin{pmatrix}\mathbf{y}_1 \\ \vdots \\ \mathbf{y}_s\end{pmatrix}
+  \in \mathbb{R}^{N}.
+$$
+
+The full cross-environment linear mixed model is
+
+$$
+\mathbf{y}
+  = \mathbf{X}\boldsymbol{\mu}
+  + \mathbf{Z}^{\mathrm{var}}\mathbf{u}
+  + \mathbf{Z}^{\mathrm{rep}}\boldsymbol{\rho}
+  + \mathbf{Z}^{\mathrm{row}}\boldsymbol{\phi}
+  + \mathbf{Z}^{\mathrm{col}}\boldsymbol{\xi}
+  + \boldsymbol{\varepsilon},
+$$
+
+where:
+
+- $\mathbf{X} \in \{0,1\}^{N \times s}$ is the site fixed-effect incidence
+  matrix and $\boldsymbol{\mu} = (\mu_1,\ldots,\mu_s)^\top$ the vector of
+  site means, drawn independently as
+  $\mu_j \stackrel{\mathrm{ind}}{\sim} \mathcal{N}(\mu_0,\, \sigma^2_{\mathrm{site}})$;
+- $\mathbf{u} = (\mathbf{u}_1^\top,\ldots,\mathbf{u}_s^\top)^\top
+  \in \mathbb{R}^{n_{\bullet}}$, $n_{\bullet} = \sum_j n_j$, stacks the
+  true genetic values for the observed varieties at each site;
+- $\boldsymbol{\rho}$, $\boldsymbol{\phi}$, $\boldsymbol{\xi}$ stack the
+  replicate, row, and column random effects across all sites;
+- $\boldsymbol{\varepsilon} \in \mathbb{R}^N$ is the plot-level residual.
+
+All random terms are mutually independent. The nuisance terms are homogeneous
+within each site, so their variance matrices take a natural direct-sum form
+across environments:
+
+$$
+\operatorname{Var}(\boldsymbol{\rho})
+  = \oplus_{j=1}^{s} \sigma^2_{j:\mathrm{rep}}\,\mathbf{I}_{r_j},
+\qquad
+\operatorname{Var}(\boldsymbol{\phi})
+  = \oplus_{j=1}^{s} \sigma^2_{j:\mathrm{row}}\,\mathbf{I}_{R_j},
+\qquad
+\operatorname{Var}(\boldsymbol{\xi})
+  = \oplus_{j=1}^{s} \sigma^2_{j:\mathrm{col}}\,\mathbf{I}_{C_j},
+\qquad
+\operatorname{Var}(\boldsymbol{\varepsilon})
+  = \sigma^2_{\mathrm{error}}\,\mathbf{I}_N,
+$$
+
+where $R_j$ and $C_j$ are the numbers of field rows and columns at site $j$
+(see [Layout](#layout)).
+
+#### Genetic variance and the G-matrix
+
+The genetic term $\mathbf{u}$ is one of the key vectors of the simulation. Let
+$\mathbf{U} \in \mathbb{R}^{n \times J}$ be the complete matrix of true
+genetic values for all $n$ varieties across all $J$ groups, where $J = s$
+for MET-only designs and $J = s \times t$ for multi-treatment designs with
+$t$ treatments. Because varieties are genetically independent realisations
+from the same $J$-variate distribution,
+
+$$
+\operatorname{vec}(\mathbf{U})
+  \sim \mathcal{N}\!\left(\mathbf{0},\;\mathbf{G} \otimes \mathbf{I}_n\right),
+$$
+
+where $\mathbf{G}$ is a $J \times J$ symmetric positive-definite genetic
+covariance matrix. The Kronecker structure encodes two things simultaneously:
+the $\mathbf{I}_n$ factor asserts that varieties are genetically independent
+of one another, while $\mathbf{G}$ governs how each variety's genetic value
+co-varies **across** environments. Specifically, $G_{jj}$ is the genetic
+variance at environment $j$ and $G_{jk}/\sqrt{G_{jj}G_{kk}}$ is the genetic
+correlation between environments $j$ and $k$.
+
+For balanced designs ($n_j = n$ for all $j$), $\mathbf{u} = \operatorname{vec}(\mathbf{U})$
+exactly, and $\operatorname{Var}(\mathbf{u}) = \mathbf{G} \otimes \mathbf{I}_n$.
+For unbalanced designs, $\mathbf{u}_j = \mathbf{A}_j\,\mathbf{U}_{:j}$, where
+$\mathbf{A}_j \in \{0,1\}^{n_j \times n}$ is the variety selection matrix
+derived from column $j$ of the binary incidence matrix $\mathbf{I}$
+(see [Incidence structure](#incidence-structure)).
+
+$\mathbf{G}$ is an important component of the simulation and its construction is
+described next in the [Genetic covariance structure](#genetic-covariance-structure)
+section and it is returned directly as `params$G`.
+
+Default variance parameters are $\sigma_{\mathrm{rep}} = 150$,
+$\sigma_{\mathrm{row}} = 80$, $\sigma_{\mathrm{col}} = 60$, and
+$\sigma_{\mathrm{error}} = 350$.
+
+---
+
+### Genetic covariance structure
+
+The genetic values across all $s$ sites (or $s \times t$ Treatment $\times$
+Site groups for split-plot designs) are stacked into the $n \times J$ matrix
+$\mathbf{U}$, where $J = s$ for MET-only and $J = s \times t$ for
+multi-treatment designs. The rows of $\mathbf{U}$ are drawn from a
+multivariate normal distribution via the Cholesky decomposition of the
+$J \times J$ genetic covariance matrix $\mathbf{G}$:
+
+$$
+\mathbf{U} = \mathbf{Z} \mathbf{L},
+\quad
+\mathbf{Z}_{ij} \stackrel{\text{iid}}{\sim} \mathcal{N}(0, 1),
+\quad
+\mathbf{L}^\top \mathbf{L} = \mathbf{G},
+$$
+
+where $\mathbf{L}$ is the upper Cholesky factor. Each row
+$\mathbf{u}_i = (u_{i1}, \ldots, u_{iJ})^\top$ of $\mathbf{U}$ gives the
+true genetic values for variety $i$ across all $J$ groups, satisfying
+
+$$
+\mathbf{U} \sim \mathcal{MN}_{n \times J}(\mathbf{0},\, \mathbf{I}_n,\, \mathbf{G}),
+$$
+
+i.e. varieties are independent realisations from $\mathcal{N}(\mathbf{0}, \mathbf{G})$.
+
+#### Auto-generated $\mathbf{G}$
+
+When `G = "auto"` (the default), a random SPD correlation matrix
+$\mathbf{R}$ is constructed such that the off-diagonal elements lie
+approximately in the user-specified interval $[r_\text{min},\, r_\text{max}]$
+(controlled by `sim.options$g_cor_min` and `sim.options$g_cor_max`, defaulting
+to 0.20 and 0.90). This is achieved by:
+
+1. Generating a random factor loading matrix $\boldsymbol{\Lambda} \in
+   \mathbb{R}^{J \times k}$ with $k = \lfloor J/3 \rfloor$ latent factors
+   and sign-flips on factors 2 through $k$ to induce realistic GEI.
+2. Computing the implied correlation matrix
+   $\mathbf{R}^\text{raw} = \operatorname{Cov2Cor}(\boldsymbol{\Lambda}
+   \boldsymbol{\Lambda}^\top + \psi \mathbf{I})$.
+3. Linearly rescaling all off-diagonal elements of $\mathbf{R}^\text{raw}$
+   from their observed range onto $[r_\text{min},\, r_\text{max}]$.
+4. Scaling the resulting correlation matrix by
+   $\sigma^2_\text{genetic}$ to produce $\mathbf{G} = \sigma^2_\text{genetic}
+   \mathbf{R}$.
+
+The final $\mathbf{G}$ has unit genetic SD of approximately
+$\sigma_\text{genetic}$ in every environment (default 250) and all pairwise
+genetic correlations in $[r_\text{min},\, r_\text{max}]$.
+
+---
+
+### Incidence structure
+
+Let $\mathbf{I} \in \{0,1\}^{n \times s}$ be the incidence matrix, where
+$I_{ij} = 1$ means variety $i$ is observed at site $j$. Under the
+**unbalanced** auto-generation algorithm, varieties are partitioned into:
+
+- **Core** varieties (proportion `core_pct`): present in at least
+  `core_min_sites_pct` $\times s$ sites.
+- **Regular** varieties (remaining): present in a random number of sites
+  drawn uniformly from
+  $[\,\lceil r_\text{min} \cdot s \rceil,\; \lfloor r_\text{max} \cdot s \rfloor\,]$.
+
+Two hard constraints are enforced: every variety must appear in at least one
+site, and every site must contain at least
+$\max(\lceil n \cdot \texttt{min\_vars\_pct} \rceil,\; 2)$ varieties.
+
+All $n$ varieties have **true** genetic values at every site regardless of
+incidence — an unobserved variety simply contributes no plots to that site's
+trial. This is the genotyping model: every variety is genomically characterised
+but only a subset are phenotyped in each environment.
+
+---
+
+### Layout
+
+Within each site, the $n_j = \sum_i I_{ij}$ observed varieties are assigned
+to a rectangular field grid of dimension $r_j \times c_j$ per replicate,
+where $r_j$ and $c_j$ are chosen to minimise the difference between rows and
+columns (nearest-to-square factorisation of $n_j$). Row and column dimensions
+therefore vary across sites in unbalanced designs.
+
+---
+
+## Example 1 — Balanced MET, yield surface
+
+A simple balanced MET-only trial: 20 varieties, six sites, two replicates,
+auto-generated $\mathbf{G}$.
+
+```{r ex1_sim}
+#| cache: true
+out1 <- simTrialData(
+  nvar      = 20L,
+  nsite     = 6L,
+  nrep      = 2L,
+  seed      = 101L,
+  verbose   = FALSE
+)
+```
+
+The `params` list records the true simulation parameters. The genetic
+correlations between sites can be inspected directly:
+
+```{r ex1_params}
+round(cov2cor(out1$params$G), 2)
+```
+
+The `"trial"` plot type renders the Row $\times$ Column field grid for every
+site, faceted in a 2 $\times$ 3 arrangement. Setting `fill = "yield"` maps
+the continuous response onto a viridis colour scale — this is the raw yield
+surface as it would appear in a field book, before any statistical adjustment.
+
+```{r ex1_trial}
+#| fig-height: 6
+plot_simTrialData(
+  out1,
+  type = "trial",
+  fill = "yield",
+  ncol = 3L
+)
+```
+
+The spatial gradient across rows and columns within each site is visible as a
+systematic drift in colour intensity — a consequence of the simulated row and
+column effects. Comparing the colour ranges between panels also reveals the
+site mean differences generated by $\sigma_\text{site}$.
+
+---
+
+## Example 2 — Split-plot MET, treatment and genetic structure
+
+Adding three treatment levels converts the trial to a split-plot design. The
+field layout now shows treatment strips (whole plots) within each replicate,
+with varieties randomised within strips.
+
+```{r ex2_sim}
+#| cache: true
+out2 <- simTrialData(
+  nvar        = 20L,
+  nsite       = 6L,
+  treatments  = c("T0", "T1", "T2"),
+  nrep        = 2L,
+  seed        = 202L,
+  verbose     = FALSE,
+  sim.options = list(treat_effects = c(0, 200, 400))
+)
+```
+
+### Genetic correlations across Treatment $\times$ Site groups
+
+With three treatments and six sites the genetic covariance matrix
+$\mathbf{G}$ is now $18 \times 18$. The `"correlation"` plot shows the full
+genetic correlation matrix across all 18 Treatment $\times$ Site groups. A
+block structure is expected: correlations within the same treatment tend to
+be stronger than those across treatments.
+
+```{r ex2_corr}
+#| fig-height: 7
+#| fig-width: 7
+plot_simTrialData(
+  out2,
+  type = "correlation"
+)
+```
+
+### Field layout coloured by treatment
+
+Setting `fill = "Treatment"` colours each plot tile by its assigned
+treatment, making the strip-plot structure immediately visible within every
+replicate. Adding `label = "Variety"` overlays abbreviated variety names so
+the within-strip randomisation can be verified.
+
+```{r ex2_trial}
+#| fig-height: 7
+plot_simTrialData(
+  out2,
+  type  = "trial",
+  fill  = "Treatment",
+  label = "Variety",
+  ncol  = 3L
+)
+```
+
+Each site panel shows two vertical slabs (one per replicate), each divided
+into three treatment columns. Variety labels within each strip confirm the
+independent randomisation. The `T0 / T1 / T2` colour coding also makes it
+easy to check that the treatment assignment is consistent across replicates.
+
+---
+
+## Example 3 — Unbalanced MET, incidence structure
+
+Increasing the number of varieties and switching to `incidence = "unbalanced"`
+generates a realistic two-tier connectivity pattern, as is common in national
+variety trials where a core set of checks is tested everywhere and candidate
+varieties appear in a subset of environments.
+
+```{r ex3_sim}
+#| cache: true
+out3 <- simTrialData(
+  nvar      = 40L,
+  nsite     = 6L,
+  nrep      = 2L,
+  incidence = "unbalanced",
+  seed      = 303L,
+  verbose   = FALSE
+)
+```
+
+### Connectivity summary
+
+```{r ex3_summary}
+inc <- out3$params$incidence
+cat(sprintf("Varieties per site : mean = %.1f,  range [%d, %d]\n",
+            mean(colSums(inc)), min(colSums(inc)), max(colSums(inc))))
+cat(sprintf("Sites per variety  : mean = %.1f,  range [%d, %d]\n",
+            mean(rowSums(inc)), min(rowSums(inc)), max(rowSums(inc))))
+```
+
+### Incidence plot
+
+The `"incidence"` plot type renders a Variety $\times$ Site tile grid.
+Blue tiles indicate observed combinations; grey tiles are absent. Varieties
+are sorted top-to-bottom by decreasing site count (most-connected at the
+top). Each variety label is annotated with its site count `[n]`; each site
+column header shows its variety count `[n]`.
+
+```{r ex3_incidence}
+#| fig-height: 8
+#| fig-width: 7
+plot_simTrialData(
+  out3,
+  type = "incidence"
+)
+```
+
+The two-tier structure is clear: a band of blue-heavy rows at the top
+corresponds to the core varieties (present at most sites), with a gradient
+of decreasing connectivity towards the bottom. Sites with fewer varieties
+often reflect a constraint on trial capacity. This plot is particularly
+useful before fitting models — a site with very few varieties or a variety
+appearing at only one site may need special treatment in the random structure.
+
+---
+
+## Example 4 — Unbalanced MET, user-supplied incidence, BLUP heatmap
+
+In some settings the analyst needs full control over which varieties appear at
+which sites — for example, when mimicking a real trial network or stress-testing
+a specific connectivity pattern. A binary matrix can be passed directly to the
+`incidence` argument.
+
+Here we construct a structured incidence pattern: all 40 varieties appear at
+three "hub" sites (`Env01`–`Env03`), while `Env04`–`Env06` each receive a
+different 50% random subset of the remaining varieties plus the first 10
+varieties as shared checks.
+
+```{r ex4_inc}
+set.seed(404L)
+nvar  <- 40L
+nsite <- 6L
+inc4  <- matrix(0L, nrow = nvar, ncol = nsite)
+
+# Hub sites: all varieties present
+inc4[, 1:3] <- 1L
+
+# Satellite sites: first 10 varieties (checks) + 50% random sample of rest
+checks <- 1:10
+rest   <- 11:nvar
+for (s in 4:6) {
+  chosen       <- sample(rest, size = ceiling(length(rest) * 0.50))
+  inc4[checks, s] <- 1L
+  inc4[chosen,  s] <- 1L
+}
+```
+
+```{r ex4_sim}
+#| cache: true
+out4 <- simTrialData(
+  nvar      = nvar,
+  nsite     = nsite,
+  nrep      = 2L,
+  incidence = inc4,
+  seed      = 404L,
+  verbose   = FALSE
+)
+```
+
+### BLUP heatmap — the true GEI surface
+
+The `"blup"` plot type maps the true genetic BLUPs ($\mathbf{U}$) onto a
+Variety $\times$ Site heatmap using a diverging RdBu colour scale centred at
+zero. Varieties are sorted by decreasing mean BLUP across all sites (best
+overall performer at the top). This visualisation reveals the
+genotype-by-environment interaction (GEI) structure directly from the
+data-generating model and can be used to validate fitted models.
+
+```{r ex4_blup}
+#| fig-height: 8
+#| fig-width: 7
+plot_simTrialData(
+  out4,
+  type = "blup"
+)
+```
+
+Strong GEI is evident where colours change markedly across a variety's row
+— a variety that is dark blue (high BLUP) at some sites and red (low BLUP)
+at others is experiencing pronounced rank changes. Varieties that maintain a
+consistent colour across all six sites are stably ranked across environments,
+a pattern that an FA(1) model would capture with a large first-factor loading.
+
+Note that the three hub sites (`Env01`–`Env03`) provide genetic values for
+all 40 varieties, while the satellite sites (`Env04`–`Env06`) reflect the
+user-supplied incidence matrix, yet **all** 40 varieties have true BLUPs at
+every site because the data-generating model assigns genetic values globally.
+Only the phenotypic observations are restricted by incidence.
+
+---
+
+## Summary
+
+### `simTrialData()` key arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `nvar` | `20` | Number of varieties |
+| `nsite` | `10` | Number of environments |
+| `treatments` | `NULL` | Character vector of treatment labels, or `NULL` for MET-only |
+| `nrep` | `2` | Replicates per environment |
+| `G` | `"auto"` | `"auto"` for random SPD matrix, or user-supplied $J \times J$ SPD matrix |
+| `incidence` | `"balanced"` | `"balanced"`, `"unbalanced"`, or user-supplied binary matrix |
+| `seed` | `NULL` | Integer seed for reproducibility |
+| `verbose` | `TRUE` | Print design summary and suggested ASReml-R model |
+| `sim.options` | `list()` | Fine-grained control: `site_mean`, `site_sd`, `sigma_genetic`, `rep_sd`, `row_sd`, `col_sd`, `error_sd`, `g_cor_min`, `g_cor_max`, `core_pct`, and more |
+
+### `simTrialData()` return value
+
+| Element | Description |
+|---------|-------------|
+| `$data` | Plot-level data frame (Site, Variety, Rep, Row, Column, yield; plus Treatment, TSite for split-plot) |
+| `$params$G` | True $J \times J$ genetic covariance matrix |
+| `$params$incidence` | $n \times s$ integer incidence matrix |
+| `$params$g_arr` | $n \times J$ matrix of true genetic BLUPs (all varieties, all groups) |
+| `$params$site_means` | True site mean yields |
+| `$params$treat_effects` | True treatment fixed effects (split-plot only) |
+
+### `plot_simTrialData()` types
+
+| Type | Key arguments | Best for |
+|------|--------------|---------|
+| `"trial"` | `fill`, `label`, `sites`, `ncol` | Field layout, yield surface, block/treatment structure |
+| `"incidence"` | `sort` | Variety connectivity in unbalanced designs |
+| `"correlation"` | — | True genetic correlation between environments |
+| `"blup"` | `sites`, `sort` | True GEI surface; validating fitted FA models |
+
+All types support `return_data = TRUE` to extract the underlying data frame
+and further customise the plot with standard ggplot2 additions.
+
+---
+
+## References
+
+Smith, A., Cullis, B. & Thompson, R. (2001). Analysing variety by environment
+data using multiplicative mixed models and adjustments for spatial field
+trend. *Biometrics*, **57**(4), 1138–1147.
+<https://doi.org/10.1111/j.0006-341X.2001.01138.x>

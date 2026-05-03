@@ -19,6 +19,7 @@ with **ASReml-R V4** mixed models. Watch this space, there are a lot more functi
 | [Extracting and Padding Field Trial Layouts](https://DrJ001.github.io/biomAid/padTrial.html) | Step-by-step guide to guard-row removal, missing-plot padding, and Before/After visualisation with `padTrial()` and `plot_padTrial()` |
 | [Multiple Comparison Criteria](https://DrJ001.github.io/biomAid/compare.html) | HSD, LSD, and Bonferroni criteria, by-group comparisons, and all three plot types for `compare()` and `plot_compare()` |
 | [BLUP Accuracy in Multi-Environment Trials](https://DrJ001.github.io/biomAid/accuracy.html) | Mrode accuracy and Cullis H², supported random structures, and all six plot types for `accuracy()` and `plot_accuracy()` |
+| [Simulating Multi-Environment Trials](https://DrJ001.github.io/biomAid/simTrialData.html) | Mathematical framework, balanced/unbalanced/split-plot designs, and all four plot types for `simTrialData()` and `plot_simTrialData()` |
 
 ## Function reference
 
@@ -367,8 +368,48 @@ Key `sim.options` elements (all have built-in defaults):
 | `outfile` | Optional CSV output path | `NULL` |
 
 Returns a list with `$data` (the field layout data frame) and `$params`
-(the true `G`, `site_means`, `incidence`, and for multi-treatment:
-`treat_effects`, `g_arr`).
+(the true `G`, `site_means`, `incidence`, `g_arr` — always returned — and
+for multi-treatment: `treat_effects`).
+
+---
+
+### `plot_simTrialData()` — Visualise simulated trial data
+
+Four complementary plot types for exploring the structure of data generated
+by `simTrialData()`. Covers the field layout, variety connectivity, true
+genetic correlation structure, and the underlying GEI surface — together
+providing a complete view of what was simulated before any model is fitted.
+
+```r
+plot_simTrialData(res,
+                  type        = c("trial", "incidence", "correlation", "blup"),
+                  fill        = NULL,
+                  label       = NULL,
+                  sites       = NULL,
+                  sort        = TRUE,
+                  ncol        = NULL,
+                  theme       = ggplot2::theme_bw(),
+                  return_data = FALSE,
+                  ...)
+```
+
+| Type | Description |
+|------|-------------|
+| `"trial"` | Tiled Row × Column field layout, one panel per site. `fill` maps any data column onto tile colour (`NULL` → `Rep`; numeric → viridis; factor → discrete palette). `label` overlays text from any column. |
+| `"incidence"` | Variety × Site presence/absence grid. Each variety label shows its site count `[n]`; each site header shows its variety count `[n]`. `sort = TRUE` orders varieties from most- to least-connected (top to bottom). |
+| `"correlation"` | Full heatmap of `cov2cor(params$G)`. Diverging RdBu palette centred at zero; correlation values printed when the matrix is ≤ 15 × 15. |
+| `"blup"` | Heatmap of `params$g_arr` (Variety × Group). Diverging RdBu palette centred at zero reveals the true GEI structure. `sort = TRUE` orders varieties by decreasing mean BLUP. |
+
+| Argument | Description |
+|----------|-------------|
+| `res` | List returned by `simTrialData()` |
+| `fill` | `"trial"` only. Column name for tile fill, or `NULL` (default → `Rep`) |
+| `label` | `"trial"` only. Column name to overlay as text. `NULL` = no labels |
+| `sites` | `"trial"` and `"blup"` only. Character vector of sites to include. `NULL` = all |
+| `sort` | Reorder varieties in `"incidence"` (by site count) and `"blup"` (by mean BLUP). Default `TRUE` |
+| `ncol` | `"trial"` only. Number of facet columns. `NULL` = ggplot2 default |
+| `theme` | A ggplot2 theme object. Default `theme_bw()` |
+| `return_data` | `TRUE` returns a list with `$plot` and `$data`. Default `FALSE` |
 
 ---
 
