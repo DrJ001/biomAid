@@ -53,7 +53,7 @@ pre.sourceCode {
 }
 
 .katex {
-  font-size: 1.08em;
+  font-size: 1.08em !important;
 }
 
 /* --- Tables ----------------------------------------------- */

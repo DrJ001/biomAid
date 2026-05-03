@@ -367,10 +367,6 @@ Key `sim.options` elements (all have built-in defaults):
 | `variety_prefix` / `site_prefix` | Label prefixes | `"Var"` / `"Env"` |
 | `outfile` | Optional CSV output path | `NULL` |
 
-Returns a list with `$data` (the field layout data frame) and `$params`
-(the true `G`, `site_means`, `incidence`, `g_arr` — always returned — and
-for multi-treatment: `treat_effects`).
-
 ---
 
 ### `plot_simTrialData()` — Visualise simulated trial data
@@ -473,9 +469,6 @@ plot_accuracy(res,
 | `"dumbbell"` | Group-level + `res2` | Paired dots per environment; segment colour = improvement direction |
 | `"scatter"` | `by_variety` + `res2` | Per-variety model1 vs model2 accuracy scatter |
 | `"diff"` | Group-level + `res2` | Signed accuracy gain (model2 − model1) per environment |
-
-When `metric = c("accuracy", "gen.H2")` the plot is automatically faceted
-into two panels. All types support `return_data = TRUE`.
 
 ---
 

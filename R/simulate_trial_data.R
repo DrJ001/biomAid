@@ -67,20 +67,48 @@
 #' @param sim.options Named list of optional simulation controls. Unknown names
 #'   produce a warning. Recognised elements (with defaults) are:
 #'   \describe{
-#'     \item{\code{site_mean}}{Numeric. Grand mean yield. Default \code{4500}.}
-#'     \item{\code{site_sd}}{Numeric. SD of site mean yields. Default \code{600}.}
+#'     \item{\code{site_mean}}{Numeric. Grand mean yield. Default \code{4500}.
+#'       When changed, any of the six scale-dependent parameters below that are
+#'       \emph{not} explicitly supplied are automatically scaled proportionally
+#'       to \code{site_mean / 4500}, preserving the default signal-to-noise
+#'       ratios at any yield scale. Supply a parameter explicitly to override
+#'       auto-scaling for that parameter.}
+#'     \item{\code{site_sd}}{Numeric. SD of site mean yields.
+#'       Auto-scaled default: \code{site_mean * (600 / 4500)}.}
 #'     \item{\code{treat_effects}}{Numeric vector (length =
 #'       \code{length(treatments)}) of fixed treatment effects, or \code{NULL}
 #'       for auto-spacing from 0 to \code{site_mean * 0.10}.
 #'       Multi-treatment only.}
 #'     \item{\code{sigma_genetic}}{Numeric. Target mean genetic SD per group.
-#'       Default \code{250}.}
-#'     \item{\code{rep_sd}}{Numeric. SD of replicate effects. Default \code{150}.}
-#'     \item{\code{row_sd}}{Numeric. SD of row spatial effects. Default \code{80}.}
+#'       Auto-scaled default: \code{site_mean * (250 / 4500)}.}
+#'     \item{\code{rep_sd}}{Numeric. SD of replicate effects.
+#'       Auto-scaled default: \code{site_mean * (150 / 4500)}.}
+#'     \item{\code{row_sd}}{Numeric. SD of row spatial effects.
+#'       Auto-scaled default: \code{site_mean * (80 / 4500)}.}
 #'     \item{\code{col_sd}}{Numeric. SD of column spatial effects.
-#'       Default \code{60}.}
-#'     \item{\code{error_sd}}{Numeric. SD of plot-level residual.
-#'       Default \code{350}.}
+#'       Auto-scaled default: \code{site_mean * (60 / 4500)}.}
+#'     \item{\code{error_sd}}{Numeric. SD of the independent (nugget) plot
+#'       error. Auto-scaled default: \code{site_mean * (350 / 4500)}.}
+#'     \item{\code{ar1_rho_row}}{Controls the first-order autoregressive
+#'       (AR1) spatial correlation in the \strong{row} direction.
+#'       \code{NULL} (default) disables the spatial component entirely.
+#'       A scalar in \eqn{(-1, 1)} applies the same correlation at every
+#'       site. A length-2 vector \code{c(lo, hi)} draws an independent
+#'       per-site correlation uniformly from \code{[lo, hi]}, so each
+#'       site has its own spatial structure.}
+#'     \item{\code{ar1_rho_col}}{Controls AR1 correlation in the
+#'       \strong{column} direction. Same specification as
+#'       \code{ar1_rho_row}. Default \code{NULL}.}
+#'     \item{\code{sigma_spatial}}{Numeric. SD of the spatially correlated
+#'       error component. Active only when at least one of
+#'       \code{ar1_rho_row} or \code{ar1_rho_col} is non-\code{NULL}.
+#'       When not supplied, defaults to \code{error_sd * 0.5} (at the
+#'       current auto-scaled level). The covariance between plots at
+#'       row-distance \eqn{\Delta r} and column-distance \eqn{\Delta c}
+#'       within a site is
+#'       \eqn{\sigma^2_{\text{spatial}} \rho_r^{|\Delta r|} \rho_c^{|\Delta c|}},
+#'       and total plot-level variance is
+#'       \eqn{\sigma^2_{\text{spatial}} + \sigma^2_{\text{error}}}.}
 #'     \item{\code{sep}}{Character. Separator for \code{TSite} labels.
 #'       Default \code{"-"}.}
 #'     \item{\code{variety_prefix}}{Character. Prefix for variety labels.
@@ -177,16 +205,32 @@ simTrialData <- function(nvar        = 20L,
                          verbose     = TRUE,
                          sim.options = list()) {
 
+  # ---- Auto-scale defaults to the user's site_mean ------------------------
+  # If the user supplies site_mean but omits any of the six scale-dependent
+  # SD parameters, those parameters are scaled proportionally to preserve the
+  # default signal-to-noise ratios at any yield scale.  Explicitly supplied
+  # values always take precedence.
+  .user_site_mean <- if ("site_mean" %in% names(sim.options))
+                       sim.options$site_mean else 4500
+  .scale          <- .user_site_mean / 4500
+  .user_keys      <- names(sim.options)
+  # Return default * scale unless the user explicitly provided the key
+  .scl <- function(key, default) if (key %in% .user_keys) default else default * .scale
+
   # ---- Merge sim.options with defaults -------------------------------------
   .defaults <- list(
     site_mean           = 4500,
-    site_sd             = 600,
+    site_sd             = .scl("site_sd",       600),
     treat_effects       = NULL,
-    sigma_genetic       = 250,
-    rep_sd              = 150,
-    row_sd              = 80,
-    col_sd              = 60,
-    error_sd            = 350,
+    sigma_genetic       = .scl("sigma_genetic", 250),
+    rep_sd              = .scl("rep_sd",        150),
+    row_sd              = .scl("row_sd",         80),
+    col_sd              = .scl("col_sd",         60),
+    error_sd            = .scl("error_sd",      350),
+    # separable AR1 spatial controls
+    ar1_rho_row         = NULL,
+    ar1_rho_col         = NULL,
+    sigma_spatial       = NULL,   # resolved post-merge when spatial is active
     sep                 = "-",
     variety_prefix      = "Var",
     site_prefix         = "Env",
@@ -210,6 +254,12 @@ simTrialData <- function(nvar        = 20L,
   opts <- modifyList(.defaults,
                      sim.options[intersect(names(sim.options),
                                            names(.defaults))])
+
+  # Resolve sigma_spatial: default to error_sd * 0.5 when spatial is active
+  # and the user did not supply it explicitly.
+  spatial_active <- !is.null(opts$ar1_rho_row) || !is.null(opts$ar1_rho_col)
+  if (spatial_active && is.null(opts$sigma_spatial))
+    opts$sigma_spatial <- opts$error_sd * 0.5
 
   # ---- Validation ----------------------------------------------------------
   if (!is.null(seed)) set.seed(seed)
@@ -272,6 +322,36 @@ simTrialData <- function(nvar        = 20L,
     if (!is.numeric(opts$min_vars_pct) ||
         opts$min_vars_pct <= 0 || opts$min_vars_pct > 1)
       stop("sim.options$min_vars_pct must be a number in (0, 1].")
+  }
+
+  # Validate AR1 spatial parameters
+  .validate_rho <- function(rho, nm) {
+    if (is.null(rho)) return(invisible(NULL))
+    if (!is.numeric(rho))
+      stop(sprintf("sim.options$%s must be numeric or NULL.", nm))
+    if (length(rho) == 1L) {
+      if (rho <= -1 || rho >= 1)
+        stop(sprintf("sim.options$%s must be a scalar in (-1, 1).", nm))
+    } else if (length(rho) == 2L) {
+      if (any(rho <= -1) || any(rho >= 1))
+        stop(sprintf("sim.options$%s range values must both be in (-1, 1).", nm))
+      if (rho[1L] >= rho[2L])
+        stop(sprintf("sim.options$%s range must have [1] < [2].", nm))
+    } else {
+      stop(sprintf(
+        "sim.options$%s must be NULL, a scalar, or a 2-element range vector.",
+        nm))
+    }
+  }
+  .validate_rho(opts$ar1_rho_row, "ar1_rho_row")
+  .validate_rho(opts$ar1_rho_col, "ar1_rho_col")
+
+  if (spatial_active) {
+    if (!is.numeric(opts$sigma_spatial) || opts$sigma_spatial <= 0)
+      stop("sim.options$sigma_spatial must be a positive number.")
+  } else if (!is.null(opts$sigma_spatial)) {
+    warning("sim.options$sigma_spatial is ignored when both ar1_rho_row ",
+            "and ar1_rho_col are NULL.")
   }
 
   # ---- Labels --------------------------------------------------------------
@@ -414,6 +494,46 @@ simTrialData <- function(nvar        = 20L,
   # ---- Site means ----------------------------------------------------------
   site_means <- setNames(rnorm(nsite, opts$site_mean, opts$site_sd), sites)
 
+  # ---- AR1 spatial helpers -------------------------------------------------
+
+  # AR1 correlation matrix of order n with parameter rho
+  .ar1_mat <- function(n, rho) {
+    if (n == 1L || abs(rho) < 1e-10) return(diag(n))
+    rho ^ abs(outer(seq_len(n), seq_len(n), `-`))
+  }
+
+  # Draw a single rho value: fixed scalar or uniform draw from c(lo, hi)
+  .draw_rho <- function(spec) {
+    if (is.null(spec))         return(0.0)
+    if (length(spec) == 1L)    return(spec)
+    runif(1L, spec[1L], spec[2L])
+  }
+
+  # Simulate a separable AR1 spatial field over an n_row x n_col grid.
+  # Returns an n_row x n_col matrix; element [r, c] is the spatial error
+  # for the plot at field row r and column c.
+  # Uses the efficient Kronecker-Cholesky factorisation:
+  #   Var(vec(field)) = sigma_s^2 * H_col x H_row  (column-major ordering)
+  #   field = sigma_s * L_row %*% Z %*% t(L_col)
+  # where L_row, L_col are lower Cholesky factors of H_row, H_col.
+  .sim_ar1_field <- function(n_row, n_col, rho_r, rho_c, sigma_s) {
+    L_r <- t(chol(.ar1_mat(n_row, rho_r)))
+    L_c <- t(chol(.ar1_mat(n_col, rho_c)))
+    Z   <- matrix(rnorm(n_row * n_col), n_row, n_col)
+    sigma_s * (L_r %*% Z %*% t(L_c))
+  }
+
+  # Pre-draw per-site AR1 correlations (before the main loop so they are
+  # available for params$ar1 return and logged in the verbose output)
+  if (spatial_active) {
+    rho_row_by_site <- setNames(
+      vapply(seq_len(nsite), function(.) .draw_rho(opts$ar1_rho_row), numeric(1L)),
+      sites)
+    rho_col_by_site <- setNames(
+      vapply(seq_len(nsite), function(.) .draw_rho(opts$ar1_rho_col), numeric(1L)),
+      sites)
+  }
+
   # ---- Build plot-level observations ---------------------------------------
   plots <- vector("list", nvar * nsite * nrep * ntreat)
   idx   <- 1L
@@ -441,6 +561,11 @@ simTrialData <- function(nvar        = 20L,
     col_eff <- rnorm(ncol_e_s, 0, opts$col_sd)
     rep_eff <- rnorm(nrep,     0, opts$rep_sd)
 
+    if (spatial_active)
+      spat_mat <- .sim_ar1_field(nrow_e_s, ncol_e_s,
+                                 rho_row_by_site[s], rho_col_by_site[s],
+                                 opts$sigma_spatial)
+
     if (has_treatments) {
       for (r in seq_len(nrep)) {
         treat_order <- sample(ntreat)
@@ -465,6 +590,7 @@ simTrialData <- function(nvar        = 20L,
                    rep_eff[r]       +
                    row_eff[row]     +
                    col_eff[col]     +
+                   (if (spatial_active) spat_mat[row, col] else 0L) +
                    rnorm(1L, 0, opts$error_sd)
             plots[[idx]] <- data.frame(
               Site      = sites[s],
@@ -497,6 +623,7 @@ simTrialData <- function(nvar        = 20L,
                  rep_eff[r]    +
                  row_eff[row]  +
                  col_eff[col]  +
+                 (if (spatial_active) spat_mat[row, col] else 0L) +
                  rnorm(1L, 0, opts$error_sd)
           plots[[idx]] <- data.frame(
             Site    = sites[s],
@@ -548,6 +675,14 @@ simTrialData <- function(nvar        = 20L,
                    else "user-supplied matrix"
     k_sug       <- min(3L, max(2L, floor(ngroup / 3L)))
 
+    auto_scaled <- setdiff(c("site_sd", "sigma_genetic", "rep_sd",
+                              "row_sd",  "col_sd",        "error_sd"),
+                           .user_keys)
+    scale_label <- if (abs(.scale - 1) < 1e-9 || length(auto_scaled) == 0L)
+      "none"
+    else
+      sprintf("%.4fx  (%s)", .scale, paste(auto_scaled, collapse = ", "))
+
     cat("\n=== simTrialData summary ===\n")
     cat(sprintf("  Environments    : %d\n", nsite))
     if (has_treatments)
@@ -555,6 +690,22 @@ simTrialData <- function(nvar        = 20L,
                   ntreat, paste(treatments, collapse = ", ")))
     cat(sprintf("  Varieties (max) : %d\n", nvar))
     cat(sprintf("  Replicates      : %d\n", nrep))
+    cat(sprintf("  Auto-scaling    : %s\n", scale_label))
+    if (spatial_active) {
+      .fmt_rho <- function(spec, draws) {
+        if (is.null(spec))       "0 (none)"
+        else if (length(spec) == 1L) sprintf("%.3f (fixed)", spec)
+        else sprintf("[%.3f, %.3f] -> site range [%.3f, %.3f]",
+                     spec[1L], spec[2L], min(draws), max(draws))
+      }
+      cat(sprintf("  Spatial AR1     : rho_row = %s\n",
+                  .fmt_rho(opts$ar1_rho_row, rho_row_by_site)))
+      cat(sprintf("  Spatial AR1     : rho_col = %s\n",
+                  .fmt_rho(opts$ar1_rho_col, rho_col_by_site)))
+      cat(sprintf("  Spatial AR1     : sigma   = %.1f\n", opts$sigma_spatial))
+    } else {
+      cat(sprintf("  Spatial AR1     : inactive\n"))
+    }
     cat(sprintf("  G structure     : %s\n", G_label))
     cat(sprintf("  Groups          : %d  (%s)\n", ngroup,
                 if (has_treatments) "Treatment x Site" else "Site"))
@@ -593,9 +744,12 @@ simTrialData <- function(nvar        = 20L,
                  site_means = site_means,
                  incidence  = inc_mat,
                  g_arr      = U)
-  if (has_treatments) {
+  if (has_treatments)
     params$treat_effects <- treat_effects
-  }
+  if (spatial_active)
+    params$ar1 <- list(rho_row       = rho_row_by_site,
+                       rho_col       = rho_col_by_site,
+                       sigma_spatial = opts$sigma_spatial)
 
   list(data = dat, params = params)
 }
