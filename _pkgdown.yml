@@ -37,6 +37,8 @@ navbar:
           href: padTrial.html
         - text: "BLUP Accuracy in Multi-Environment Trials"
           href: accuracy.html
+        - text: "Simulating Multi-Environment Trials"
+          href: simTrialData.html
 
 reference:
   - title: "Pairwise Comparison Criteria"
@@ -94,10 +96,12 @@ reference:
 
   - title: "Field Trial Utilities"
     desc: >
-      Simulate balanced multi-environment trial data with a factor-analytic
-      genetic covariance structure, and extract or pad field trial layouts
-      from partially observed grids.
+      Simulate balanced or unbalanced multi-environment trial data with a
+      realistic genetic covariance structure, visualise the simulated design
+      and GEI surface, and extract or pad field trial layouts from partially
+      observed grids.
     contents:
       - simTrialData
+      - plot_simTrialData
       - padTrial
       - plot_padTrial

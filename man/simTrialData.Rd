@@ -121,8 +121,9 @@ variety x site combinations are included.}
 \item{\code{incidence}}{Integer \code{nvar x nsite} incidence matrix.}
 \item{\code{treat_effects}}{True treatment fixed effects
 (multi-treatment only).}
-\item{\code{g_arr}}{\code{nvar x ngroup} matrix of true genetic BLUPs
-(multi-treatment only).}
+\item{\code{g_arr}}{\code{nvar x ngroup} matrix of true genetic BLUPs.
+Always returned. Column names are site names for MET-only designs and
+\code{TSite} labels for multi-treatment designs.}
 }}
 }
 }

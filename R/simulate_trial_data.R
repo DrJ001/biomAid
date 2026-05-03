@@ -123,8 +123,9 @@
 #'       \item{\code{incidence}}{Integer \code{nvar x nsite} incidence matrix.}
 #'       \item{\code{treat_effects}}{True treatment fixed effects
 #'         (multi-treatment only).}
-#'       \item{\code{g_arr}}{\code{nvar x ngroup} matrix of true genetic BLUPs
-#'         (multi-treatment only).}
+#'       \item{\code{g_arr}}{\code{nvar x ngroup} matrix of true genetic BLUPs.
+#'         Always returned. Column names are site names for MET-only designs and
+#'         \code{TSite} labels for multi-treatment designs.}
 #'     }}
 #' }
 #'
@@ -590,10 +591,10 @@ simTrialData <- function(nvar        = 20L,
   # ---- Return --------------------------------------------------------------
   params <- list(G          = G_sim,
                  site_means = site_means,
-                 incidence  = inc_mat)
+                 incidence  = inc_mat,
+                 g_arr      = U)
   if (has_treatments) {
     params$treat_effects <- treat_effects
-    params$g_arr         <- U
   }
 
   list(data = dat, params = params)

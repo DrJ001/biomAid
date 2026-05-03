@@ -143,12 +143,11 @@ test_that("different seeds produce different data", {
 test_that("MET-only params has G, site_means, incidence", {
   out <- simTrialData(nvar = 4L, nsite = 3L, nrep = 2L,
                       seed = 14L, verbose = FALSE)
-  expect_true(all(c("G", "site_means", "incidence") %in% names(out$params)))
+  expect_true(all(c("G", "site_means", "incidence", "g_arr") %in% names(out$params)))
   expect_false("Lambda"        %in% names(out$params))
   expect_false("Psi"           %in% names(out$params))
   expect_false("n_fa"          %in% names(out$params))
   expect_false("treat_effects" %in% names(out$params))
-  expect_false("g_arr"         %in% names(out$params))
 })
 
 test_that("MET-only: G is nsite x nsite", {
