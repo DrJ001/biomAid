@@ -191,6 +191,13 @@ When `ar1_rho_row = ar1_rho_col = NULL` (the default) the spatial component
 is absent and $\operatorname{Var}(\boldsymbol{\varepsilon}) =
 \sigma^2_{\mathrm{error}}\,\mathbf{I}_N$.
 
+Default variance parameters are $\sigma_{\mathrm{rep}} = 150$,
+$\sigma_{\mathrm{row}} = 80$, $\sigma_{\mathrm{col}} = 60$,
+$\sigma_{\mathrm{error}} = 350$, and — when the AR1 spatial component is
+active — $\sigma_{\mathrm{spatial}} = \sigma_{\mathrm{error}} / 2 = 175$ by
+default. All six scale-dependent parameters are automatically proportioned to
+`site_mean` when only `site_mean` is changed by the user.
+
 ---
 
 #### Genetic variance and the G-matrix
@@ -220,18 +227,8 @@ exactly, and $\operatorname{Var}(\mathbf{u}) = \mathbf{G} \otimes \mathbf{I}_n$.
 For unbalanced designs, $\mathbf{u}_j = \mathbf{A}_j\,\mathbf{U}_{:j}$, where
 $\mathbf{A}_j \in \{0,1\}^{n_j \times n}$ is the variety selection matrix
 derived from column $j$ of the binary incidence matrix $\mathbf{I}$
-(see [Incidence structure](#incidence-structure)).
-
-$\mathbf{G}$ is an important component of the simulation; its construction is
-described next in the [Genetic covariance structure](#genetic-covariance-structure)
-section and it is returned directly as `params$G`.
-
-Default variance parameters are $\sigma_{\mathrm{rep}} = 150$,
-$\sigma_{\mathrm{row}} = 80$, $\sigma_{\mathrm{col}} = 60$,
-$\sigma_{\mathrm{error}} = 350$, and — when the AR1 spatial component is
-active — $\sigma_{\mathrm{spatial}} = \sigma_{\mathrm{error}} / 2 = 175$ by
-default. All six scale-dependent parameters are automatically proportioned to
-`site_mean` when only `site_mean` is changed by the user.
+(see [Incidence structure](#incidence-structure)). $\mathbf{G}$ is an important component
+of the simulation and its construction is described next in the [Genetic covariance structure](#genetic-covariance-structure) section and it is returned directly as `params$G`.
 
 ---
 
