@@ -1,5 +1,5 @@
 ---
-title: "Random Regression of Treatment BLUPs from multi-treatment MET anlyses"
+title: "Random Regression of Treatment BLUPs from Multi-Treatment MET Analyses"
 subtitle: "`randomRegress()` and `plot_randomRegress()`"
 author: "Julian Taylor"
 date: today
@@ -28,8 +28,12 @@ execute:
 #| include: false
 library(biomAid)
 library(ggplot2)
-library(asreml)
-library(ASExtras4)
+asreml_ok <- requireNamespace("asreml", quietly = TRUE)
+if (asreml_ok) {
+  library(asreml)
+  library(ASExtras4)
+  asreml.options(trace = FALSE)
+}
 ```
 
 ---
@@ -41,7 +45,8 @@ into two biologically interpretable components:
 
 - **Efficiency** — a variety's genetic value under the baseline (typically
   low-input) treatment.
-- **Responsiveness (or Tolerance)** — a variety's capacity to genetically respond to the application of a treatment.
+- **Responsiveness (or Tolerance)** — a variety's capacity to respond
+  genetically to the application of a treatment.
 
 The decomposition is derived from the **G-matrix** (genetic
 variance–covariance matrix across Treatment × Site combinations) using the
@@ -55,33 +60,104 @@ an efficiency–responsiveness quadrant plot, or a G-matrix heatmap.
 
 ## Mathematical Framework
 
+### The multi-treatment, multi-environment LMM
+
+Consider $n$ varieties evaluated across $s = 1, \ldots, S$ sites under
+$t = 1, \ldots, T$ treatments. For variety $v$ at site $s$ under treatment $t$,
+the linear mixed model is
+
+$$
+y_{tsv} = \tau_{ts} + u_{tsv} + \rho_{sr} + \varepsilon_{tsv},
+$$
+
+where $\tau_{ts}$ is a fixed Treatment × Site mean, $\rho_{sr}$ is a random
+replicate-within-site effect, and $\varepsilon_{tsv}$ is the residual. The
+genetic effect $u_{tsv}$ is the key quantity of interest.
+
+Stacking observations across all treatment × site combinations into the
+vector $\mathbf{y}$, the model can be written compactly as
+
+$$
+\mathbf{y} = \mathbf{X}\boldsymbol{\tau} + \mathbf{Z}\mathbf{u} + \mathbf{W}\boldsymbol{\rho} + \boldsymbol{\varepsilon},
+$$
+
+where $\mathbf{X}$, $\mathbf{Z}$, and $\mathbf{W}$ are incidence matrices for
+fixed effects, genetic effects, and replicates respectively.
+
+**Genetic effects.** The $n \times (T \cdot S)$ matrix
+$\mathbf{U} = [\mathbf{u}_{11} \mid \cdots \mid \mathbf{u}_{TS}]$ of
+variety BLUPs stacked across all treatment × site groups satisfies
+
+$$
+\operatorname{vec}(\mathbf{U}) \sim \mathcal{N}(\mathbf{0},\; \mathbf{G} \otimes \mathbf{I}_n),
+$$
+
+where $\mathbf{G}$ is the $(T \cdot S) \times (T \cdot S)$ genetic
+variance–covariance matrix (the G-matrix), and $\mathbf{I}_n$ is the
+$n \times n$ identity over varieties. Each block $\mathbf{G}_{ts,t's'}$
+describes the genetic covariance between treatment $t$ at site $s$ and
+treatment $t'$ at site $s'$.
+
+**Replicate variance.** The site-level replicate effects are modelled as
+$\boldsymbol{\rho} \sim \mathcal{N}(\mathbf{0},\; \bigoplus_s \sigma^2_s \mathbf{I}_{r_s})$,
+corresponding to the `at(Site):Rep` term in ASReml-R.
+
+**Residual variance.** Within each site a separable first-order
+autoregressive structure captures spatial trends along rows and columns,
+$\boldsymbol{\varepsilon}_s \sim \mathcal{N}(\mathbf{0},\; \sigma^2_{e,s}\,\mathbf{A}_s(\rho_r) \otimes \mathbf{A}_s(\rho_c))$,
+corresponding to `ar1(Row):ar1(Column)` nested within site.
+
+For full derivations of the incidence matrices, Kronecker products, and
+auto-generated genetic structures, see the
+[Simulating Multi-Environment Trials](simTrialData.html) vignette.
+
+In ASReml-R V4 this model is written as:
+
+```r
+model <- asreml(
+  yield    ~ TSite,
+  random   = ~ corgh(TSite):Variety + at(Site):Rep,
+  residual = ~ dsum(~ ar1(Row):ar1(Column) | Site),
+  data     = dat
+)
+```
+
+where `TSite` is a composite factor formed by pasting the treatment label
+onto the site label (e.g. `"T0-Site1"`). This is necessary because
+ASReml-R requires a single factor to index the columns of the G-matrix.
+
+---
+
 ### The G-matrix
 
-Let $\hat{\mathbf{u}}_s = (\hat{u}_{1s}, \ldots, \hat{u}_{ks})^\top$ be the
-vector of variety BLUPs for $k$ treatments at site $s$, stacked across all
-sites. The genetic variance–covariance structure is described by the
-**G-matrix**:
+The G-matrix returned by ASReml-R V4 for the `struct(TSite):Variety` random
+term is indexed by the levels of `TSite`. For a single site with three
+treatments, $\mathbf{G}$ is a $3 \times 3$ matrix; for four sites and three
+treatments it is $12 \times 12$.
 
-$$
-\mathbf{G} = \operatorname{Var}\!\left(\hat{\mathbf{u}}\right),
-$$
+The structure keyword (`corgh`, `us`, `fa`, `diag`, …) controls how
+$\mathbf{G}$ is parameterised. `randomRegress()` accepts any of these:
 
-with $k \times k$ blocks $\mathbf{G}_{jl}$ giving the genetic covariance
-between treatments $j$ and $l$ averaged across sites. In ASReml-R V4 this
-is the genetic variance/covariance matrix for the Treatment-Site:Variety random term.
+| ASReml-R term | G-matrix form |
+|---|---|
+| `corgh(TSite):Variety` | Heterogeneous variances, one shared correlation parameter per pair |
+| `corh(TSite):Variety` | Heterogeneous variances, single correlation (2-group) |
+| `us(TSite):Variety` | Fully unstructured covariance matrix |
+| `fa(TSite, k):Variety` | Factor analytic of order $k$ |
+| `diag(TSite):Variety` | Diagonal — zero between-group covariances |
 
 ---
 
 ### Conditional decomposition
 
-For treatment $j$ with conditioning set $A_j$ (a subset of the other
-treatment labels), the **multivariate conditional normal** distribution gives
-the regression of $\hat{u}_{js}$ on $\hat{\mathbf{u}}_{A_j,s}$:
+For treatment-site combination $j$ with conditioning set $A_j$ (a subset of
+the other treatment-site labels), the **multivariate conditional normal**
+distribution gives the regression of $\hat{u}_{j}$ on $\hat{\mathbf{u}}_{A_j}$:
 
 $$
-\hat{u}_{js} \mid \hat{\mathbf{u}}_{A_j,s}
+\hat{u}_{j} \mid \hat{\mathbf{u}}_{A_j}
   \sim \mathcal{N}\!\left(
-    \boldsymbol{\beta}_j^\top \hat{\mathbf{u}}_{A_j,s},\;
+    \boldsymbol{\beta}_j^\top \hat{\mathbf{u}}_{A_j},\;
     \sigma^2_{j \mid A_j}
   \right),
 $$
@@ -94,16 +170,16 @@ $$
 \sigma^2_{j \mid A_j} = G_{jj} - \mathbf{G}_{j A_j}\,\boldsymbol{\beta}_j.
 $$
 
-The **responsiveness BLUP** for variety $v$ at site $s$ is the residual from
-this regression:
+The **responsiveness BLUP** for variety $v$ is the residual from this
+regression:
 
 $$
-\tilde{u}_{js,v} = \hat{u}_{js,v} - \boldsymbol{\beta}_j^\top \hat{\mathbf{u}}_{A_j,s,v}.
+\tilde{u}_{j,v} = \hat{u}_{j,v} - \boldsymbol{\beta}_j^\top \hat{\mathbf{u}}_{A_j,v}.
 $$
 
 Responsiveness BLUPs are:
 
-- **zero-mean** within each site (inherited from the BLUPs)
+- **zero-mean** within each treatment-site group (inherited from the BLUPs)
 - **orthogonal** to the conditioning BLUPs in the G-matrix sense
 - **genetically independent** of the efficiency signal, with variance
   $\sigma^2_{j \mid A_j}$
@@ -112,8 +188,8 @@ Responsiveness BLUPs are:
 
 ### The transformation matrix
 
-Collecting all conditioning relationships across treatments and sites defines
-a sparse lower-triangular transformation matrix $\mathbf{T}$ such that:
+Collecting all conditioning relationships defines a sparse transformation
+matrix $\mathbf{T}$ such that:
 
 $$
 \tilde{\mathbf{u}} = \mathbf{T}\hat{\mathbf{u}},
@@ -123,8 +199,7 @@ $$
 $$
 
 The diagonal blocks of $\mathbf{V}_T$ are the conditional genetic variances
-$\sigma^2_{j \mid A_j}$; off-diagonal blocks measure residual genetic
-associations between components. For `type = "sequential"` the full
+$\sigma^2_{j \mid A_j}$. For `type = "sequential"` the full
 $\mathbf{V}_T$ is **diagonal** — a complete Gram-Schmidt
 orthogonalisation of the BLUP space.
 
@@ -138,27 +213,245 @@ The four built-in schemes differ only in how $A_j$ is chosen:
 |--------|------------------------|--------------------------|----------|
 | `"baseline"` | $\{\text{levs}[1]\}$ only | Block-diagonal | Comparing all treatments to one baseline |
 | `"sequential"` | $\{\text{levs}[1], \ldots, \text{levs}[j-1]\}$ | Diagonal ($LDL^\top$ Cholesky) | Fully orthogonal components |
-| `"partial"` | All other treatments | Dense | Partial genetic variances |
+| `"partial"` | All other treatments simultaneously | Dense | Partial genetic variances |
 | `"custom"` | User-specified | Depends | Bespoke experimental logic |
 
 ---
 
-## Setup
-
-### Simulated data and model
+## Example 1 — Single site, partial conditioning
 
 > **Requires:** ASReml-R V4 and ASExtras4. The vignette is pre-rendered so
 > no licence is needed to read it; run the code chunks only if you have
 > both packages installed.
 
-We use `simTrialData()` to generate a balanced multi-environment trial with
-20 varieties, 4 sites, and 3 nitrogen treatments (T0 = control, T1 = low N,
-T2 = high N). A composite `TSite` factor (e.g. `"T0-Env1"`) is created
-to serve as the Treatment × Site classification for the ASReml model.
+### Simulated data
 
-```{r simulate}
+We simulate a single-site trial with 50 varieties and three nitrogen
+treatments (T0 = control, T1 = low N, T2 = high N), three replicates per
+treatment. With only one site, the G-matrix is a $3 \times 3$ matrix
+describing the genetic (co)variances between treatments — a clean,
+interpretable structure for introducing the method.
+
+We use `sim.options` to restrict the auto-generated between-treatment
+genetic correlations to a moderate range (0.55–0.70). This keeps the true
+genetic structure well away from the parameter boundary, giving the
+`corgh` model a stable likelihood surface to optimise. The default
+`sigma_genetic` and `error_sd` values produce a per-plot heritability
+of approximately 0.60 — ample signal for reliable estimation with 50
+varieties and 3 replicates.
+
+```{r sim1}
 #| cache: true
-out <- simTrialData(
+out1 <- simTrialData(
+  nvar       = 50L,
+  nsite      = 1L,
+  treatments = c("T0", "T1", "T2"),
+  nrep       = 3L,
+  seed       = 7L,
+  verbose    = FALSE,
+  sim.options = list(g_cor_min = 0.55, g_cor_max = 0.70)
+)
+dat1 <- out1$data
+```
+
+The field layout and true genetic correlation structure can be examined
+with `plot_simTrialData()`:
+
+```{r plot_sim1_layout}
+#| fig-height: 4
+plot_simTrialData(out1, type = "trial", fill = "Treatment", ncol = 3L)
+```
+
+```{r plot_sim1_corr}
+#| fig-height: 4
+#| fig-width: 5
+plot_simTrialData(out1, type = "correlation")
+```
+
+The correlation heatmap confirms that the three treatments have positive
+genetic correlations with each other (true values in the range 0.55–0.70),
+reflecting that varieties with good baseline performance also tend to respond
+positively to applied nitrogen — but not perfectly. This partial sharing of
+genetic rankings is exactly the structure that partial conditioning is
+designed to dissect.
+
+### Forming `TSite` and fitting the model
+
+ASReml-R requires a single factor to index the G-matrix columns. We create
+`TSite` by pasting the treatment label onto the site name. With only one
+site this simply appends the site label (e.g. `"T0-Site1"`), but the same
+code generalises directly to multi-site data:
+
+```{r prep1}
+dat1$TSite  <- interaction(dat1$Treatment, dat1$Site, sep = "-")
+dat1$Row    <- factor(dat1$Row)
+dat1$Column <- factor(dat1$Column)
+levs1       <- c("T0", "T1", "T2")
+```
+
+We fit a **heterogeneous-correlation** (`corgh`) model. With three
+treatments this parameterises the $3 \times 3$ G-matrix with three
+genetic variances and three pairwise correlations — the most flexible
+fully-identified structure for this problem size:
+
+```{r fit1}
+#| eval: !expr asreml_ok
+#| cache: true
+#| results: hide
+model1 <- asreml(
+  yield    ~ TSite,
+  random   = ~ corgh(TSite):Variety + at(Site):Rep,
+  residual = ~ ar1(Row):ar1(Column),
+  data     = dat1,
+  maxit    = 30L
+)
+model1 <- update(model1)
+```
+
+```{r vc1}
+#| eval: !expr asreml_ok
+#| dependson: "fit1"
+vc1 <- summary(model1)$varcomp
+vc1[grepl("TSite", rownames(vc1)), ]
+```
+
+The `corgh` varcomp rows give the genetic variance for each `TSite` level
+(diagonal of the G-matrix) and the estimated genetic correlation between
+each pair. With true correlations in the range 0.55–0.70 and 50 varieties
+across 3 replicates, the estimates should be well away from the boundary
+($|r| \ll 1$), ensuring the reconstructed G-matrix is positive definite and
+all conditional variances are positive.
+
+### Running `randomRegress()` — partial conditioning
+
+With a single site, **partial conditioning** is the natural choice: each
+treatment is conditioned on all the others simultaneously, so the three
+responsiveness BLUPs capture the genetic signal that is unique to each
+treatment and unshared with the others.
+
+```{r rr1}
+#| eval: !expr asreml_ok
+#| cache: true
+#| dependson: "fit1"
+res1 <- randomRegress(
+  model1,
+  term = "corgh(TSite):Variety",
+  levs = levs1,
+  type = "partial",
+  sep  = "-"
+)
+```
+
+With a single site, `beta` has one row and `sigmat` has one row — the
+regression coefficients and conditional genetic variance are scalars:
+
+```{r show_beta1}
+#| eval: !expr asreml_ok
+#| dependson: "rr1"
+# Site-specific regression coefficients (one site -> one row each)
+res1$beta
+```
+
+```{r show_sigmat1}
+#| eval: !expr asreml_ok
+#| dependson: "rr1"
+# Conditional genetic variances under partial conditioning
+res1$sigmat
+```
+
+Each `sigmat` entry $\sigma^2_{j \mid A_j}$ is the genetic variance
+in treatment $j$ that is **orthogonal** to all other treatments. A small
+value relative to $G_{jj}$ (the diagonal of `Gmat`) indicates that most of
+the genetic variation in that treatment is shared with the others;
+a value close to $G_{jj}$ indicates a large treatment-specific genetic
+component. **Negative values** would indicate a near-singular (indefinite)
+G-matrix caused by boundary correlation estimates — `randomRegress()` warns
+explicitly when this occurs and sets the affected entries to `NA`.
+
+```{r compare_gvar1}
+#| eval: !expr asreml_ok
+#| dependson: "rr1"
+# Compare conditional variances to marginal variances
+data.frame(
+  treatment  = levs1,
+  marginal   = round(diag(res1$Gmat), 4),
+  conditional = round(res1$sigmat[1L, ], 4)
+)
+```
+
+### Regression plot
+
+The regression plot shows the raw treatment BLUP (y-axis) against the
+conditioning BLUP (x-axis). Under partial conditioning the conditioning
+set includes **all other treatments**, so there is a single regression for
+each pair. The slope $\hat{\beta}$ is annotated in the top-left corner.
+
+```{r plot_reg1}
+#| eval: !expr asreml_ok
+#| fig-height: 5
+#| dependson: "rr1"
+p_reg1 <- plot_randomRegress(res1, type = "regress")
+print(p_reg1)
+```
+
+A slope $\hat{\beta} > 0$ and close to 1 means the two treatments share
+similar genetic rankings; a slope close to 0 means the treatment adds
+little information once the others are accounted for.
+
+### Quadrant plot with default highlights
+
+The quadrant plot places **efficiency** on the x-axis and
+**responsiveness** on the y-axis. Under partial conditioning, every
+treatment has a responsiveness axis, so there are three quadrant panels:
+
+```{r plot_quad1}
+#| eval: !expr asreml_ok
+#| fig-height: 7
+#| dependson: "rr1"
+p_quad1 <- plot_randomRegress(res1, type = "quadrant", highlight = "default")
+print(p_quad1)
+```
+
+The default highlight algorithm selects three archetypes from the top-right
+quadrant (high efficiency + high responsiveness) and three from the
+bottom-left (low efficiency + low responsiveness), annotated consistently
+across all panels. Varieties that appear in the top-right of all panels
+respond positively to every treatment; those that shift between quadrants
+across panels show treatment-specific responses.
+
+### G-matrix heatmap
+
+With a single site the G-matrix is a $3 \times 3$ correlation matrix —
+straightforward to interpret:
+
+```{r plot_gmat1}
+#| eval: !expr asreml_ok
+#| fig-height: 4
+#| fig-width: 5
+#| dependson: "rr1"
+p_gmat1 <- plot_randomRegress(res1, type = "gmat")
+print(p_gmat1)
+```
+
+The heatmap displays `cov2cor(Gmat)`. High off-diagonal values (dark red)
+indicate strong genetic co-ranking between treatments; values below ~0.8
+suggest meaningful genotype × treatment interaction that the partial
+decomposition has captured.
+
+---
+
+## Example 2 — Multi-site, factor analytic model
+
+### Simulated data
+
+We now scale to a multi-environment setting: 20 varieties, 4 sites, and the
+same three nitrogen treatments. The FA(2) model is the standard choice for
+MET analyses — it captures the dominant axes of genotype × environment
+interaction parsimoniously.
+
+```{r sim2}
+#| cache: true
+out2 <- simTrialData(
   nvar       = 20L,
   nsite      = 4L,
   treatments = c("T0", "T1", "T2"),
@@ -166,218 +459,171 @@ out <- simTrialData(
   seed       = 42L,
   verbose    = FALSE
 )
-dat       <- out$data
-levs      <- c("T0", "T1", "T2")
-dat$TSite  <- interaction(dat$Treatment, dat$Site, sep = "-")
-dat$Row    <- factor(dat$Row)
-dat$Column <- factor(dat$Column)
+dat2 <- out2$data
 ```
 
-We fit a **factor analytic model** with 2 factors for the
-Treatment × Site genetic covariance structure. FA models are the standard
-choice for multi-environment trials: they are parsimonious, converge well,
-and capture the dominant axes of genotype × environment interaction.
+The `"blup"` plot of `plot_simTrialData()` visualises the true genetic
+values across all 12 treatment × site groups, revealing the GEI structure
+baked into the simulation:
 
-```{r fit_model}
+```{r plot_sim2_blup}
+#| fig-height: 5
+#| dependson: "sim2"
+plot_simTrialData(out2, type = "blup", sort = TRUE)
+```
+
+Varieties cluster into those with broadly positive responses across all
+treatment × site groups (top rows) and those with more variable or
+treatment-specific patterns — exactly the structure that `randomRegress()`
+is designed to unpack.
+
+### Forming `TSite` and fitting the FA(2) model
+
+```{r prep2}
+#| dependson: "sim2"
+dat2$TSite  <- interaction(dat2$Treatment, dat2$Site, sep = "-")
+dat2$Row    <- factor(dat2$Row)
+dat2$Column <- factor(dat2$Column)
+levs2       <- c("T0", "T1", "T2")
+```
+
+A **factor analytic** model with 2 factors provides a parsimonious
+description of the $12 \times 12$ G-matrix across 4 sites and 3 treatments.
+The two factors capture the dominant axes of genetic co-variation —
+typically a general adaptation factor and a GEI factor:
+
+```{r fit2}
+#| eval: !expr asreml_ok
 #| cache: true
 #| results: hide
-asreml.options(trace = FALSE)
-model <- asreml(
+model2 <- asreml(
   yield    ~ TSite,
   random   = ~ fa(TSite, 2):Variety + at(Site):Rep,
   residual = ~ dsum(~ ar1(Row):ar1(Column) | Site),
-  data     = dat,
+  data     = dat2,
   maxit    = 30L
 )
-model <- update(model)
+model2 <- update(model2)
 ```
 
-```{r model_summary}
-vc <- summary(model)$varcomp
-vc[grepl("TSite", rownames(vc)), ]
+```{r vc2}
+#| eval: !expr asreml_ok
+#| dependson: "fit2"
+vc2 <- summary(model2)$varcomp
+vc2[grepl("TSite", rownames(vc2)), ]
 ```
 
-### Running `randomRegress()`
+The varcomp rows show the factor loadings (`!fa1`, `!fa2`) and specific
+variances (`!var`) for each `TSite` level. The G-matrix reconstructed from
+these is $\hat{\mathbf{G}} = \hat{\boldsymbol{\Lambda}}\hat{\boldsymbol{\Lambda}}^\top + \hat{\boldsymbol{\Psi}}$.
 
-With the fitted model, `randomRegress()` extracts the G-matrix from the
-FA variance parameters and computes BLUPs, regression coefficients, and
-responsiveness components using baseline conditioning (T0 as efficiency,
-T1 and T2 as responsiveness):
+### Running `randomRegress()` — baseline conditioning
 
-```{r run_rr}
+For multi-site data with an FA model, **baseline conditioning** is the most
+widely used scheme: T0 is the efficiency (control) treatment, and T1 and T2
+are conditioned on T0 to give treatment-specific responsiveness BLUPs.
+
+```{r rr2}
+#| eval: !expr asreml_ok
 #| cache: true
-res <- randomRegress(
-  model,
-  Env  = "TSite:Variety",
-  levs = levs,
+#| dependson: "fit2"
+res2 <- randomRegress(
+  model2,
+  term = "fa(TSite, 2):Variety",
+  levs = levs2,
   type = "baseline",
   sep  = "-"
 )
 ```
 
-The return value:
+With 4 sites, `beta` has 4 rows (one per site) and `sigmat` has 4 rows.
+The site-specific regression slopes in `beta` capture how the treatment
+response relationship changes across environments:
 
-```{r show_structure}
-str(res, max.level = 1)
+```{r show_beta2}
+#| eval: !expr asreml_ok
+#| dependson: "rr2"
+# Site-specific regression coefficients for T1 conditioned on T0
+round(res2$beta$T1, 3)
 ```
 
----
+### Regression plot
 
-## Regression plot — `type = "regress"`
-
-The regression plot shows the raw treatment BLUPs for each conditioned
-treatment (y-axis) against the conditioning treatment BLUPs (x-axis). Each
-panel corresponds to one site × treatment pair. A **dotted random regression
-line** through the origin carries the site-specific slope $\hat{\beta}$,
-annotated in the top-left corner.
-
-The slope $\hat{\beta}$ quantifies the average relationship between
-treatments: $\hat{\beta} > 1$ means the conditioned treatment varies more
-than the baseline; $\hat{\beta} < 1$ means it varies less.
-
-```{r plot_regress}
+```{r plot_reg2}
+#| eval: !expr asreml_ok
 #| fig-height: 7
-p_reg <- plot_randomRegress(res, type = "regress")
-print(p_reg)
+#| dependson: "rr2"
+p_reg2 <- plot_randomRegress(res2, type = "regress")
+print(p_reg2)
 ```
 
-ASReml BLUPs are already zero-mean within each site by construction, so
-`centre = FALSE` (the default) is appropriate. Use `centre = TRUE` only
-if BLUPs have been computed from adjusted means and retain a site-level
-offset.
+Each panel corresponds to one site × treatment pair. The dotted regression
+line through the origin carries the site-specific $\hat{\beta}$ slope.
+Panels where $\hat{\beta}$ differs substantially across sites indicate
+heterogeneous treatment responses — the G-matrix captures this as
+off-diagonal structure between treatment × site combinations.
 
----
+### Quadrant plot — default highlights
 
-## Quadrant plot — `type = "quadrant"`
-
-The quadrant plot separates the two components of genetic performance.
-The **x-axis** carries the unconditional (efficiency) BLUPs; the **y-axis**
-carries the responsiveness BLUPs $\tilde{u}_{js,v}$. Dotted zero lines on
-both axes divide each panel into four quadrants:
-
-| Quadrant | Efficiency | Responsiveness | Interpretation |
-|----------|-----------|----------------|----------------|
-| Top-right | High | High | Broadly adapted: performs well and responds strongly |
-| Top-left | Low | High | Responsive but poor performance under baseline |
-| Bottom-right | High | Low | Efficient but does not respond well to treatment |
-| Bottom-left | Low | Low | Poor performance on both scales |
-
-```{r plot_quadrant}
+```{r plot_quad2}
+#| eval: !expr asreml_ok
 #| fig-height: 7
-p_quad <- plot_randomRegress(res, type = "quadrant")
-print(p_quad)
+#| dependson: "rr2"
+p_quad2 <- plot_randomRegress(res2, type = "quadrant", highlight = "default")
+print(p_quad2)
 ```
 
----
+The automatic highlight algorithm identifies the six most informative
+archetypes by their position in the efficiency–responsiveness space,
+averaged across all sites. Orange points are top-right archetypes (broadly
+adapted and responsive); blue points are bottom-left archetypes (consistently
+poor performers). The same six varieties are labelled in every panel.
 
-## Variety highlighting
+### Filtering to a single treatment pair
 
-By default, `highlight = "default"` automatically selects and annotates
-**six varieties** that are informative archetypes of the efficiency–
-responsiveness space. The algorithm operates in the centred quadrant space,
-independently of the `centre` argument used for the plot axes.
+For multi-site multi-treatment results, `treatments` restricts which panels
+are shown. This is useful when a particular treatment comparison is of
+primary interest:
 
-### How the default algorithm works
-
-1. Compute the mean efficiency (x) and responsiveness (y) for each variety
-   **across all sites and treatment pairs**.
-2. Separate varieties into the **top-right** quadrant ($x > 0$, $y > 0$)
-   and the **bottom-left** quadrant ($x < 0$, $y < 0$).
-3. Within each quadrant, retain varieties whose distance from the origin
-   exceeds the 50th percentile (relaxes to 33rd then 0th if fewer than
-   three candidates remain).
-4. Pick three archetypes by polar angle $\theta = \arctan(|y|/|x|)$:
-   - **Efficiency archetype** — smallest $\theta$ (close to the x-axis)
-   - **Balanced archetype** — closest to $\theta = \pi/4$
-   - **Responsiveness archetype** — largest $\theta$ (close to the y-axis)
-
-The same six varieties are annotated consistently across all site and
-treatment-pair panels.
-
-```{r highlight_default}
-#| fig-height: 7
-# Orange = top-right archetypes, Blue = bottom-left archetypes
-p_hl <- plot_randomRegress(res, type = "quadrant", highlight = "default")
-print(p_hl)
-```
-
-### User-specified highlights
-
-Pass a character vector of variety names to `highlight` to annotate specific
-varieties of interest (shown in green):
-
-```{r highlight_custom}
-#| fig-height: 7
-user_vars <- levels(factor(res$blups$Variety))[c(1L, 10L, 20L)]
-p_custom  <- plot_randomRegress(res, type  = "quadrant",
-                                highlight = user_vars)
-print(p_custom)
-```
-
-### No highlighting
-
-Set `highlight = NULL` to suppress annotation entirely and draw all points
-in a single colour:
-
-```{r highlight_none}
-#| fig-height: 7
-p_none <- plot_randomRegress(res, type = "quadrant", highlight = NULL)
-print(p_none)
-```
-
----
-
-## Filtering treatments — `treatments` argument
-
-For results with many conditioned treatments, `treatments` restricts which
-pairs appear in the plot:
-
-```{r treatments_filter}
-#| fig-height: 4
-p_t1 <- plot_randomRegress(res, type = "quadrant", treatments = "T1")
+```{r plot_quad2_t1}
+#| eval: !expr asreml_ok
+#| fig-height: 5
+#| dependson: "rr2"
+p_t1 <- plot_randomRegress(res2, type = "quadrant",
+                            treatments = "T1", highlight = "default")
 print(p_t1)
 ```
 
----
+### G-matrix heatmap
 
-## G-matrix heatmap — `type = "gmat"`
+The $12 \times 12$ G-matrix correlation heatmap reveals the full structure
+of genetic co-variation across all treatment × site combinations:
 
-The `"gmat"` plot displays `cov2cor(Gmat)` — the genetic correlations
-between all Treatment × Site combinations — as a diverging heatmap. High
-positive correlations (dark red) indicate treatments and/or sites that share
-genetic rankings; negative correlations (dark blue) indicate rank reversal.
-
-```{r plot_gmat}
+```{r plot_gmat2}
+#| eval: !expr asreml_ok
 #| fig-height: 6
 #| fig-width: 8
-p_gmat <- plot_randomRegress(res, type = "gmat")
-print(p_gmat)
+#| dependson: "rr2"
+p_gmat2 <- plot_randomRegress(res2, type = "gmat")
+print(p_gmat2)
 ```
 
-Correlations within the same treatment across sites (e.g. T0-Env1 with
-T0-Env2) tend to be moderate to high. Correlations between treatments
-(e.g. T0-Env1 with T2-Env3) reflect the degree of Treatment × Genotype ×
-Environment interaction.
+Within-treatment correlations (e.g. T0-Env1 with T0-Env2) are typically
+high, reflecting consistent genetic ranking for that treatment across sites.
+Correlations across treatments (e.g. T0-Env1 with T2-Env3) reflect the
+combined effect of genotype × treatment and genotype × environment interaction.
 
----
-
-## Extracting plot data — `return_data = TRUE`
+### Bespoke visualisation with `return_data = TRUE`
 
 All three plot types support `return_data = TRUE`, which returns the tidy
-data frame used to build the plot. This is useful for bespoke
-visualisations or downstream analysis.
+data frame used to build the plot. This enables custom `ggplot2`
+visualisations beyond the built-in types:
 
 ```{r return_data}
-df_quad <- plot_randomRegress(res, type = "quadrant", return_data = TRUE)
-head(df_quad)
-```
-
-The data frame can be passed to any `ggplot2` workflow:
-
-```{r bespoke}
+#| eval: !expr asreml_ok
 #| fig-height: 4
-# Custom plot: quadrant for T1 only, custom colour by site
-df_t1 <- plot_randomRegress(res, type = "quadrant",
+#| dependson: "rr2"
+df_t1 <- plot_randomRegress(res2, type = "quadrant",
                              treatments  = "T1",
                              return_data = TRUE)
 
@@ -386,8 +632,9 @@ ggplot(df_t1, aes(x = x, y = y, colour = Site)) +
   geom_vline(xintercept = 0, linetype = "dotted", colour = "grey40") +
   geom_point(size = 1.8, alpha = 0.8) +
   facet_wrap(~ Site, nrow = 2L) +
-  labs(x = "Efficiency (T0 BLUP)", y = "Responsiveness (T1 | T0)",
-       title = "Custom site-coloured quadrant plot") +
+  labs(x = "Efficiency (T0 BLUP)",
+       y = "Responsiveness (T1 | T0)",
+       title = "T1 responsiveness by site") +
   theme_bw() +
   theme(legend.position = "none")
 ```
@@ -402,7 +649,7 @@ ggplot(df_t1, aes(x = x, y = y, colour = Site)) +
 |---------|------|-------------|
 | `blups` | Data frame | Raw BLUPs + responsiveness BLUPs + HSD per variety × site |
 | `beta` | Named list | Site-specific $\boldsymbol{\beta}_j$ matrices, one per conditioned treatment |
-| `Gmat` | Matrix | Original G-matrix |
+| `Gmat` | Matrix | Original G-matrix (covariance) |
 | `TGmat` | Matrix | Transformed G-matrix $\mathbf{T}\mathbf{G}\mathbf{T}^\top$ |
 | `sigmat` | Matrix | Conditional genetic variances $\sigma^2_{j \mid A_j}$ per site |
 | `tmat` | Matrix | Full transformation matrix $\mathbf{T}$ |
@@ -413,8 +660,8 @@ ggplot(df_t1, aes(x = x, y = y, colour = Site)) +
 
 ## Summary
 
-| Task | Argument |
-|------|----------|
+| Task | Code |
+|------|------|
 | Baseline conditioning | `type = "baseline"` (default) |
 | Fully orthogonal (Gram-Schmidt) | `type = "sequential"` |
 | Partial genetic variances | `type = "partial"` |
@@ -425,9 +672,11 @@ ggplot(df_t1, aes(x = x, y = y, colour = Site)) +
 | Default archetype highlights | `highlight = "default"` |
 | Named variety highlights | `highlight = c("Var01", "Var15")` |
 | Suppress highlights | `highlight = NULL` |
-| Restrict treatments shown | `treatments = "T1"` |
+| Restrict treatment panels | `treatments = "T1"` |
 | Export plot data | `return_data = TRUE` |
 | Absolute yield scale | `centre = TRUE` |
+| Single site, corgh term | `term = "corgh(TSite):Variety"` |
+| Multi-site, FA term | `term = "fa(TSite, 2):Variety"` |
 
 ---
 
@@ -439,9 +688,4 @@ in Australian wheats. *Euphytica*, **149**, 85–95.
 <https://doi.org/10.1007/s10681-005-9056-5>
 
 McDonald G, Bovill W, Taylor J, Wheeler R. (2015) Responses to phosphorus among wheat genotypes.
-*Crop and Pasture Science*, **66**(5), 430–444. (2015). <https://doi.org/10.1071/CP14191>
-
-The WtmsDW Locus on Wheat Chromosome 2B Controls Major Natural Variation for
-Floret Sterility Responses to Heat Stress at Booting Stage.
-*Frontiers in Plant Science*, **12**, 635397. (2021).
-<https://doi.org/10.3389/fpls.2021.635397>
+*Crop and Pasture Science*, **66**(5), 430–444. <https://doi.org/10.1071/CP14191>

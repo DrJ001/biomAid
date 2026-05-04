@@ -60,7 +60,11 @@ NULL
   if (length(conditioned) == 0L)
     stop("No conditioned treatments to plot. Check 'treatments'.")
 
-  eff_lv <- names(Filter(is.null, cond_list))[1L]
+  # Under "partial" conditioning every treatment has a non-NULL conditioning
+  # set, so there is no unconditional (efficiency) treatment. Fall back to
+  # the raw BLUP of the first treatment in levs as the x-axis reference.
+  uncond <- names(Filter(is.null, cond_list))
+  eff_lv <- if (length(uncond) > 0L) uncond[1L] else names(cond_list)[1L]
 
   rows <- lapply(conditioned, function(lv_j) {
     resp_col <- paste0("resp.", lv_j)
@@ -79,7 +83,9 @@ NULL
       df$x <- df$x + ave(df$x, df$Site, FUN = mean)
     df
   })
-  do.call(rbind, rows)
+  out <- do.call(rbind, rows)
+  attr(out, "eff_lv") <- eff_lv   # carry forward for axis labelling
+  out
 }
 
 #' @noRd
@@ -270,6 +276,15 @@ NULL
 
   base_col <- if (is.null(hl)) "#E15759" else "grey50"
 
+  # eff_lv is attached by .rreg_quadrant_data() so axis label reflects
+  # whether the x-axis is an unconditional efficiency BLUP or the first
+  # treatment in levs (partial conditioning fallback).
+  eff_lv <- attr(df, "eff_lv")
+  x_label <- if (centre)
+    paste0(eff_lv, " BLUP (+ site mean)")
+  else
+    paste0(eff_lv, " BLUP")
+
   p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y)) +
     ggplot2::geom_hline(yintercept = 0, linetype = "dotted",
                         linewidth  = 0.7, colour = "grey30") +
@@ -279,8 +294,7 @@ NULL
     .rreg_highlight_layers(df, hl) +
     ggplot2::facet_grid(pair_label ~ Site, scales = "free") +
     ggplot2::labs(
-      x       = if (centre) "Efficiency (BLUP + site mean)" else
-                             "Efficiency (unconditional BLUP)",
+      x       = x_label,
       y       = "Responsiveness (conditional BLUP)",
       caption = "Dotted lines at zero divide each panel into four quadrants"
     ) +
