@@ -733,7 +733,15 @@ simTrialData <- function(nvar        = 20L,
       cat(sprintf("    asreml(yield ~ Site,\n"))
       cat(sprintf("           random   = ~ fa(Site, %d):id(Variety) + at(Site):Rep,\n",
                   k_sug))
-      cat(sprintf("           data     = dat)\n"))
+      cat(sprintf("           data     = dat)\n"))Preparing shell command ⏳
+
+
+
+---
+Generating.
+@cursor(randomRegress.R 134:1) @
+stop
+
       cat(sprintf("    accuracy(model)\n"))
     }
     cat("============================\n\n")

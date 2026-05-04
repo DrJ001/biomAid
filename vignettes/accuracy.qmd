@@ -116,27 +116,6 @@ basis.
 
 ---
 
-### Extracting $G_{jj}$ from ASReml-R V4
-
-The extraction strategy depends on the random structure fitted for the
-variety term:
-
-| Structure | $G_{jj}$ | `only=` string |
-|-----------|-----------|----------------|
-| `fa(Env, k):id(Var)` | $\sum_f \lambda_{jf}^2 + \psi_j$ | `"fa(Env, k):Var"` |
-| `diag(Env):id(Var)` | $\sigma^2_j$ | `"Env:Var"` |
-| `corgh(Env):id(Var)` | $\sigma^2_j$ | `"Env:Var"` |
-| `corh(Env):id(Var)` | $\sigma^2_j$ | `"Env:Var"` |
-| `us(Env):id(Var)` | $\sigma^2_{jj}$ (diagonal of **U**) | `"Env:Var"` |
-| `id(Var)` | $\sigma^2$ | `"Var"` |
-
-For factor analytic models, $G_{jj} = \boldsymbol{\lambda}_j^\top
-\boldsymbol{\lambda}_j + \psi_j$ where $\boldsymbol{\lambda}_j$ is the
-$k$-vector of factor loadings for environment $j$ and $\psi_j$ is the
-specific variance.
-
----
-
 ## Setup
 
 ### Simulated data

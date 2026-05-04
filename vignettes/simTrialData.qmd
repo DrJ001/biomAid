@@ -70,14 +70,7 @@ connectivity, genetic correlations, and the true underlying genetic values.
 
 Consider a MET with $n$ varieties, $s$ environments (sites), $r$ replicates,
 and $N = \sum_{j=1}^s n_j r$ total plots, where $n_j \le n$ is the number of
-varieties observed at site $j$. Stack all observations in site order into
-
-$$
-\mathbf{y} = \begin{pmatrix}\mathbf{y}_1 \\ \vdots \\ \mathbf{y}_s\end{pmatrix}
-  \in \mathbb{R}^{N}.
-$$
-
-The full cross-environment linear mixed model is
+varieties observed at site $j$. Let $\mathbf{y} = (\mathbf{y}_1^\top,\ldots,\mathbf{y}_s^\top)^\top \in \mathbb{R}^{N}$ be the vector of observations conformably partitioned by sites, then the multi-environment trial (MET) linear mixed model is
 
 $$
 \mathbf{y}
@@ -98,23 +91,24 @@ where:
 - $\mathbf{u} = (\mathbf{u}_1^\top,\ldots,\mathbf{u}_s^\top)^\top
   \in \mathbb{R}^{n_{\bullet}}$, $n_{\bullet} = \sum_j n_j$, stacks the
   true genetic values for the observed varieties at each site;
-- $\boldsymbol{\rho}$, $\boldsymbol{\phi}$, $\boldsymbol{\xi}$ stack the
+- $\boldsymbol{\rho}$, $\boldsymbol{\phi}$, $\boldsymbol{\xi}$ are the peripheral
   replicate, row, and column random effects across all sites;
-- $\boldsymbol{\varepsilon} \in \mathbb{R}^N$ is the plot-level residual.
+- $\boldsymbol{\varepsilon} (\mathbf{\varepsilon}_1^\top,\ldots,\mathbf{\varepsilon}_s^\top)^\top
+\in \mathbb{R}^N$ is vector of residuals conformably partitioned by sites.
 
-All random terms are mutually independent. The nuisance terms are homogeneous
+All random terms are mutually independent. The design based random terms are homogeneous
 within each site, so their variance matrices take a natural direct-sum form
 across environments:
 
 $$
 \operatorname{Var}(\boldsymbol{\rho})
-  = \bigoplus_{j=1}^{s} \sigma^2_{\mathrm{rep}}\,\mathbf{I}_{r},
+  = \oplus_{j=1}^{s} \sigma^2_{\mathrm{rep}}\,\mathbf{I}_{r},
 \qquad
 \operatorname{Var}(\boldsymbol{\phi})
-  = \bigoplus_{j=1}^{s} \sigma^2_{\mathrm{row}}\,\mathbf{I}_{R_j},
+  = \oplus_{j=1}^{s} \sigma^2_{\mathrm{row}}\,\mathbf{I}_{R_j},
 \qquad
 \operatorname{Var}(\boldsymbol{\xi})
-  = \bigoplus_{j=1}^{s} \sigma^2_{\mathrm{col}}\,\mathbf{I}_{C_j},
+  = \oplus_{j=1}^{s} \sigma^2_{\mathrm{col}}\,\mathbf{I}_{C_j},
 $$
 
 where $R_j$ and $C_j$ are the numbers of field rows and columns at site $j$
@@ -136,24 +130,8 @@ $$
 $$
 
 The spatial component uses a **separable first-order autoregressive** (AR1)
-structure across the field rows and columns within each site. For site $j$
-with $R_j$ rows and $C_j$ columns, the $R_j C_j$-vector of spatial errors
-$\boldsymbol{\eta}_j$ (plots ordered column-major, i.e. row index varies
-fastest) has covariance
-
-$$
-\operatorname{Var}(\boldsymbol{\eta}_j)
-  = \sigma^2_{\mathrm{spatial}}\,
-    \mathbf{H}_{C_j}\!\left(\rho^{(j)}_{\mathrm{col}}\right)
-    \otimes
-    \mathbf{H}_{R_j}\!\left(\rho^{(j)}_{\mathrm{row}}\right),
-$$
-
-where $\mathbf{H}_m(\rho)$ is the $m \times m$ AR1 correlation matrix with
-$(i,k)$ element $\rho^{|i-k|}$, and $\rho^{(j)}_{\mathrm{row}},\,
-\rho^{(j)}_{\mathrm{col}} \in (-1, 1)$ are the site-specific AR1 parameters.
-Stacking across all $s$ sites using the direct-sum notation, the full residual
-variance is
+structure across the field rows and columns within each site. Stacking across all
+$s$ sites using the direct-sum notation, the full residual variance is
 
 $$
 \operatorname{Var}(\boldsymbol{\varepsilon})
@@ -167,6 +145,10 @@ $$
       \sigma^2_{\mathrm{error}}\,\mathbf{I}_{R_j C_j}
     \Bigr].
 $$
+
+where $\mathbf{H}_m(\rho)$ is the $m \times m$ AR1 correlation matrix with
+$(i,k)$ element $\rho^{|i-k|}$, and $\rho^{(j)}_{\mathrm{row}},\,
+\rho^{(j)}_{\mathrm{col}} \in (-1, 1)$ are the site-specific AR1 parameters.
 
 The AR1 parameters can be **fixed** across all sites (a scalar supplied to
 `ar1_rho_row` / `ar1_rho_col`) or **site-varying**, with each
@@ -200,7 +182,7 @@ default. All six scale-dependent parameters are automatically proportioned to
 
 ---
 
-#### Genetic variance and the G-matrix
+### Genetic variance and the G-matrix
 
 The genetic term $\mathbf{u}$ is one of the key vectors of the simulation. Let
 $\mathbf{U} \in \mathbb{R}^{n \times J}$ be the complete matrix of true
@@ -227,17 +209,9 @@ exactly, and $\operatorname{Var}(\mathbf{u}) = \mathbf{G} \otimes \mathbf{I}_n$.
 For unbalanced designs, $\mathbf{u}_j = \mathbf{A}_j\,\mathbf{U}_{:j}$, where
 $\mathbf{A}_j \in \{0,1\}^{n_j \times n}$ is the variety selection matrix
 derived from column $j$ of the binary incidence matrix $\mathbf{I}$
-(see [Incidence structure](#incidence-structure)). $\mathbf{G}$ is an important component
-of the simulation and its construction is described next in the [Genetic covariance structure](#genetic-covariance-structure) section and it is returned directly as `params$G`.
+(see [Incidence structure](#incidence-structure)).
 
----
-
-### Genetic covariance structure
-
-The genetic values across all $s$ sites (or $s \times t$ Treatment $\times$
-Site groups for split-plot designs) are stacked into the $n \times J$ matrix
-$\mathbf{U}$, where $J = s$ for MET-only and $J = s \times t$ for
-multi-treatment designs. The rows of $\mathbf{U}$ are drawn from a
+The rows of $\mathbf{U}$ are drawn from a
 multivariate normal distribution via the Cholesky decomposition of the
 $J \times J$ genetic covariance matrix $\mathbf{G}$:
 
@@ -258,6 +232,7 @@ $$
 $$
 
 i.e. varieties are independent realisations from $\mathcal{N}(\mathbf{0}, \mathbf{G})$.
+$\mathbf{G}$ is returned directly as `params$G`.
 
 #### Auto-generated $\mathbf{G}$
 
