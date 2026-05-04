@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Julian Taylor">
-<meta name="dcterms.date" content="2026-05-03">
+<meta name="dcterms.date" content="2026-05-04">
 
 <title>biomAid - Simulating Multi-Environment Plant Breeding Trials</title>
 <style>
@@ -4732,7 +4732,7 @@ font-weight: 400;
   <ul class="collapse">
   <li><a href="#trial-structure" id="toc-trial-structure" class="nav-link" data-scroll-target="#trial-structure">Trial structure</a></li>
   <li><a href="#residual-variance-structure" id="toc-residual-variance-structure" class="nav-link" data-scroll-target="#residual-variance-structure">Residual variance structure</a></li>
-  <li><a href="#genetic-covariance-structure" id="toc-genetic-covariance-structure" class="nav-link" data-scroll-target="#genetic-covariance-structure">Genetic covariance structure</a></li>
+  <li><a href="#genetic-variance-and-the-g-matrix" id="toc-genetic-variance-and-the-g-matrix" class="nav-link" data-scroll-target="#genetic-variance-and-the-g-matrix">Genetic variance and the G-matrix</a></li>
   <li><a href="#incidence-structure" id="toc-incidence-structure" class="nav-link" data-scroll-target="#incidence-structure">Incidence structure</a></li>
   <li><a href="#layout" id="toc-layout" class="nav-link" data-scroll-target="#layout">Layout</a></li>
   </ul></li>
@@ -4788,7 +4788,7 @@ font-weight: 400;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">May 3, 2026</p>
+      <p class="date">May 4, 2026</p>
     </div>
   </div>
   
@@ -4860,12 +4860,7 @@ font-weight: 400;
 <h2 class="anchored" data-anchor-id="mathematical-framework">Mathematical Framework</h2>
 <section id="trial-structure" class="level3">
 <h3 class="anchored" data-anchor-id="trial-structure">Trial structure</h3>
-<p>Consider a MET with <span class="math inline">n</span> varieties, <span class="math inline">s</span> environments (sites), <span class="math inline">r</span> replicates, and <span class="math inline">N = \sum_{j=1}^s n_j r</span> total plots, where <span class="math inline">n_j \le n</span> is the number of varieties observed at site <span class="math inline">j</span>. Stack all observations in site order into</p>
-<p><span class="math display">
-\mathbf{y} = \begin{pmatrix}\mathbf{y}_1 \\ \vdots \\ \mathbf{y}_s\end{pmatrix}
-  \in \mathbb{R}^{N}.
-</span></p>
-<p>The full cross-environment linear mixed model is</p>
+<p>Consider a MET with <span class="math inline">n</span> varieties, <span class="math inline">s</span> environments (sites), <span class="math inline">r</span> replicates, and <span class="math inline">N = \sum_{j=1}^s n_j r</span> total plots, where <span class="math inline">n_j \le n</span> is the number of varieties observed at site <span class="math inline">j</span>. Let <span class="math inline">\mathbf{y} = (\mathbf{y}_1^\top,\ldots,\mathbf{y}_s^\top)^\top \in \mathbb{R}^{N}</span> be the vector of observations conformably partitioned by sites, then the multi-environment trial (MET) linear mixed model is</p>
 <p><span class="math display">
 \mathbf{y}
   = \mathbf{X}\boldsymbol{\mu}
@@ -4879,19 +4874,19 @@ font-weight: 400;
 <ul>
 <li><span class="math inline">\mathbf{X} \in \{0,1\}^{N \times s}</span> is the site fixed-effect incidence matrix and <span class="math inline">\boldsymbol{\mu} = (\mu_1,\ldots,\mu_s)^\top</span> the vector of site means, drawn independently as <span class="math inline">\mu_j \stackrel{\mathrm{ind}}{\sim} \mathcal{N}(\mu_0,\, \sigma^2_{\mathrm{site}})</span>;</li>
 <li><span class="math inline">\mathbf{u} = (\mathbf{u}_1^\top,\ldots,\mathbf{u}_s^\top)^\top \in \mathbb{R}^{n_{\bullet}}</span>, <span class="math inline">n_{\bullet} = \sum_j n_j</span>, stacks the true genetic values for the observed varieties at each site;</li>
-<li><span class="math inline">\boldsymbol{\rho}</span>, <span class="math inline">\boldsymbol{\phi}</span>, <span class="math inline">\boldsymbol{\xi}</span> stack the replicate, row, and column random effects across all sites;</li>
-<li><span class="math inline">\boldsymbol{\varepsilon} \in \mathbb{R}^N</span> is the plot-level residual.</li>
+<li><span class="math inline">\boldsymbol{\rho}</span>, <span class="math inline">\boldsymbol{\phi}</span>, <span class="math inline">\boldsymbol{\xi}</span> are the peripheral replicate, row, and column random effects across all sites;</li>
+<li><span class="math inline">\boldsymbol{\varepsilon} (\mathbf{\varepsilon}_1^\top,\ldots,\mathbf{\varepsilon}_s^\top)^\top \in \mathbb{R}^N</span> is vector of residuals conformably partitioned by sites.</li>
 </ul>
-<p>All random terms are mutually independent. The nuisance terms are homogeneous within each site, so their variance matrices take a natural direct-sum form across environments:</p>
+<p>All random terms are mutually independent. The design based random terms are homogeneous within each site, so their variance matrices take a natural direct-sum form across environments:</p>
 <p><span class="math display">
 \operatorname{Var}(\boldsymbol{\rho})
-  = \bigoplus_{j=1}^{s} \sigma^2_{\mathrm{rep}}\,\mathbf{I}_{r},
+  = \oplus_{j=1}^{s} \sigma^2_{\mathrm{rep}}\,\mathbf{I}_{r},
 \qquad
 \operatorname{Var}(\boldsymbol{\phi})
-  = \bigoplus_{j=1}^{s} \sigma^2_{\mathrm{row}}\,\mathbf{I}_{R_j},
+  = \oplus_{j=1}^{s} \sigma^2_{\mathrm{row}}\,\mathbf{I}_{R_j},
 \qquad
 \operatorname{Var}(\boldsymbol{\xi})
-  = \bigoplus_{j=1}^{s} \sigma^2_{\mathrm{col}}\,\mathbf{I}_{C_j},
+  = \oplus_{j=1}^{s} \sigma^2_{\mathrm{col}}\,\mathbf{I}_{C_j},
 </span></p>
 <p>where <span class="math inline">R_j</span> and <span class="math inline">C_j</span> are the numbers of field rows and columns at site <span class="math inline">j</span> (see <a href="#layout">Layout</a>).</p>
 <hr>
@@ -4905,15 +4900,7 @@ font-weight: 400;
 \qquad \boldsymbol{\delta} \sim \mathcal{N}(\mathbf{0},\,
   \sigma^2_{\mathrm{error}}\,\mathbf{I}_N).
 </span></p>
-<p>The spatial component uses a <strong>separable first-order autoregressive</strong> (AR1) structure across the field rows and columns within each site. For site <span class="math inline">j</span> with <span class="math inline">R_j</span> rows and <span class="math inline">C_j</span> columns, the <span class="math inline">R_j C_j</span>-vector of spatial errors <span class="math inline">\boldsymbol{\eta}_j</span> (plots ordered column-major, i.e. row index varies fastest) has covariance</p>
-<p><span class="math display">
-\operatorname{Var}(\boldsymbol{\eta}_j)
-  = \sigma^2_{\mathrm{spatial}}\,
-    \mathbf{H}_{C_j}\!\left(\rho^{(j)}_{\mathrm{col}}\right)
-    \otimes
-    \mathbf{H}_{R_j}\!\left(\rho^{(j)}_{\mathrm{row}}\right),
-</span></p>
-<p>where <span class="math inline">\mathbf{H}_m(\rho)</span> is the <span class="math inline">m \times m</span> AR1 correlation matrix with <span class="math inline">(i,k)</span> element <span class="math inline">\rho^{|i-k|}</span>, and <span class="math inline">\rho^{(j)}_{\mathrm{row}},\, \rho^{(j)}_{\mathrm{col}} \in (-1, 1)</span> are the site-specific AR1 parameters. Stacking across all <span class="math inline">s</span> sites using the direct-sum notation, the full residual variance is</p>
+<p>The spatial component uses a <strong>separable first-order autoregressive</strong> (AR1) structure across the field rows and columns within each site. Stacking across all <span class="math inline">s</span> sites using the direct-sum notation, the full residual variance is</p>
 <p><span class="math display">
 \operatorname{Var}(\boldsymbol{\varepsilon})
   = \bigoplus_{j=1}^{s}
@@ -4926,6 +4913,7 @@ font-weight: 400;
       \sigma^2_{\mathrm{error}}\,\mathbf{I}_{R_j C_j}
     \Bigr].
 </span></p>
+<p>where <span class="math inline">\mathbf{H}_m(\rho)</span> is the <span class="math inline">m \times m</span> AR1 correlation matrix with <span class="math inline">(i,k)</span> element <span class="math inline">\rho^{|i-k|}</span>, and <span class="math inline">\rho^{(j)}_{\mathrm{row}},\, \rho^{(j)}_{\mathrm{col}} \in (-1, 1)</span> are the site-specific AR1 parameters.</p>
 <p>The AR1 parameters can be <strong>fixed</strong> across all sites (a scalar supplied to <code>ar1_rho_row</code> / <code>ar1_rho_col</code>) or <strong>site-varying</strong>, with each <span class="math inline">\rho^{(j)}</span> drawn independently and uniformly from a user-supplied range <span class="math inline">[r_{\min}, r_{\max}]</span>, producing a different spatial structure at every trial location. The simulation uses the efficient Kronecker–Cholesky factorisation</p>
 <p><span class="math display">
 \boldsymbol{\eta}_j = \sigma_{\mathrm{spatial}}\,
@@ -4938,21 +4926,17 @@ font-weight: 400;
 <p>When <code>ar1_rho_row = ar1_rho_col = NULL</code> (the default) the spatial component is absent and <span class="math inline">\operatorname{Var}(\boldsymbol{\varepsilon}) = \sigma^2_{\mathrm{error}}\,\mathbf{I}_N</span>.</p>
 <p>Default variance parameters are <span class="math inline">\sigma_{\mathrm{rep}} = 150</span>, <span class="math inline">\sigma_{\mathrm{row}} = 80</span>, <span class="math inline">\sigma_{\mathrm{col}} = 60</span>, <span class="math inline">\sigma_{\mathrm{error}} = 350</span>, and — when the AR1 spatial component is active — <span class="math inline">\sigma_{\mathrm{spatial}} = \sigma_{\mathrm{error}} / 2 = 175</span> by default. All six scale-dependent parameters are automatically proportioned to <code>site_mean</code> when only <code>site_mean</code> is changed by the user.</p>
 <hr>
-<section id="genetic-variance-and-the-g-matrix" class="level4">
-<h4 class="anchored" data-anchor-id="genetic-variance-and-the-g-matrix">Genetic variance and the G-matrix</h4>
+</section>
+<section id="genetic-variance-and-the-g-matrix" class="level3">
+<h3 class="anchored" data-anchor-id="genetic-variance-and-the-g-matrix">Genetic variance and the G-matrix</h3>
 <p>The genetic term <span class="math inline">\mathbf{u}</span> is one of the key vectors of the simulation. Let <span class="math inline">\mathbf{U} \in \mathbb{R}^{n \times J}</span> be the complete matrix of true genetic values for all <span class="math inline">n</span> varieties across all <span class="math inline">J</span> groups, where <span class="math inline">J = s</span> for MET-only designs and <span class="math inline">J = s \times t</span> for multi-treatment designs with <span class="math inline">t</span> treatments. Because varieties are genetically independent realisations from the same <span class="math inline">J</span>-variate distribution,</p>
 <p><span class="math display">
 \operatorname{vec}(\mathbf{U})
   \sim \mathcal{N}\!\left(\mathbf{0},\;\mathbf{G} \otimes \mathbf{I}_n\right),
 </span></p>
 <p>where <span class="math inline">\mathbf{G}</span> is a <span class="math inline">J \times J</span> symmetric positive-definite genetic covariance matrix. The Kronecker structure encodes two things simultaneously: the <span class="math inline">\mathbf{I}_n</span> factor asserts that varieties are genetically independent of one another, while <span class="math inline">\mathbf{G}</span> governs how each variety’s genetic value co-varies <strong>across</strong> environments. Specifically, <span class="math inline">G_{jj}</span> is the genetic variance at environment <span class="math inline">j</span> and <span class="math inline">G_{jk}/\sqrt{G_{jj}G_{kk}}</span> is the genetic correlation between environments <span class="math inline">j</span> and <span class="math inline">k</span>.</p>
-<p>For balanced designs (<span class="math inline">n_j = n</span> for all <span class="math inline">j</span>), <span class="math inline">\mathbf{u} = \operatorname{vec}(\mathbf{U})</span> exactly, and <span class="math inline">\operatorname{Var}(\mathbf{u}) = \mathbf{G} \otimes \mathbf{I}_n</span>. For unbalanced designs, <span class="math inline">\mathbf{u}_j = \mathbf{A}_j\,\mathbf{U}_{:j}</span>, where <span class="math inline">\mathbf{A}_j \in \{0,1\}^{n_j \times n}</span> is the variety selection matrix derived from column <span class="math inline">j</span> of the binary incidence matrix <span class="math inline">\mathbf{I}</span> (see <a href="#incidence-structure">Incidence structure</a>). <span class="math inline">\mathbf{G}</span> is an important component of the simulation and its construction is described next in the <a href="#genetic-covariance-structure">Genetic covariance structure</a> section and it is returned directly as <code>params$G</code>.</p>
-<hr>
-</section>
-</section>
-<section id="genetic-covariance-structure" class="level3">
-<h3 class="anchored" data-anchor-id="genetic-covariance-structure">Genetic covariance structure</h3>
-<p>The genetic values across all <span class="math inline">s</span> sites (or <span class="math inline">s \times t</span> Treatment <span class="math inline">\times</span> Site groups for split-plot designs) are stacked into the <span class="math inline">n \times J</span> matrix <span class="math inline">\mathbf{U}</span>, where <span class="math inline">J = s</span> for MET-only and <span class="math inline">J = s \times t</span> for multi-treatment designs. The rows of <span class="math inline">\mathbf{U}</span> are drawn from a multivariate normal distribution via the Cholesky decomposition of the <span class="math inline">J \times J</span> genetic covariance matrix <span class="math inline">\mathbf{G}</span>:</p>
+<p>For balanced designs (<span class="math inline">n_j = n</span> for all <span class="math inline">j</span>), <span class="math inline">\mathbf{u} = \operatorname{vec}(\mathbf{U})</span> exactly, and <span class="math inline">\operatorname{Var}(\mathbf{u}) = \mathbf{G} \otimes \mathbf{I}_n</span>. For unbalanced designs, <span class="math inline">\mathbf{u}_j = \mathbf{A}_j\,\mathbf{U}_{:j}</span>, where <span class="math inline">\mathbf{A}_j \in \{0,1\}^{n_j \times n}</span> is the variety selection matrix derived from column <span class="math inline">j</span> of the binary incidence matrix <span class="math inline">\mathbf{I}</span> (see <a href="#incidence-structure">Incidence structure</a>).</p>
+<p>The rows of <span class="math inline">\mathbf{U}</span> are drawn from a multivariate normal distribution via the Cholesky decomposition of the <span class="math inline">J \times J</span> genetic covariance matrix <span class="math inline">\mathbf{G}</span>:</p>
 <p><span class="math display">
 \mathbf{U} = \mathbf{Z} \mathbf{L},
 \quad
@@ -4964,7 +4948,7 @@ font-weight: 400;
 <p><span class="math display">
 \mathbf{U} \sim \mathcal{MN}_{n \times J}(\mathbf{0},\, \mathbf{I}_n,\, \mathbf{G}),
 </span></p>
-<p>i.e. varieties are independent realisations from <span class="math inline">\mathcal{N}(\mathbf{0}, \mathbf{G})</span>.</p>
+<p>i.e. varieties are independent realisations from <span class="math inline">\mathcal{N}(\mathbf{0}, \mathbf{G})</span>. <span class="math inline">\mathbf{G}</span> is returned directly as <code>params$G</code>.</p>
 <section id="auto-generated-mathbfg" class="level4">
 <h4 class="anchored" data-anchor-id="auto-generated-mathbfg">Auto-generated <span class="math inline">\mathbf{G}</span></h4>
 <p>When <code>G = &quot;auto&quot;</code> (the default), a random SPD correlation matrix <span class="math inline">\mathbf{R}</span> is constructed such that the off-diagonal elements lie approximately in the user-specified interval <span class="math inline">[r_\text{min},\, r_\text{max}]</span> (controlled by <code>sim.options$g_cor_min</code> and <code>sim.options$g_cor_max</code>, defaulting to 0.20 and 0.90). This is achieved by:</p>

@@ -154,6 +154,10 @@ NULL
       pool   <- pool[pool$Variety != pick, , drop = FALSE]
     }
 
+    if (length(chosen) == 0L)
+      return(data.frame(Variety = character(0L), group = character(0L),
+                        stringsAsFactors = FALSE))
+
     data.frame(Variety = chosen, group = grp, stringsAsFactors = FALSE)
   }
 
