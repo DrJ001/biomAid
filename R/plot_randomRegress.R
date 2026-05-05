@@ -13,11 +13,100 @@ NULL
 
 # ---- Data preparation helpers ------------------------------------------
 
-#' @noRd
-.rreg_regress_data <- function(res, treatments, centre) {
+# ---- AVP helpers ---------------------------------------------------------
 
-  blups       <- res$blups
-  cond_list   <- res$cond_list
+#' Extract the T x T within-site G-matrix block from the full Gmat
+#'
+#' @param Gmat       Full Gmat with column names combining treatment and site
+#' @param site       Site label (e.g. "Env1")
+#' @param treatments Character vector of treatment labels needed
+#' @param sep        Separator used to join treatment and site labels
+#' @return T x T matrix with rownames/colnames = treatments, or NULL on failure
+#' @noRd
+.rreg_site_Gmat <- function(Gmat, site, treatments, sep) {
+
+  tsnams <- colnames(Gmat)
+
+  if (!any(grepl(sep, tsnams, fixed = TRUE))) {
+    # No separator: tsnams ARE the treatment labels (single group, no site)
+    ok <- treatments[treatments %in% tsnams]
+    if (length(ok) == 0L) return(NULL)
+    return(Gmat[ok, ok, drop = FALSE])
+  }
+
+  st    <- strsplit(tsnams, split = sep, fixed = TRUE)
+  part1 <- vapply(st, `[`, character(1L), 1L)
+  part2 <- vapply(st, `[`, character(1L), 2L)
+
+  # Determine which part carries treatment vs site labels
+  if (all(treatments %in% part1)) {
+    tnam <- part1; snam <- part2
+  } else {
+    tnam <- part2; snam <- part1
+  }
+
+  site_cols <- which(snam == site & tnam %in% treatments)
+  if (length(site_cols) == 0L) return(NULL)
+
+  G_ss <- Gmat[site_cols, site_cols, drop = FALSE]
+  dimnames(G_ss) <- list(tnam[site_cols], tnam[site_cols])
+  G_ss
+}
+
+#' Compute added-variable-plot residuals for one conditioning panel
+#'
+#' Projects both the x-axis treatment (k) and the conditioned treatment (j)
+#' onto the orthogonal complement of A_rest using the G-matrix, so that the
+#' slope of the resulting scatter equals the stored partial regression
+#' coefficient exactly (in population).
+#'
+#' @param blups_j    Numeric vector — raw BLUPs for conditioned treatment j
+#' @param blups_k    Numeric vector — raw BLUPs for x-axis treatment k
+#' @param blups_rest Data frame or matrix — raw BLUPs for A_rest treatments
+#' @param G_ss       T x T within-site G-matrix (rownames = treatment labels)
+#' @param j,k        Treatment label strings
+#' @param A_rest     Character vector of remaining conditioning treatments
+#' @return List with elements x and y (partial residuals)
+#' @noRd
+.rreg_avp_xy <- function(blups_j, blups_k, blups_rest, G_ss, j, k, A_rest) {
+
+  if (length(A_rest) == 0L)
+    return(list(x = blups_k, y = blups_j))
+
+  G_rr <- G_ss[A_rest, A_rest, drop = FALSE]
+  G_rk <- G_ss[A_rest, k,      drop = FALSE]
+  G_rj <- G_ss[A_rest, j,      drop = FALSE]
+
+  solve_safe <- function(A, b) {
+    tryCatch(
+      if (nrow(A) == 1L) drop(b) / A[1L, 1L] else drop(solve(A, b)),
+      error = function(e) NULL
+    )
+  }
+
+  gamma_k <- solve_safe(G_rr, G_rk)
+  gamma_j <- solve_safe(G_rr, G_rj)
+
+  # Fallback to raw BLUPs if G is singular or A_rest has NAs
+  if (is.null(gamma_k) || is.null(gamma_j) || anyNA(blups_rest))
+    return(list(x = blups_k, y = blups_j))
+
+  u_rest <- as.matrix(blups_rest)
+  list(
+    x = blups_k - drop(u_rest %*% gamma_k),
+    y = blups_j - drop(u_rest %*% gamma_j)
+  )
+}
+
+# ---- Regression data builder ---------------------------------------------
+
+#' @noRd
+.rreg_regress_data <- function(res, treatments, centre, cond_x = 1L) {
+
+  blups     <- res$blups
+  cond_list <- res$cond_list
+  Gmat      <- res$Gmat
+  sep       <- if (!is.null(res$sep)) res$sep else "-"  # stored by randomRegress()
   conditioned <- names(Filter(Negate(is.null), cond_list))
 
   if (!is.null(treatments))
@@ -25,27 +114,88 @@ NULL
   if (length(conditioned) == 0L)
     stop("No conditioned treatments to plot. Check 'treatments'.")
 
-  rows <- lapply(conditioned, function(lv_j) {
+  n_panels <- length(conditioned)
+  cx       <- rep_len(as.integer(cond_x), n_panels)
+
+  # Validate each index against its panel's A_j length
+  for (ci in seq_len(n_panels)) {
+    lv_j <- conditioned[ci]
+    aj_n <- length(cond_list[[lv_j]])
+    if (cx[ci] < 1L || cx[ci] > aj_n) {
+      warning("cond_x[", ci, "] = ", cx[ci], " is out of range for '", lv_j,
+              "' (conditioning set has ", aj_n, " member(s)). Using 1.")
+      cx[ci] <- 1L
+    }
+  }
+
+  cond_lv_used <- character(n_panels)
+  avp_active   <- FALSE
+
+  rows <- lapply(seq_len(n_panels), function(ci) {
+
+    lv_j    <- conditioned[ci]
     A_j     <- cond_list[[lv_j]]
-    cond_lv <- A_j[1L]
-    beta_j  <- res$beta[[lv_j]]          # ns x |A_j|, rownames = sites
+    cond_lv <- A_j[cx[ci]]
+    A_rest  <- A_j[-cx[ci]]          # all A_j members EXCEPT the selected one
+    cond_lv_used[ci] <<- cond_lv
+
+    beta_j    <- res$beta[[lv_j]]    # ns x |A_j|, rownames = sites
     site_beta <- setNames(beta_j[, cond_lv], rownames(beta_j))
-    df <- data.frame(
-      Site       = blups$Site,
-      Variety    = blups$Variety,
-      x          = blups[[cond_lv]],
-      y          = blups[[lv_j]],
-      pair_label = paste0(lv_j, " | ", paste(A_j, collapse = ", ")),
-      beta       = site_beta[as.character(blups$Site)],
-      stringsAsFactors = FALSE
-    )
+
+    if (length(A_rest) == 0L) {
+      # |A_j| = 1: no projection needed — use raw BLUPs
+      df <- data.frame(
+        Site       = blups$Site,
+        Variety    = blups$Variety,
+        x          = blups[[cond_lv]],
+        y          = blups[[lv_j]],
+        pair_label = paste0(lv_j, " | ", paste(A_j, collapse = ", ")),
+        beta       = site_beta[as.character(blups$Site)],
+        stringsAsFactors = FALSE
+      )
+    } else {
+      # |A_j| >= 2: added variable plot — project per site
+      avp_active <<- TRUE
+      site_rows <- lapply(unique(blups$Site), function(s) {
+        idx <- blups$Site == s
+        bs  <- blups[idx, , drop = FALSE]
+
+        G_ss <- .rreg_site_Gmat(Gmat, s,
+                                unique(c(lv_j, A_j)), sep)
+        avp  <- .rreg_avp_xy(
+          blups_j    = bs[[lv_j]],
+          blups_k    = bs[[cond_lv]],
+          blups_rest = bs[, A_rest, drop = FALSE],
+          G_ss       = G_ss,
+          j          = lv_j,
+          k          = cond_lv,
+          A_rest     = A_rest
+        )
+        data.frame(
+          Site       = s,
+          Variety    = bs$Variety,
+          x          = avp$x,
+          y          = avp$y,
+          pair_label = paste0(lv_j, " | ", paste(A_j, collapse = ", ")),
+          beta       = site_beta[s],
+          stringsAsFactors = FALSE
+        )
+      })
+      df <- do.call(rbind, site_rows)
+    }
+
     if (centre) {
       df$x <- df$x + ave(df$x, df$Site, FUN = mean)
       df$y <- df$y + ave(df$y, df$Site, FUN = mean)
     }
     df
   })
-  do.call(rbind, rows)
+
+  out  <- do.call(rbind, rows)
+  x_lv <- if (length(unique(cond_lv_used)) == 1L) cond_lv_used[1L] else NULL
+  attr(out, "cond_lv")    <- x_lv
+  attr(out, "avp_active") <- avp_active
+  out
 }
 
 #' @noRd
@@ -236,6 +386,23 @@ NULL
 
   base_col <- if (is.null(hl)) "#4E79A7" else "grey50"
 
+  # x-axis label and caption reflect whether AVP projection was applied.
+  cond_lv    <- attr(df, "cond_lv")
+  avp_active <- isTRUE(attr(df, "avp_active"))
+
+  x_label <- if (!is.null(cond_lv)) {
+    base <- if (avp_active) paste0(cond_lv, " BLUP (partial residual)")
+            else paste0(cond_lv, " BLUP")
+    if (centre) paste0(base, " + site mean") else base
+  } else {
+    if (centre) "Conditioning BLUP (+ site mean)" else "Conditioning treatment BLUP"
+  }
+
+  plot_caption <- if (avp_active)
+    "Added variable plot \u2014 x and y are partial residuals; dotted line: partial regression coefficient"
+  else
+    "Dotted line: site-specific random regression"
+
   p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y)) +
     ggplot2::geom_hline(yintercept = 0, linewidth = 0.25, colour = "grey70") +
     ggplot2::geom_vline(xintercept = 0, linewidth = 0.25, colour = "grey70") +
@@ -255,11 +422,10 @@ NULL
     ) +
     ggplot2::facet_grid(pair_label ~ Site, scales = "free") +
     ggplot2::labs(
-      x       = if (centre) "Conditioning BLUP (+ site mean)" else
-                             "Conditioning treatment BLUP",
-      y       = if (centre) "Conditioned BLUP (+ site mean)"  else
+      x       = x_label,
+      y       = if (centre) "Conditioned BLUP (+ site mean)" else
                              "Conditioned treatment BLUP",
-      caption = "Dotted line: site-specific random regression"
+      caption = plot_caption
     ) +
     theme +
     ggplot2::theme(
@@ -387,6 +553,22 @@ NULL
 #'   so the change is minimal; this option is mainly useful when BLUPs have
 #'   been computed from treatment means (e.g. in the demo).
 #'   Ignored for `type = "gmat"`.
+#' @param cond_x      Positive integer or integer vector (default `1L`).
+#'   Selects which member of the conditioning set \eqn{A_j} is placed on
+#'   the x-axis of the `"regress"` plot for each conditioned-treatment
+#'   panel.  A scalar is recycled across all panels; a vector of the same
+#'   length as the number of conditioned treatments plotted sets each panel
+#'   independently.  For example, with three conditioned treatments under
+#'   partial conditioning:
+#'   \itemize{
+#'     \item `cond_x = 1L` (default) — first member of \eqn{A_j} for every
+#'       panel, e.g. `c(1, 1, 1)`.
+#'     \item `cond_x = 2L` — second member for every panel.
+#'     \item `cond_x = c(2, 1, 2)` — panel-specific selection.
+#'   }
+#'   An index that exceeds \eqn{|A_j|} for a given panel triggers a warning
+#'   and falls back to 1.  Has no effect when \eqn{|A_j| = 1} (e.g.
+#'   `type = "baseline"`).  Ignored for `type = "quadrant"` and `"gmat"`.
 #' @param highlight   Controls variety annotation for `"regress"` and
 #'   `"quadrant"` plots. One of:
 #'   \describe{
@@ -428,6 +610,17 @@ NULL
 #'
 #' # Retrieve the tidy data frame
 #' df <- plot_randomRegress(res, type = "quadrant", return_data = TRUE)
+#'
+#' # Partial conditioning — default (first conditioning treatment on x)
+#' res_part <- randomRegress(model, term = "us(TSite):Variety",
+#'                           levs = c("N0","N1","N2"), type = "partial")
+#' plot_randomRegress(res_part, type = "regress")              # cond_x = 1L
+#'
+#' # Show the second conditioning treatment on the x-axis for all panels
+#' plot_randomRegress(res_part, type = "regress", cond_x = 2L)
+#'
+#' # Mixed: second for panels 1 & 3, first for panel 2
+#' plot_randomRegress(res_part, type = "regress", cond_x = c(2L, 1L, 2L))
 #' }
 #'
 #' @export
@@ -436,6 +629,7 @@ plot_randomRegress <- function(res,
                                treatments  = NULL,
                                highlight   = "default",
                                centre      = FALSE,
+                               cond_x      = 1L,
                                theme       = ggplot2::theme_bw(),
                                return_data = FALSE,
                                ...) {
@@ -459,9 +653,14 @@ plot_randomRegress <- function(res,
   if (!is.logical(centre) || length(centre) != 1L)
     stop("'centre' must be a single logical value (TRUE or FALSE).")
 
+  if (!is.numeric(cond_x) || length(cond_x) < 1L ||
+      any(is.na(cond_x)) || any(cond_x < 1L) ||
+      any(cond_x != as.integer(cond_x)))
+    stop("'cond_x' must be a positive integer or integer vector.")
+
   # ---- Build tidy data ---------------------------------------------------
   df <- switch(type,
-    regress  = .rreg_regress_data( res, treatments, centre),
+    regress  = .rreg_regress_data( res, treatments, centre, cond_x),
     quadrant = .rreg_quadrant_data(res, treatments, centre),
     gmat     = .rreg_gmat_data(    res)
   )

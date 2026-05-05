@@ -573,5 +573,6 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
        sigmat    = sigmat,
        tmat      = tmat,
        cond_list = cond_list,
-       type      = type)
+       type      = type,
+       sep       = sep)
 }

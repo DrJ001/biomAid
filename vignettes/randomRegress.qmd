@@ -358,24 +358,53 @@ data.frame(
 )
 ```
 
-### Regression plot
+### Regression plots — added variable plots
 
-The regression plot shows the raw treatment BLUP (y-axis) against the
-conditioning BLUP (x-axis). Under partial conditioning the conditioning
-set includes **all other treatments**, so there is a single regression for
-each pair. The slope $\hat{\beta}$ is annotated in the top-left corner.
+Under partial conditioning every treatment has $|A_j| = 2$, so the
+regression of $\hat{u}_j$ on $A_j$ is inherently three-dimensional and
+cannot be shown in a single 2-D scatter. Both regression plots below are
+therefore **added variable plots**: for each panel, both the x-axis and the
+y-axis show *partial residuals* after projecting out the remaining
+conditioning treatment using the G-matrix, so that the annotated slope
+$\hat{\beta}$ aligns correctly with the scatter.
+
+Formally, for panel $j$ with $A_j = \{k, r\}$ and `cond_x` selecting $k$:
+
+$$
+x_v = \hat{u}_{k,v} - \tfrac{G_{rk}}{G_{rr}}\,\hat{u}_{r,v},
+\qquad
+y_v = \hat{u}_{j,v} - \tfrac{G_{rj}}{G_{rr}}\,\hat{u}_{r,v}.
+$$
+
+The two plots show **different 2-D slices** of the same 3-D regression —
+`cond_x = 1L` projects onto the first conditioning treatment (after
+removing the second), and `cond_x = 2L` projects onto the second (after
+removing the first). Each strip label shows the full conditioning set,
+e.g. `T1 | T0, T2`. A per-panel integer vector, e.g.
+`cond_x = c(2L, 1L, 2L)`, allows a different slice in each panel.
 
 ```{r plot_reg1}
 #| eval: !expr asreml_ok
 #| fig-height: 9
 #| dependson: "rr1"
+# Slice 1: first conditioning treatment on x (T1 for T0; T0 for T1 and T2)
 p_reg1 <- plot_randomRegress(res1, type = "regress")
 print(p_reg1)
 ```
 
-A slope $\hat{\beta} > 0$ and close to 1 means the two treatments share
-similar genetic rankings; a slope close to 0 means the treatment adds
-little information once the others are accounted for.
+```{r plot_reg1_cx}
+#| eval: !expr asreml_ok
+#| fig-height: 9
+#| dependson: "rr1"
+# Slice 2: second conditioning treatment on x (T2 for T0 and T1; T1 for T2)
+p_reg1_cx <- plot_randomRegress(res1, type = "regress", cond_x = 2L)
+print(p_reg1_cx)
+```
+
+Comparing the slopes across the two slices reveals the relative contribution
+of each conditioning treatment to explaining the conditioned treatment's BLUPs.
+A steeper slope in one slice than the other indicates that dimension of $A_j$
+carries more of the shared genetic signal.
 
 ### Quadrant plot with default highlights
 
