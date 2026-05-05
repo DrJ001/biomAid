@@ -40,7 +40,7 @@ if (asreml_ok) {
 
 ## Overview
 
-`randomRegress()` decomposes variety BLUPs from a multi-environment trial
+`randomRegress()` decomposes variety BLUPs from a multi-treatment, multi-environment trial
 into two biologically interpretable components:
 
 - **Efficiency** — a variety's genetic value under the baseline (typically
@@ -49,9 +49,9 @@ into two biologically interpretable components:
   genetically to the application of a treatment.
 
 The decomposition is derived from the **G-matrix** (genetic
-variance–covariance matrix across Treatment × Site combinations) using the
-Gaussian conditional distribution. It generalises naturally from two
-treatments to any number, with four built-in conditioning schemes.
+variance–covariance matrix across Treatment × Site combinations) using
+Gaussian conditional distribution theory. It generalises naturally from two
+treatments to any number, with four built-in conditioning schemes used in this function.
 
 `plot_randomRegress()` visualises the result as a regression scatter plot,
 an efficiency–responsiveness quadrant plot, or a G-matrix heatmap.
@@ -60,99 +60,84 @@ an efficiency–responsiveness quadrant plot, or a G-matrix heatmap.
 
 ## Mathematical Framework
 
-### The multi-treatment, multi-environment LMM
-
-Consider $n$ varieties evaluated across $s = 1, \ldots, S$ sites under
-$t = 1, \ldots, T$ treatments. For variety $v$ at site $s$ under treatment $t$,
-the linear mixed model is
-
-$$
-y_{tsv} = \tau_{ts} + u_{tsv} + \rho_{sr} + \varepsilon_{tsv},
-$$
-
-where $\tau_{ts}$ is a fixed Treatment × Site mean, $\rho_{sr}$ is a random
-replicate-within-site effect, and $\varepsilon_{tsv}$ is the residual. The
-genetic effect $u_{tsv}$ is the key quantity of interest.
-
-Stacking observations across all treatment × site combinations into the
-vector $\mathbf{y}$, the model can be written compactly as
-
-$$
-\mathbf{y} = \mathbf{X}\boldsymbol{\tau} + \mathbf{Z}\mathbf{u} + \mathbf{W}\boldsymbol{\rho} + \boldsymbol{\varepsilon},
-$$
-
-where $\mathbf{X}$, $\mathbf{Z}$, and $\mathbf{W}$ are incidence matrices for
-fixed effects, genetic effects, and replicates respectively.
-
-**Genetic effects.** The $n \times (T \cdot S)$ matrix
-$\mathbf{U} = [\mathbf{u}_{11} \mid \cdots \mid \mathbf{u}_{TS}]$ of
-variety BLUPs stacked across all treatment × site groups satisfies
-
-$$
-\operatorname{vec}(\mathbf{U}) \sim \mathcal{N}(\mathbf{0},\; \mathbf{G} \otimes \mathbf{I}_n),
-$$
-
-where $\mathbf{G}$ is the $(T \cdot S) \times (T \cdot S)$ genetic
-variance–covariance matrix (the G-matrix), and $\mathbf{I}_n$ is the
-$n \times n$ identity over varieties. Each block $\mathbf{G}_{ts,t's'}$
-describes the genetic covariance between treatment $t$ at site $s$ and
-treatment $t'$ at site $s'$.
-
-**Replicate variance.** The site-level replicate effects are modelled as
-$\boldsymbol{\rho} \sim \mathcal{N}(\mathbf{0},\; \bigoplus_s \sigma^2_s \mathbf{I}_{r_s})$,
-corresponding to the `at(Site):Rep` term in ASReml-R.
-
-**Residual variance.** Within each site a separable first-order
-autoregressive structure captures spatial trends along rows and columns,
-$\boldsymbol{\varepsilon}_s \sim \mathcal{N}(\mathbf{0},\; \sigma^2_{e,s}\,\mathbf{A}_s(\rho_r) \otimes \mathbf{A}_s(\rho_c))$,
-corresponding to `ar1(Row):ar1(Column)` nested within site.
-
-For full derivations of the incidence matrices, Kronecker products, and
-auto-generated genetic structures, see the
-[Simulating Multi-Environment Trials](simTrialData.html) vignette.
-
-In ASReml-R V4 this model is written as:
-
-```r
-model <- asreml(
-  yield    ~ TSite,
-  random   = ~ corgh(TSite):Variety + at(Site):Rep,
-  residual = ~ dsum(~ ar1(Row):ar1(Column) | Site),
-  data     = dat
-)
-```
-
-where `TSite` is a composite factor formed by pasting the treatment label
-onto the site label (e.g. `"T0-Site1"`). This is necessary because
-ASReml-R requires a single factor to index the columns of the G-matrix.
-
----
-
 ### The G-matrix
 
-The G-matrix returned by ASReml-R V4 for the `struct(TSite):Variety` random
-term is indexed by the levels of `TSite`. For a single site with three
-treatments, $\mathbf{G}$ is a $3 \times 3$ matrix; for four sites and three
-treatments it is $12 \times 12$.
+For full specification of the multi-treatment, multi-environment LMM see the
+[Simulating Multi-Environment Trials](simTrialData.html) vignette.
 
-The structure keyword (`corgh`, `us`, `fa`, `diag`, …) controls how
-$\mathbf{G}$ is parameterised. `randomRegress()` accepts any of these:
+Let $\hat{\mathbf{u}}$ be the vector of variety BLUPs stacked across all
+$p = T \times S$ treatment $\times$ site groups, where $T$ is the number
+of treatments and $S$ the number of sites. The genetic
+variance–covariance structure is described by the **G-matrix**:
 
-| ASReml-R term | G-matrix form |
+$$
+\operatorname{Var}(\hat{\mathbf{u}}) = \mathbf{G} \otimes \mathbf{I}_n,
+$$
+
+where $\mathbf{I}_n$ is the $n \times n$ identity over varieties and the
+$p \times p$ G-matrix has a natural $S \times S$ block structure, with each
+block being $T \times T$:
+
+$$
+\mathbf{G} =
+\begin{pmatrix}
+\mathbf{G}_{11} & \mathbf{G}_{12} & \cdots & \mathbf{G}_{1S} \\
+\mathbf{G}_{21} & \mathbf{G}_{22} & \cdots & \mathbf{G}_{2S} \\
+\vdots          & \vdots          & \ddots & \vdots           \\
+\mathbf{G}_{S1} & \mathbf{G}_{S2} & \cdots & \mathbf{G}_{SS}
+\end{pmatrix}.
+$$
+
+Each **diagonal block** $\mathbf{G}_{ss}$ is the $T \times T$ matrix of
+genetic (co)variances among treatments *within* site $s$:
+
+$$
+\mathbf{G}_{ss} =
+\begin{pmatrix}
+\sigma^2_{1s}       & \sigma_{1s,2s} & \cdots & \sigma_{1s,Ts} \\
+\sigma_{2s,1s} & \sigma^2_{2s}       & \cdots & \sigma_{2s,Ts} \\
+\vdots         & \vdots         & \ddots & \vdots         \\
+\sigma_{Ts,1s} & \sigma_{Ts,2s} & \cdots & \sigma^2_{Ts}
+\end{pmatrix},
+$$
+
+where $\sigma^2_{ts}$ is the genetic variance for treatment $t$ at site $s$
+and $\sigma_{ts,t's}$ is the genetic covariance between treatments $t$ and
+$t'$ within the same site. Each **off-diagonal block** $\mathbf{G}_{ss'}$
+($s \neq s'$) is the analogous $T \times T$ matrix of genetic covariances
+for treatment pairs *across* sites $s$ and $s'$.
+
+### Allowable ASReml-R specifications
+
+To obtain the $\mathbf{G}$ matrix `randomRegress()` allows various specifications
+of the Treatment $\times$ Site $\times$ Variety interaction through its flexible `term`
+argument. 
+
+| ASReml-R term | Estimated matrix form |
 |---|---|
-| `corgh(TSite):Variety` | Heterogeneous variances, one shared correlation parameter per pair |
+| `corgh(TSite):Variety` | Heterogeneous variances, fully unstructured correlation matrix|
 | `corh(TSite):Variety` | Heterogeneous variances, single correlation (2-group) |
 | `us(TSite):Variety` | Fully unstructured covariance matrix |
-| `fa(TSite, k):Variety` | Factor analytic of order $k$ |
-| `diag(TSite):Variety` | Diagonal — zero between-group covariances |
+| `fa(TSite, k):Variety` | Fully unstructured covariance matrix |
+
+For `corgh()` and `corh()` the estimated matrix is converted to a fully unstructured variance
+matrix $\mathbf{G}$ in `randomRegress()` before regressions are undertaken. To ensure maxi um flexibiit
 
 ---
 
 ### Conditional decomposition
 
-For treatment-site combination $j$ with conditioning set $A_j$ (a subset of
-the other treatment-site labels), the **multivariate conditional normal**
-distribution gives the regression of $\hat{u}_{j}$ on $\hat{\mathbf{u}}_{A_j}$:
+Conditioning is performed **within sites only**. For a given site $s$,
+the $T$ treatment groups are indexed locally as $j = 1, \ldots, T$.
+The scalar $G_{jj}$ is the marginal genetic variance for treatment $j$
+at site $s$, i.e. the $(j,j)$ element of the within-site diagonal block
+$\mathbf{G}_{ss}$. The sub-vector $\mathbf{G}_{A_j j}$ contains the
+covariances between treatment $j$ and the conditioning set
+$A_j \subseteq \{1,\ldots,T\} \setminus \{j\}$, drawn from the same
+block $\mathbf{G}_{ss}$.
+
+With this specification the **multivariate conditional normal** distribution gives
+the regression of $\hat{u}_{j}$ on $\hat{\mathbf{u}}_{A_j}$:
 
 $$
 \hat{u}_{j} \mid \hat{\mathbf{u}}_{A_j}
@@ -169,6 +154,9 @@ $$
 \qquad
 \sigma^2_{j \mid A_j} = G_{jj} - \mathbf{G}_{j A_j}\,\boldsymbol{\beta}_j.
 $$
+
+Here $\mathbf{G}_{A_j A_j}$, $\mathbf{G}_{A_j j}$, and $G_{jj}$ are all
+sub-blocks or elements of the within-site diagonal block $\mathbf{G}_{ss}$.
 
 The **responsiveness BLUP** for variety $v$ is the residual from this
 regression:
@@ -212,7 +200,7 @@ The four built-in schemes differ only in how $A_j$ is chosen:
 | Scheme | $A_j$ for treatment $j$ | $\mathbf{V}_T$ structure | Best for |
 |--------|------------------------|--------------------------|----------|
 | `"baseline"` | $\{\text{levs}[1]\}$ only | Block-diagonal | Comparing all treatments to one baseline |
-| `"sequential"` | $\{\text{levs}[1], \ldots, \text{levs}[j-1]\}$ | Diagonal ($LDL^\top$ Cholesky) | Fully orthogonal components |
+| `"sequential"` | $\{\text{levs}[1], \ldots, \text{levs}[j-1]\}$ | Diagonal ($\mathbf{L}\mathbf{D}\mathbf{L}^\top$ Cholesky) | Fully orthogonal components |
 | `"partial"` | All other treatments simultaneously | Dense | Partial genetic variances |
 | `"custom"` | User-specified | Depends | Bespoke experimental logic |
 
@@ -237,7 +225,7 @@ genetic correlations to a moderate range (0.55–0.70). This keeps the true
 genetic structure well away from the parameter boundary, giving the
 `corgh` model a stable likelihood surface to optimise. The default
 `sigma_genetic` and `error_sd` values produce a per-plot heritability
-of approximately 0.60 — ample signal for reliable estimation with 50
+of approximately 0.60, an ample signal for reliable estimation with 50
 varieties and 3 replicates.
 
 ```{r sim1}
@@ -254,18 +242,11 @@ out1 <- simTrialData(
 dat1 <- out1$data
 ```
 
-The field layout and true genetic correlation structure can be examined
-with `plot_simTrialData()`:
+The field layout can be examined with `plot_simTrialData()`:
 
 ```{r plot_sim1_layout}
-#| fig-height: 4
+#| fig-height: 7
 plot_simTrialData(out1, type = "trial", fill = "Treatment", ncol = 3L)
-```
-
-```{r plot_sim1_corr}
-#| fig-height: 4
-#| fig-width: 5
-plot_simTrialData(out1, type = "correlation")
 ```
 
 The correlation heatmap confirms that the three treatments have positive
@@ -312,7 +293,7 @@ model1 <- update(model1)
 #| eval: !expr asreml_ok
 #| dependson: "fit1"
 vc1 <- summary(model1)$varcomp
-vc1[grepl("TSite", rownames(vc1)), ]
+vc1[grepl("TSite", rownames(vc1)), 1:2]
 ```
 
 The `corgh` varcomp rows give the genetic variance for each `TSite` level
@@ -364,9 +345,7 @@ in treatment $j$ that is **orthogonal** to all other treatments. A small
 value relative to $G_{jj}$ (the diagonal of `Gmat`) indicates that most of
 the genetic variation in that treatment is shared with the others;
 a value close to $G_{jj}$ indicates a large treatment-specific genetic
-component. **Negative values** would indicate a near-singular (indefinite)
-G-matrix caused by boundary correlation estimates — `randomRegress()` warns
-explicitly when this occurs and sets the affected entries to `NA`.
+component. 
 
 ```{r compare_gvar1}
 #| eval: !expr asreml_ok
@@ -388,7 +367,7 @@ each pair. The slope $\hat{\beta}$ is annotated in the top-left corner.
 
 ```{r plot_reg1}
 #| eval: !expr asreml_ok
-#| fig-height: 5
+#| fig-height: 9
 #| dependson: "rr1"
 p_reg1 <- plot_randomRegress(res1, type = "regress")
 print(p_reg1)
@@ -406,7 +385,7 @@ treatment has a responsiveness axis, so there are three quadrant panels:
 
 ```{r plot_quad1}
 #| eval: !expr asreml_ok
-#| fig-height: 7
+#| fig-height: 9
 #| dependson: "rr1"
 p_quad1 <- plot_randomRegress(res1, type = "quadrant", highlight = "default")
 print(p_quad1)
@@ -419,32 +398,13 @@ across all panels. Varieties that appear in the top-right of all panels
 respond positively to every treatment; those that shift between quadrants
 across panels show treatment-specific responses.
 
-### G-matrix heatmap
-
-With a single site the G-matrix is a $3 \times 3$ correlation matrix —
-straightforward to interpret:
-
-```{r plot_gmat1}
-#| eval: !expr asreml_ok
-#| fig-height: 4
-#| fig-width: 5
-#| dependson: "rr1"
-p_gmat1 <- plot_randomRegress(res1, type = "gmat")
-print(p_gmat1)
-```
-
-The heatmap displays `cov2cor(Gmat)`. High off-diagonal values (dark red)
-indicate strong genetic co-ranking between treatments; values below ~0.8
-suggest meaningful genotype × treatment interaction that the partial
-decomposition has captured.
-
 ---
 
 ## Example 2 — Multi-site, factor analytic model
 
 ### Simulated data
 
-We now scale to a multi-environment setting: 20 varieties, 4 sites, and the
+We now scale to a multi-environment setting: 40 varieties, 4 sites, and the
 same three nitrogen treatments. The FA(2) model is the standard choice for
 MET analyses — it captures the dominant axes of genotype × environment
 interaction parsimoniously.
@@ -452,7 +412,7 @@ interaction parsimoniously.
 ```{r sim2}
 #| cache: true
 out2 <- simTrialData(
-  nvar       = 20L,
+  nvar       = 40L,
   nsite      = 4L,
   treatments = c("T0", "T1", "T2"),
   nrep       = 3L,

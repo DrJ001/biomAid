@@ -64,20 +64,48 @@ model. Default \code{TRUE}.}
 \item{sim.options}{Named list of optional simulation controls. Unknown names
 produce a warning. Recognised elements (with defaults) are:
 \describe{
-\item{\code{site_mean}}{Numeric. Grand mean yield. Default \code{4500}.}
-\item{\code{site_sd}}{Numeric. SD of site mean yields. Default \code{600}.}
+\item{\code{site_mean}}{Numeric. Grand mean yield. Default \code{4500}.
+When changed, any of the six scale-dependent parameters below that are
+\emph{not} explicitly supplied are automatically scaled proportionally
+to \code{site_mean / 4500}, preserving the default signal-to-noise
+ratios at any yield scale. Supply a parameter explicitly to override
+auto-scaling for that parameter.}
+\item{\code{site_sd}}{Numeric. SD of site mean yields.
+Auto-scaled default: \code{site_mean * (600 / 4500)}.}
 \item{\code{treat_effects}}{Numeric vector (length =
 \code{length(treatments)}) of fixed treatment effects, or \code{NULL}
 for auto-spacing from 0 to \code{site_mean * 0.10}.
 Multi-treatment only.}
 \item{\code{sigma_genetic}}{Numeric. Target mean genetic SD per group.
-Default \code{250}.}
-\item{\code{rep_sd}}{Numeric. SD of replicate effects. Default \code{150}.}
-\item{\code{row_sd}}{Numeric. SD of row spatial effects. Default \code{80}.}
+Auto-scaled default: \code{site_mean * (250 / 4500)}.}
+\item{\code{rep_sd}}{Numeric. SD of replicate effects.
+Auto-scaled default: \code{site_mean * (150 / 4500)}.}
+\item{\code{row_sd}}{Numeric. SD of row spatial effects.
+Auto-scaled default: \code{site_mean * (80 / 4500)}.}
 \item{\code{col_sd}}{Numeric. SD of column spatial effects.
-Default \code{60}.}
-\item{\code{error_sd}}{Numeric. SD of plot-level residual.
-Default \code{350}.}
+Auto-scaled default: \code{site_mean * (60 / 4500)}.}
+\item{\code{error_sd}}{Numeric. SD of the independent (nugget) plot
+error. Auto-scaled default: \code{site_mean * (350 / 4500)}.}
+\item{\code{ar1_rho_row}}{Controls the first-order autoregressive
+(AR1) spatial correlation in the \strong{row} direction.
+\code{NULL} (default) disables the spatial component entirely.
+A scalar in \eqn{(-1, 1)} applies the same correlation at every
+site. A length-2 vector \code{c(lo, hi)} draws an independent
+per-site correlation uniformly from \code{[lo, hi]}, so each
+site has its own spatial structure.}
+\item{\code{ar1_rho_col}}{Controls AR1 correlation in the
+\strong{column} direction. Same specification as
+\code{ar1_rho_row}. Default \code{NULL}.}
+\item{\code{sigma_spatial}}{Numeric. SD of the spatially correlated
+error component. Active only when at least one of
+\code{ar1_rho_row} or \code{ar1_rho_col} is non-\code{NULL}.
+When not supplied, defaults to \code{error_sd * 0.5} (at the
+current auto-scaled level). The covariance between plots at
+row-distance \eqn{\Delta r} and column-distance \eqn{\Delta c}
+within a site is
+\eqn{\sigma^2_{\text{spatial}} \rho_r^{|\Delta r|} \rho_c^{|\Delta c|}},
+and total plot-level variance is
+\eqn{\sigma^2_{\text{spatial}} + \sigma^2_{\text{error}}}.}
 \item{\code{sep}}{Character. Separator for \code{TSite} labels.
 Default \code{"-"}.}
 \item{\code{variety_prefix}}{Character. Prefix for variety labels.

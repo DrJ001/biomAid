@@ -35,7 +35,7 @@ NULL
       Variety    = blups$Variety,
       x          = blups[[cond_lv]],
       y          = blups[[lv_j]],
-      pair_label = paste0(lv_j, " | ", cond_lv),
+      pair_label = paste0(lv_j, " | ", paste(A_j, collapse = ", ")),
       beta       = site_beta[as.character(blups$Site)],
       stringsAsFactors = FALSE
     )
@@ -76,7 +76,7 @@ NULL
       Variety    = blups$Variety,
       x          = blups[[eff_lv]],
       y          = blups[[resp_col]],
-      pair_label = paste0(lv_j, " | ", cond_lv),
+      pair_label = paste0(lv_j, " | ", paste(cond_list[[lv_j]], collapse = ", ")),
       stringsAsFactors = FALSE
     )
     if (centre)
