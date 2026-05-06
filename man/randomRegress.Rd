@@ -6,7 +6,7 @@
 \usage{
 randomRegress(
   model,
-  Env = "TSite:Variety",
+  term = "us(TSite):Variety",
   levs = NULL,
   type = "baseline",
   cond = NULL,
@@ -16,11 +16,45 @@ randomRegress(
 )
 }
 \arguments{
-\item{model}{An ASReml-R V4 model object containing a Treatment x Site x
-Variety random term.}
+\item{model}{An ASReml-R V4 model object containing a random
+Treatment \eqn{\times} Site \eqn{\times} Variety term.}
 
-\item{Env}{Character string identifying the Treatment-Site:Variety term,
-written as \code{"<TreatSite>:<Variety>"}.  Defaults to \code{"TSite:Variety"}.}
+\item{term}{Character string giving the \strong{full} random-effect interaction
+term exactly as it appears in the model formula, written as
+\code{"<struct>(<Group>):<Variety>"}.  The function parses the structure
+keyword, group factor name, and variety factor name automatically, so
+the correct strings are used for \code{predict.asreml()}.
+
+Supported variance structures on the left-hand side:
+\describe{
+\item{\code{us(TSite)}}{Unstructured G-matrix — the most general form.}
+\item{\code{fa(TSite, k)}}{Factor-analytic of order \eqn{k}.}
+\item{\code{corgh(TSite)}}{Heterogeneous correlation — one correlation
+parameter shared across groups with group-specific variances.}
+\item{\code{corh(TSite)}}{Correlation and variance structure for two-group
+(two-treatment-level) models.}
+\item{\code{diag(TSite)}}{Diagonal — independent genetic variances per group,
+zero between-group covariances.}
+}
+
+Supported wrappers on the right-hand side (variety factor):
+\describe{
+\item{\code{vm(Variety, giv1)}}{Genomic or pedigree relationship matrix via
+\code{asreml::vm()}.  Only the bare factor name is used for
+\code{predict.asreml()}.}
+\item{\code{ide(Variety)}}{Identity-scaled term via \code{asreml::ide()}.}
+\item{\code{Variety} (no wrapper)}{Plain factor — the default.}
+}
+
+Examples:
+\preformatted{
+  term = "us(TSite):Variety"
+  term = "fa(TSite, 2):Variety"
+  term = "corgh(TSite):Variety"
+  term = "corh(TSite):Variety"
+  term = "us(TSite):vm(Variety, giv1)"
+  term = "us(TSite):ide(Variety)"
+  }}
 
 \item{levs}{Character vector of length \eqn{\ge 2} giving the treatment
 labels.  For \code{type = "baseline"} and \code{type = "sequential"} the \strong{first}
@@ -123,23 +157,29 @@ explicitly via the \code{cond} argument.}
 }
 \examples{
 \dontrun{
-## Baseline scheme (default — same as original randomRegress for k = 2)
-res_base <- randomRegress(model, levs = c("N0","N1","N2"))
+## Baseline scheme — unstructured G-matrix
+res_base <- randomRegress(model, term = "us(TSite):Variety",
+                          levs = c("N0","N1","N2"))
 
 ## Sequential (Cholesky) — fully orthogonal components; TGmat is diagonal
-res_seq  <- randomRegress(model, levs = c("N0","N1","N2"),
-                            type = "sequential")
+res_seq  <- randomRegress(model, term = "fa(TSite, 2):Variety",
+                          levs = c("N0","N1","N2"), type = "sequential")
 
-## Partial — each treatment vs all others
-res_part <- randomRegress(model, levs = c("N0","N1","N2"),
-                            type = "partial")
+## Heterogeneous correlation structure
+res_cor  <- randomRegress(model, term = "corgh(TSite):Variety",
+                          levs = c("N0","N1","N2"))
 
-## Custom — T2 conditioned on BOTH T0 and T1; T1 conditioned on T0 only
-res_cust <- randomRegress(model, levs = c("N0","N1","N2"),
-                            type   = "custom",
-                            cond   = list(N0 = NULL,
-                                          N1 = "N0",
-                                          N2 = c("N0","N1")))
+## Genomic relationship matrix (vm wrapper on Variety)
+res_vm   <- randomRegress(model, term = "us(TSite):vm(Variety, giv1)",
+                          levs = c("N0","N1","N2"))
+
+## Custom conditioning
+res_cust <- randomRegress(model, term = "us(TSite):Variety",
+                          levs = c("N0","N1","N2"),
+                          type = "custom",
+                          cond = list(N0 = NULL,
+                                      N1 = "N0",
+                                      N2 = c("N0","N1")))
 }
 
 }

@@ -46,6 +46,123 @@
 }
 
 
+# ---- Private helper: parse the random term string -----------------------
+
+#' Parse an ASReml-R random interaction term for randomRegress()
+#'
+#' Accepts the full left-hand interaction term as the user supplies it, e.g.:
+#'   "us(TSite):Variety"
+#'   "fa(TSite, 2):Variety"
+#'   "corgh(TSite):Variety"
+#'   "corh(TSite):Variety"
+#'   "diag(TSite):Variety"
+#'   "us(TSite):vm(Variety, giv1)"
+#'   "us(TSite):ide(Variety)"
+#'
+#' Returns a list with:
+#'   struct      – variance structure keyword (fa / us / corgh / corh / diag)
+#'   group_var   – bare group-factor name (e.g. "TSite")
+#'   by_var      – bare variety-factor name (e.g. "Variety"), wrappers stripped
+#'   by_wrapper  – wrapper on the by-variable if present (e.g. "vm", "ide", or NULL)
+#'   by_raw      – full right-hand side as supplied (e.g. "vm(Variety, giv1)")
+#'   n_fa        – integer FA order, or NULL for non-FA structures
+#'   only_term   – string to pass to predict(only=...)
+#'   classify    – string to pass to predict(classify=...)
+#'
+#' @noRd
+.parse_rreg_term <- function(term) {
+
+  term <- gsub("\\s+", "", term)   # strip all whitespace
+
+  # Locate the first ":" at parenthesis depth 0
+  cp <- .top_colon(term)
+  if (is.na(cp))
+    stop("'term' must be an interaction of the form 'struct(Group):Variety' or 'struct(Group):wrapper(Variety,...)'.")
+
+  lft <- substr(term, 1L,       cp - 1L)
+  rgt <- substr(term, cp + 1L,  nchar(term))
+
+  # ---- Left-hand side: struct(Group [, k]) --------------------------------
+  struct <- sub("\\(.*", "", lft)
+  if (!struct %in% c("fa", "us", "corgh", "corh", "diag"))
+    stop("Unsupported variance structure '", struct, "'. ",
+         "Supported: fa, us, corgh, corh, diag.")
+
+  # group variable: first comma-separated token inside lft parens
+  group_var <- trimws(strsplit(.inside(lft), ",")[[1L]][1L])
+
+  # FA order (only meaningful for FA terms)
+  n_fa <- if (struct == "fa") {
+    suppressWarnings(
+      as.integer(trimws(strsplit(.inside(lft), ",")[[1L]][2L]))
+    )
+  } else NULL
+
+  # ---- Right-hand side: Variety | vm(Variety,...) | ide(Variety) ----------
+  by_raw     <- rgt
+  by_wrapper <- NULL
+
+  # Check for a wrapping function: any "word(" pattern
+  if (grepl("^[A-Za-z][A-Za-z0-9_]*\\(", rgt)) {
+    by_wrapper <- sub("\\(.*", "", rgt)
+    by_var     <- trimws(strsplit(.inside(rgt), ",")[[1L]][1L])
+  } else {
+    by_var <- rgt
+  }
+
+  # ---- Build predict() strings -------------------------------------------
+  # ASReml-R uses the bare variable names (no wrappers) in both classify and only.
+  # For FA:   only = "fa(Group, k):Var"  (space after comma required by ASReml)
+  # For rest: only = "Group:Var"
+  only_term <- if (struct == "fa" && !is.null(n_fa))
+    sprintf("fa(%s, %d):%s", group_var, n_fa, by_var)
+  else
+    paste0(group_var, ":", by_var)
+
+  classify <- paste0(group_var, ":", by_var)
+
+  list(
+    struct     = struct,
+    group_var  = group_var,
+    by_var     = by_var,
+    by_wrapper = by_wrapper,
+    by_raw     = by_raw,
+    n_fa       = n_fa,
+    only_term  = only_term,
+    classify   = classify
+  )
+}
+
+
+# ---- Private helper: convert corh/corgh vparameters matrix to G-matrix --
+
+#' Convert a heterogeneous-correlation vparameters matrix to a covariance G-matrix
+#'
+#' ASReml-R V4 stores `corh` and `corgh` variance parameters in a matrix
+#' accessed via `summary(model, vparameters = TRUE)$vparameters[["Group:Variety"]]`
+#' (using the bare stripped term, e.g. `"TSite:Variety"`).  This matrix has:
+#'   - Genetic variances (sigma^2_j) on the diagonal
+#'   - Correlations (r_ij) on the off-diagonal
+#'
+#' To use it as a proper covariance G-matrix in the regression we need:
+#'   G_ij = r_ij * sigma_i * sigma_j    (off-diagonal)
+#'   G_jj = sigma^2_j                   (diagonal, unchanged)
+#'
+#' @param M  Square matrix from vparameters with variances on diagonal and
+#'   correlations on off-diagonal.
+#' @return   Symmetric covariance matrix of the same dimensions.
+#'
+#' @noRd
+.cor_to_cov_Gmat <- function(M) {
+  sds    <- sqrt(diag(M))          # sigma_j for each group level
+  R      <- M
+  diag(R) <- 1                     # pure correlation matrix (1s on diagonal)
+  G      <- diag(sds) %*% R %*% diag(sds)   # G = diag(sigma) R diag(sigma)
+  dimnames(G) <- dimnames(M)       # restore row/col names lost by %*%
+  G
+}
+
+
 # ---- Main function -------------------------------------------------------
 
 #' Multivariate Random Regression of Treatment BLUPs Within Environments
@@ -85,10 +202,44 @@
 #'     explicitly via the `cond` argument.}
 #' }
 #'
-#' @param model An ASReml-R V4 model object containing a Treatment x Site x
-#'   Variety random term.
-#' @param Env Character string identifying the Treatment-Site:Variety term,
-#'   written as `"<TreatSite>:<Variety>"`.  Defaults to `"TSite:Variety"`.
+#' @param model An ASReml-R V4 model object containing a random
+#'   Treatment \eqn{\times} Site \eqn{\times} Variety term.
+#' @param term Character string giving the **full** random-effect interaction
+#'   term exactly as it appears in the model formula, written as
+#'   `"<struct>(<Group>):<Variety>"`.  The function parses the structure
+#'   keyword, group factor name, and variety factor name automatically, so
+#'   the correct strings are used for \code{predict.asreml()}.
+#'
+#'   Supported variance structures on the left-hand side:
+#'   \describe{
+#'     \item{`us(TSite)`}{Unstructured G-matrix — the most general form.}
+#'     \item{`fa(TSite, k)`}{Factor-analytic of order \eqn{k}.}
+#'     \item{`corgh(TSite)`}{Heterogeneous correlation — one correlation
+#'       parameter shared across groups with group-specific variances.}
+#'     \item{`corh(TSite)`}{Correlation and variance structure for two-group
+#'       (two-treatment-level) models.}
+#'     \item{`diag(TSite)`}{Diagonal — independent genetic variances per group,
+#'       zero between-group covariances.}
+#'   }
+#'
+#'   Supported wrappers on the right-hand side (variety factor):
+#'   \describe{
+#'     \item{`vm(Variety, giv1)`}{Genomic or pedigree relationship matrix via
+#'       \code{asreml::vm()}.  Only the bare factor name is used for
+#'       \code{predict.asreml()}.}
+#'     \item{`ide(Variety)`}{Identity-scaled term via \code{asreml::ide()}.}
+#'     \item{`Variety` (no wrapper)}{Plain factor — the default.}
+#'   }
+#'
+#'   Examples:
+#'   \preformatted{
+#'   term = "us(TSite):Variety"
+#'   term = "fa(TSite, 2):Variety"
+#'   term = "corgh(TSite):Variety"
+#'   term = "corh(TSite):Variety"
+#'   term = "us(TSite):vm(Variety, giv1)"
+#'   term = "us(TSite):ide(Variety)"
+#'   }
 #' @param levs Character vector of length \eqn{\ge 2} giving the treatment
 #'   labels.  For `type = "baseline"` and `type = "sequential"` the **first**
 #'   element is the baseline (efficiency) treatment.  For `type = "partial"`
@@ -151,29 +302,35 @@
 #'
 #' @examples
 #' \dontrun{
-#' ## Baseline scheme (default — same as original randomRegress for k = 2)
-#' res_base <- randomRegress(model, levs = c("N0","N1","N2"))
+#' ## Baseline scheme — unstructured G-matrix
+#' res_base <- randomRegress(model, term = "us(TSite):Variety",
+#'                           levs = c("N0","N1","N2"))
 #'
 #' ## Sequential (Cholesky) — fully orthogonal components; TGmat is diagonal
-#' res_seq  <- randomRegress(model, levs = c("N0","N1","N2"),
-#'                             type = "sequential")
+#' res_seq  <- randomRegress(model, term = "fa(TSite, 2):Variety",
+#'                           levs = c("N0","N1","N2"), type = "sequential")
 #'
-#' ## Partial — each treatment vs all others
-#' res_part <- randomRegress(model, levs = c("N0","N1","N2"),
-#'                             type = "partial")
+#' ## Heterogeneous correlation structure
+#' res_cor  <- randomRegress(model, term = "corgh(TSite):Variety",
+#'                           levs = c("N0","N1","N2"))
 #'
-#' ## Custom — T2 conditioned on BOTH T0 and T1; T1 conditioned on T0 only
-#' res_cust <- randomRegress(model, levs = c("N0","N1","N2"),
-#'                             type   = "custom",
-#'                             cond   = list(N0 = NULL,
-#'                                           N1 = "N0",
-#'                                           N2 = c("N0","N1")))
+#' ## Genomic relationship matrix (vm wrapper on Variety)
+#' res_vm   <- randomRegress(model, term = "us(TSite):vm(Variety, giv1)",
+#'                           levs = c("N0","N1","N2"))
+#'
+#' ## Custom conditioning
+#' res_cust <- randomRegress(model, term = "us(TSite):Variety",
+#'                           levs = c("N0","N1","N2"),
+#'                           type = "custom",
+#'                           cond = list(N0 = NULL,
+#'                                       N1 = "N0",
+#'                                       N2 = c("N0","N1")))
 #' }
 #'
 #' @export
-randomRegress <- function(model, Env = "TSite:Variety", levs = NULL,
-                             type = "baseline", cond = NULL,
-                             sep = "-", pev = TRUE, ...) {
+randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
+                           type = "baseline", cond = NULL,
+                           sep = "-", pev = TRUE, ...) {
 
   # ---- Validate and build conditioning structure -------------------------
   if (is.null(levs) || length(levs) < 2L)
@@ -188,27 +345,47 @@ randomRegress <- function(model, Env = "TSite:Variety", levs = NULL,
   if (n_cond == 0L)
     stop("No treatments have a conditioning set. Check 'type' or 'cond'.")
 
-  # ---- Parse Env term ----------------------------------------------------
-  evnam <- strsplit(Env, ":")[[1L]]
-  enam  <- evnam[1L]
-  vnam  <- evnam[2L]
+  # ---- Parse term string -------------------------------------------------
+  p     <- .parse_rreg_term(term)
+  enam  <- p$group_var    # e.g. "TSite"
+  vnam  <- p$by_var       # e.g. "Variety"  (bare, wrappers stripped)
+  struct <- p$struct      # e.g. "us", "fa", "corgh", "corh", "diag"
 
-  rterm <- grep(gsub(":", ".*", Env, fixed = TRUE),
-                attr(terms(model$formulae$random), "term.labels"),
-                value = TRUE)
+  # Match the term in the model's random formula using the parsed components
+  # (guards against whitespace differences between user input and R's deparsing)
+  rterm <- grep(
+    paste0(struct, "\\(", enam),
+    attr(terms(model$formulae$random), "term.labels"),
+    value = TRUE
+  )
+  if (length(rterm) == 0L)
+    stop("Cannot find a term matching '", term, "' in the model's random formula.")
+  rterm <- rterm[1L]
 
   # ---- Extract BLUPs and G-matrix ----------------------------------------
-  if (startsWith(rterm, "fa")) {
+  if (struct == "fa") {
     sumfa <- .fa_asreml(model, trunc.char = NULL)
     pvals <- sumfa$blups[[rterm]]$blups[, 1:3]
     names(pvals) <- c("blup", enam, vnam)   # standardise FA column names
     Gmat  <- sumfa$gammas[[rterm]]$Gmat
     pred  <- NULL                            # vcov unavailable; HSD will be NA
   } else {
-    pred  <- predict(model, classify = Env, only = Env, vcov = TRUE, ...)
-    Gmat  <- .asreml_vparams(model, Env)
+    pred  <- predict(model, classify = p$classify, only = p$only_term,
+                     vcov = TRUE, ...)
+    # vparameters is always keyed by the bare "Group:Variety" term (p$classify),
+    # regardless of the variance structure wrapper.
+    raw_vp <- .asreml_vparams(model, p$classify)
+    # corh / corgh: diagonal = genetic variances, off-diagonal = correlations.
+    # Convert to a proper covariance G-matrix before use.
+    Gmat <- if (struct %in% c("corh", "corgh"))
+      .cor_to_cov_Gmat(raw_vp)
+    else
+      raw_vp   # us / diag already return a covariance matrix
     pvals <- pred$pvals
-    names(pvals)[3L] <- "blup"
+    names(pvals)[names(pvals) == "predicted.value"] <- "blup"
+    # Normalise column names to bare variable names (strip any wrappers)
+    names(pvals) <- sub(paste0("^", enam, "$"), enam, names(pvals))
+    names(pvals) <- sub(paste0("^", vnam,  "$"), vnam,  names(pvals))
   }
 
   tsnams <- dimnames(Gmat)[[2L]]
@@ -302,6 +479,20 @@ randomRegress <- function(model, Env = "TSite:Variety", levs = NULL,
       # ---- Conditional genetic variance: sigma_j = G_jj - G_jA beta_j --
       sig_j <- G_jj - drop(G_jA %*% beta_j)
 
+      # A negative conditional variance signals that the estimated G-matrix
+      # is indefinite (not positive definite). This typically arises when a
+      # correlation parameter is near its boundary (|r| -> 1), making the
+      # G-matrix nearly singular. Schur complements of indefinite matrices
+      # can be strongly negative — NOT just floating-point noise.
+      # Skip this treatment-site combination and warn the user.
+      if (is.na(sig_j) || sig_j <= 0) {
+        warning("Non-positive conditional variance (", round(sig_j, 5L),
+                ") for treatment '", lv_j, "' at site '", usnams[i], "'. ",
+                "The estimated G-matrix may be indefinite (boundary correlation). ",
+                "Check model convergence and varcomp estimates.")
+        next
+      }
+
       # Store parameters
       beta[[lv_j]][i, ] <- beta_j
       sigmat[i, ci]     <- sig_j
@@ -382,5 +573,6 @@ randomRegress <- function(model, Env = "TSite:Variety", levs = NULL,
        sigmat    = sigmat,
        tmat      = tmat,
        cond_list = cond_list,
-       type      = type)
+       type      = type,
+       sep       = sep)
 }

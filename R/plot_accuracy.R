@@ -21,7 +21,8 @@
 utils::globalVariables(c(
   "group", "value", "sd_val", "metric_label", "model_label",
   "variety", "x1", "x2", "diff_val", "gain_dir",
-  ".value_x", ".value_y"
+  ".value_x", ".value_y",
+  "present", "x_obs", "x_unobs", "pres_label"
 ))
 
 # =============================================================================
@@ -86,10 +87,18 @@ plot_accuracy <- function(res,
   compare_types <- c("dumbbell", "scatter", "diff")
   bv_types      <- c("violin", "heatmap", "scatter")
 
+  has_pres_spl <- "variety" %in% names(res) && "present" %in% names(res) &&
+                  any(res$present) && any(!res$present)
+
   if (type %in% single_types && !is.null(res2))
     warning(sprintf("[plot_accuracy] type='%s' ignores res2.", type))
-  if (type %in% compare_types && is.null(res2))
-    stop(sprintf("[plot_accuracy] type='%s' requires res2.", type))
+  if (type %in% compare_types && is.null(res2)) {
+    if (type == "diff" && has_pres_spl) {
+      # Allow: single-model present-gap diff
+    } else {
+      stop(sprintf("[plot_accuracy] type='%s' requires res2.", type))
+    }
+  }
   if (type %in% bv_types && !is_bv(res))
     stop(sprintf("[plot_accuracy] type='%s' requires by_variety=TRUE data in res.", type))
   if (type == "scatter" && !is.null(res2) && !is_bv(res2))
@@ -124,8 +133,9 @@ plot_accuracy <- function(res,
 # =============================================================================
 
 # Colour palette used throughout
-.pa_metric_cols <- c("Mrode Accuracy" = "#2166AC", "Gen. H\u00b2" = "#D6604D")
-.pa_gain_cols   <- c("Improved" = "#1A9641", "Declined"  = "#D7191C")
+.pa_metric_cols   <- c("Mrode Accuracy" = "#2166AC", "Gen. H\u00b2" = "#D6604D")
+.pa_gain_cols     <- c("Improved" = "#1A9641", "Declined"  = "#D7191C")
+.pa_present_cols  <- c("Observed" = "#2166AC", "Unobserved" = "#E07B39")
 
 # Convert group-level accuracy() output to long format
 .pa_long_grp <- function(res, metric) {
@@ -154,26 +164,71 @@ plot_accuracy <- function(res,
   do.call(rbind, c(out, make.row.names = FALSE))
 }
 
-# Convert by_variety accuracy() output to long format
+# Convert by_variety accuracy() output to long format.
+# The `present` column is carried through when it exists in res.
 .pa_long_bv <- function(res, metric) {
+  has_present <- "present" %in% names(res)
   out <- list()
   if ("accuracy" %in% metric && "accuracy" %in% names(res)) {
-    out[["accuracy"]] <- data.frame(
+    df <- data.frame(
       group        = res$group,
       variety      = res$variety,
       value        = res$accuracy,
       metric_label = "Mrode Accuracy",
       stringsAsFactors = FALSE
     )
+    if (has_present) df$present <- res$present
+    out[["accuracy"]] <- df
   }
   if ("gen.H2" %in% metric && "gen.H2" %in% names(res)) {
-    out[["gen.H2"]] <- data.frame(
+    df <- data.frame(
       group        = res$group,
       variety      = res$variety,
       value        = res$gen.H2,
       metric_label = "Gen. H\u00b2",
       stringsAsFactors = FALSE
     )
+    if (has_present) df$present <- res$present
+    out[["gen.H2"]] <- df
+  }
+  if (!length(out)) stop("[plot_accuracy] No matching metric columns found in res.")
+  do.call(rbind, c(out, make.row.names = FALSE))
+}
+
+# Compute group-level mean accuracy split by present status from by_variety data.
+# Returns long data frame with columns: group, value, sd_val, metric_label,
+# present (logical), pres_label (character).
+.pa_present_grp <- function(res, metric) {
+  out <- list()
+  for (pres in c(TRUE, FALSE)) {
+    sub <- res[res$present == pres, , drop = FALSE]
+    if (nrow(sub) == 0L) next
+    pl <- if (pres) "Observed" else "Unobserved"
+    if ("accuracy" %in% metric && "accuracy" %in% names(sub)) {
+      agg    <- aggregate(accuracy ~ group, data = sub, FUN = mean, na.rm = TRUE)
+      agg_sd <- aggregate(accuracy ~ group, data = sub, FUN = sd,   na.rm = TRUE)
+      out[[paste0("acc_", pres)]] <- data.frame(
+        group        = agg$group,
+        value        = agg$accuracy,
+        sd_val       = agg_sd$accuracy,
+        metric_label = "Mrode Accuracy",
+        present      = pres,
+        pres_label   = pl,
+        stringsAsFactors = FALSE
+      )
+    }
+    if ("gen.H2" %in% metric && "gen.H2" %in% names(sub)) {
+      agg <- aggregate(gen.H2 ~ group, data = sub, FUN = function(x) x[1L])
+      out[[paste0("h2_", pres)]] <- data.frame(
+        group        = agg$group,
+        value        = agg$gen.H2,
+        sd_val       = NA_real_,
+        metric_label = "Gen. H\u00b2",
+        present      = pres,
+        pres_label   = pl,
+        stringsAsFactors = FALSE
+      )
+    }
   }
   if (!length(out)) stop("[plot_accuracy] No matching metric columns found in res.")
   do.call(rbind, c(out, make.row.names = FALSE))
@@ -204,6 +259,81 @@ plot_accuracy <- function(res,
 
 .pa_lollipop <- function(res, metric, theme, return_data) {
 
+  # ---- Present-split mode: by_variety data with both observed and unobserved --
+  is_bv        <- "variety" %in% names(res)
+  has_pres_spl <- is_bv && "present" %in% names(res) &&
+                  any(res$present) && any(!res$present)
+
+  if (has_pres_spl) {
+    d <- .pa_present_grp(res, metric)
+
+    # Order groups by the observed (present=TRUE) mean accuracy, ascending
+    ref_metric <- unique(d$metric_label)[1L]
+    ref_obs    <- d[d$metric_label == ref_metric & d$present, ]
+    grp_ord    <- names(sort(tapply(ref_obs$value, ref_obs$group, mean,
+                                    na.rm = TRUE)))
+    d$group    <- factor(d$group, levels = grp_ord)
+
+    d_obs   <- d[d$present, ,  drop = FALSE]
+    d_unobs <- d[!d$present, , drop = FALSE]
+
+    # Join for the connecting segment
+    seg <- merge(
+      d_obs  [, c("group", "value", "metric_label")],
+      d_unobs[, c("group", "value", "metric_label")],
+      by = c("group", "metric_label"), suffixes = c("_obs", "_unobs")
+    )
+    names(seg)[names(seg) == "value_obs"]   <- "x_obs"
+    names(seg)[names(seg) == "value_unobs"] <- "x_unobs"
+    seg$group <- factor(seg$group, levels = levels(d$group))
+
+    use_facet <- length(unique(d$metric_label)) > 1L
+
+    p <- ggplot2::ggplot() +
+      # Stem from 0 to observed value
+      ggplot2::geom_segment(
+        data = d_obs,
+        ggplot2::aes(x = 0, xend = value, y = group, yend = group),
+        colour = "grey65", linewidth = 0.7
+      ) +
+      # Connecting segment: observed to unobserved point
+      ggplot2::geom_segment(
+        data = seg,
+        ggplot2::aes(x = x_obs, xend = x_unobs, y = group, yend = group),
+        colour = "grey45", linewidth = 1.0, linetype = "dashed"
+      ) +
+      # Unobserved point (drawn first so observed sits on top)
+      ggplot2::geom_point(
+        data = d_unobs,
+        ggplot2::aes(x = value, y = group, fill = pres_label),
+        shape = 21, colour = "white", stroke = 0.4, size = 3.5
+      ) +
+      # Observed point
+      ggplot2::geom_point(
+        data = d_obs,
+        ggplot2::aes(x = value, y = group, fill = pres_label),
+        shape = 21, colour = "white", stroke = 0.4, size = 3.5
+      ) +
+      ggplot2::scale_fill_manual(
+        name   = NULL,
+        values = .pa_present_cols
+      ) +
+      ggplot2::scale_x_continuous(
+        limits = c(0, 1),
+        breaks = seq(0, 1, 0.2),
+        expand = ggplot2::expansion(mult = c(0, 0.03))
+      ) +
+      ggplot2::labs(x = "Accuracy", y = NULL) +
+      theme
+
+    if (use_facet)
+      p <- p + ggplot2::facet_wrap(~ metric_label, ncol = 2, scales = "free_x")
+
+    if (return_data) return(list(plot = p, data = d))
+    return(p)
+  }
+
+  # ---- Standard mode: group-level data ----------------------------------------
   d <- .pa_long_grp(res, metric)
   d <- .pa_order_groups(d)
 
@@ -290,6 +420,29 @@ plot_accuracy <- function(res,
 
   p <- ggplot2::ggplot(d, ggplot2::aes(x = group, y = value))
 
+  # When `present` is in the data, colour jitter points by observed status.
+  has_present_col <- "present" %in% names(d)
+
+  # Helper: build the jitter layer — fixed colour or coloured by present status
+  .jitter_layer <- function(sub, col) {
+    if (has_present_col && "present" %in% names(sub)) {
+      sub$pres_label <- ifelse(sub$present, "Observed", "Unobserved")
+      ggplot2::geom_jitter(
+        data        = sub,
+        ggplot2::aes(colour = pres_label),
+        alpha = 0.75, size = 1.5,
+        width = 0.10, height = 0,
+        show.legend = TRUE
+      )
+    } else {
+      ggplot2::geom_jitter(
+        data   = sub,
+        colour = col, alpha = 0.65, size = 1.5,
+        width  = 0.10, height = 0
+      )
+    }
+  }
+
   if (use_facet) {
     # Build per-metric geoms using data= subsets; facet handles layout
     for (ml in unique(d$metric_label)) {
@@ -312,11 +465,7 @@ plot_accuracy <- function(res,
             fill = col, colour = col, alpha = 0.30,
             trim = TRUE, scale = "width"
           ) +
-          ggplot2::geom_jitter(
-            data = sub,
-            colour = col, alpha = 0.65, size = 1.5,
-            width = 0.10, height = 0
-          )
+          .jitter_layer(sub, col)
       }
     }
     p <- p + ggplot2::facet_wrap(~ metric_label, ncol = 1, scales = "free_y")
@@ -337,10 +486,7 @@ plot_accuracy <- function(res,
           fill = col, colour = col, alpha = 0.30,
           trim = TRUE, scale = "width"
         ) +
-        ggplot2::geom_jitter(
-          colour = col, alpha = 0.65, size = 1.5,
-          width = 0.10, height = 0
-        )
+        .jitter_layer(d, col)
     }
   }
 
@@ -348,6 +494,14 @@ plot_accuracy <- function(res,
     ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
     ggplot2::labs(x = "Group", y = "Accuracy") +
     theme
+
+  # Add present colour scale when colouring by observed status
+  if (has_present_col) {
+    p <- p + ggplot2::scale_colour_manual(
+      name   = NULL,
+      values = .pa_present_cols
+    )
+  }
 
   if (return_data) return(list(plot = p, data = d))
   p
@@ -380,6 +534,21 @@ plot_accuracy <- function(res,
       panel.grid.major = ggplot2::element_blank(),
       panel.grid.minor = ggplot2::element_blank()
     )
+
+  # Overlay a small grey solid circle on tiles where the variety was not
+  # observed at that site (unobserved).
+  if ("present" %in% names(d)) {
+    d_unobs <- d[!d$present, , drop = FALSE]
+    if (nrow(d_unobs) > 0L)
+      p <- p + ggplot2::geom_point(
+        data        = d_unobs,
+        ggplot2::aes(x = group, y = variety),
+        colour      = "grey50",
+        shape       = 16,
+        size        = 1.5,
+        inherit.aes = FALSE
+      )
+  }
 
   if (use_facet)
     p <- p + ggplot2::facet_wrap(~ metric_label, ncol = 2)
@@ -541,6 +710,65 @@ plot_accuracy <- function(res,
 
 .pa_diff <- function(res, res2, metric, label1, label2, theme, return_data) {
 
+  # ---- Single-model present-gap mode ----------------------------------------
+  is_bv        <- "variety" %in% names(res)
+  has_pres_spl <- is_bv && "present" %in% names(res) &&
+                  any(res$present) && any(!res$present)
+
+  if (is.null(res2) && has_pres_spl) {
+    d <- .pa_present_grp(res, metric)
+
+    d_obs   <- d[d$present, ,  drop = FALSE]
+    d_unobs <- d[!d$present, , drop = FALSE]
+
+    dd <- merge(
+      d_obs  [, c("group", "value", "metric_label")],
+      d_unobs[, c("group", "value", "metric_label")],
+      by = c("group", "metric_label"), suffixes = c("_obs", "_unobs")
+    )
+    dd$diff_val <- dd$value_unobs - dd$value_obs
+    dd$gain_dir <- ifelse(dd$diff_val >= 0, "Improved", "Declined")
+
+    ref_metric <- unique(dd$metric_label)[1L]
+    ref_d      <- dd[dd$metric_label == ref_metric, ]
+    grp_ord    <- names(sort(tapply(ref_d$diff_val, ref_d$group, mean,
+                                    na.rm = TRUE)))
+    dd$group   <- factor(dd$group, levels = grp_ord)
+
+    use_facet <- length(unique(dd$metric_label)) > 1L
+    abs_max   <- max(abs(dd$diff_val), na.rm = TRUE)
+    x_lim     <- c(-abs_max, abs_max) * 1.08
+
+    p <- ggplot2::ggplot(dd, ggplot2::aes(x = diff_val, y = group,
+                                           colour = gain_dir)) +
+      ggplot2::geom_vline(
+        xintercept = 0, linetype = "dashed",
+        colour = "grey40", linewidth = 0.6
+      ) +
+      ggplot2::geom_segment(
+        ggplot2::aes(x = 0, xend = diff_val, yend = group),
+        linewidth = 0.9
+      ) +
+      ggplot2::geom_point(size = 3.5) +
+      ggplot2::scale_colour_manual(values = .pa_gain_cols, guide = "none") +
+      ggplot2::scale_x_continuous(
+        limits = x_lim,
+        expand = ggplot2::expansion(mult = c(0, 0))
+      ) +
+      ggplot2::labs(
+        x = "Accuracy gap  (Unobserved \u2212 Observed)",
+        y = NULL
+      ) +
+      theme
+
+    if (use_facet)
+      p <- p + ggplot2::facet_wrap(~ metric_label, ncol = 2, scales = "free_x")
+
+    if (return_data) return(list(plot = p, data = dd))
+    return(p)
+  }
+
+  # ---- Two-model comparison mode --------------------------------------------
   d1 <- .pa_long_grp(res,  metric)
   d2 <- .pa_long_grp(res2, metric)
 

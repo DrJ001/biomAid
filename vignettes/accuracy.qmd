@@ -288,26 +288,32 @@ accuracy(m_fa2, metric = "gen.H2")
 
 ### Per-variety accuracies
 
-Set `by_variety = TRUE` to return one row per variety × environment. The
-`present` argument controls which combinations are included:
-
-- **`present = TRUE`** (default) — restrict to variety × environment
-  combinations *observed* in the data. Produces holes in heatmaps for
-  unbalanced trials.
-- **`present = FALSE`** — include *all* combinations returned by
-  `predict.asreml()`. For FA models the G-matrix supports prediction of
-  BLUPs for unobserved combinations; their PEV is higher (lower accuracy)
-  than for observed ones, reflecting reduced information.
+Set `by_variety = TRUE` to return one row per variety × environment. All
+combinations with a finite prediction standard error are returned, including
+variety × site combinations that were not directly observed in the data (for
+FA models the G-matrix supports prediction at unobserved combinations). The
+`present` column indicates which combinations were observed in the data
+(`TRUE`) and which are unobserved (`FALSE`).
 
 ```{r acc_bv}
 #| eval: !expr asreml_ok
-# present = FALSE fills the full variety x site grid for FA models
 acc_fa2_bv    <- accuracy(m_fa2,  metric = c("accuracy", "gen.H2"),
-                           by_variety = TRUE, present = FALSE)
+                           by_variety = TRUE)
 acc_diag_bv   <- accuracy(m_diag, metric = c("accuracy", "gen.H2"),
-                           by_variety = TRUE, present = FALSE)
+                           by_variety = TRUE)
 
 head(acc_fa2_bv)
+```
+
+The `present` column flags which variety × site combinations were directly
+observed in the trial data. For an unbalanced trial, some combinations will
+be `FALSE` — the variety was not grown at that site but still receives a
+BLUP prediction with a higher (worse) PEV.
+
+```{r present_counts}
+#| eval: !expr asreml_ok
+# How many combinations are observed vs unobserved?
+table(Observed = acc_fa2_bv$present)
 ```
 
 ---
@@ -342,12 +348,38 @@ reliability, and the two capture subtly different aspects of model quality.
 
 ---
 
+### Lollipop — observed vs unobserved accuracy
+
+Passing `by_variety = TRUE` data to `type = "lollipop"` automatically
+triggers a **dumbbell layout** when both observed and unobserved combinations
+are present. The blue dot shows the mean accuracy across varieties **directly
+observed** at each site; the orange dot shows the mean accuracy for
+**unobserved** varieties. The dashed segment connecting the two makes the
+size of the accuracy gap visible at a glance.
+
+```{r lollipop_present}
+#| eval: !expr asreml_ok
+#| fig-height: 4.5
+plot_accuracy(acc_fa2_bv, type = "lollipop", metric = "accuracy")
+```
+
+Sites where the two dots sit close together have strong inter-site genetic
+correlations — the FA G-matrix can borrow enough information from other sites
+to predict unobserved varieties almost as well as observed ones. Sites with
+a wider gap have weaker covariance structure and provide less support for
+unobserved predictions.
+
+---
+
 ### Violin — per-variety accuracy distribution
 
 The violin plot requires `by_variety = TRUE` data and displays the Mrode
 Accuracy metric only. Cullis H² is a group-level constant and is suppressed
 automatically — use `type = "lollipop"` to visualise it. The width of each
 violin reflects the spread of per-variety accuracies within each environment.
+Individual points are coloured by `present` status: **blue** for varieties
+directly observed at that site, **orange** for varieties supported only by
+the FA G-matrix.
 
 ```{r violin_fa2}
 #| eval: !expr asreml_ok
@@ -355,22 +387,26 @@ violin reflects the spread of per-variety accuracies within each environment.
 plot_accuracy(acc_fa2_bv, type = "violin", metric = "accuracy")
 ```
 
-Varieties that appear in fewer sites share less information with the rest of
-the trial — their BLUPs have higher PEV and lower accuracy. "Core" varieties
-(present in most environments) sit at the high-accuracy end; rarely-observed
-varieties sit at the low end. With `present = FALSE`, the full variety × site
-grid is included so unobserved combinations also contribute, showing an
-additional tail of lower accuracies.
+The orange points cluster at the lower end of each violin, confirming that
+unobserved varieties have higher PEV and lower accuracy — but the FA G-matrix
+still provides predictions well above zero. "Core" varieties observed at most
+sites appear as blue points at the high-accuracy end; rarely-observed varieties
+as blue points lower down; and the orange unobserved predictions occupy the
+tail.
 
 ---
 
 ### Heatmap — variety × site accuracy grid
 
 The heatmap visualises per-variety accuracy across all environments
-simultaneously using `present = FALSE` data, so the full variety × site grid
-is displayed without holes. Varieties are sorted from highest mean accuracy
+simultaneously. The full variety × site grid is displayed — observed
+combinations (`present = TRUE`) and unobserved combinations
+(`present = FALSE`) alike. Varieties are sorted from highest mean accuracy
 (top) to lowest (bottom); environments are ordered by increasing mean accuracy.
 The viridis colour scale maps accuracy onto a perceptually uniform gradient.
+A small **grey circle** marks each tile where the variety was not observed at
+that site (`present = FALSE`); the underlying colour still shows the
+model-based accuracy for that combination.
 
 ```{r heatmap_fa2}
 #| eval: !expr asreml_ok
@@ -379,11 +415,33 @@ The viridis colour scale maps accuracy onto a perceptually uniform gradient.
 plot_accuracy(acc_fa2_bv, type = "heatmap", metric = "accuracy")
 ```
 
-A column that is uniformly darker than its neighbours indicates an environment
-where all varieties are predicted less reliably. Within each column, darker
-tiles correspond to varieties with fewer site appearances — their BLUPs rely
-more on the FA G-matrix and less on direct observations, so their PEV is
-higher.
+Tiles with a grey circle are systematically darker than their circled-free
+neighbours in the same column, reflecting the higher PEV of unobserved
+predictions. A column that is uniformly darker than its neighbours indicates
+an environment where all varieties are predicted less reliably, regardless
+of observed status.
+
+---
+
+### Accuracy gap — unobserved vs observed
+
+Passing `by_variety = TRUE` data to `type = "diff"` **without** a second
+model computes the accuracy gap per site: the signed difference between the
+mean accuracy of unobserved varieties and the mean accuracy of observed
+varieties (Unobserved − Observed). All sites are expected to show a negative
+gap — unobserved varieties have higher PEV, so their accuracy is lower.
+
+```{r diff_present}
+#| eval: !expr asreml_ok
+#| fig-height: 4.5
+plot_accuracy(acc_fa2_bv, type = "diff", metric = "accuracy")
+```
+
+Sites with the smallest gap (least negative) have the strongest inter-site
+genetic correlations — the FA G-matrix can borrow enough information from
+neighbouring sites to support near-observed-quality predictions. Sites with
+a larger gap are more informationally isolated: varieties not grown there
+receive much less support from the rest of the trial.
 
 ---
 
@@ -466,7 +524,7 @@ shrinkage imposed by the FA structure.
 
 ---
 
-### Diff — signed accuracy gain
+### Diff — signed accuracy gain between models
 
 The diff plot shows (model2 − model1) for each environment as a lollipop
 centred on zero. It distils the dumbbell into a single signed quantity,
@@ -541,19 +599,18 @@ rd$plot +
 | `classify` | Auto-detected | Override the `predict()` classify string |
 | `metric` | `c("accuracy","gen.H2")` | Metrics to compute; one or both |
 | `pworkspace` | `"2gb"` | Passed to `predict.asreml()` |
-| `by_variety` | `FALSE` | Return one row per variety × group |
-| `present` | `TRUE` | `TRUE` restricts to observed variety × group combinations; `FALSE` includes all `predict.asreml()` rows (FA models support unobserved combos via the G-matrix) |
+| `by_variety` | `FALSE` | Return one row per variety × group; includes a `present` column (`TRUE` = observed in data, `FALSE` = unobserved) |
 
 ### `plot_accuracy()` types
 
 | Type | Input | Best for |
 |------|-------|---------|
-| `"lollipop"` | Group-level | Compact accuracy summary per site |
-| `"violin"` | `by_variety` | Distribution of accuracy across varieties |
-| `"heatmap"` | `by_variety` | Variety × site accuracy at a glance |
+| `"lollipop"` | Group-level **or** `by_variety` | Accuracy summary per site; dumbbell of observed vs unobserved when `present` split present |
+| `"violin"` | `by_variety` | Distribution of accuracy; points coloured blue (observed) / orange (unobserved) |
+| `"heatmap"` | `by_variety` | Variety × site accuracy grid; grey circle marks unobserved tiles |
 | `"dumbbell"` | Group-level + `res2` | Paired model comparison per site |
 | `"scatter"` | `by_variety` + `res2` | Per-variety model comparison |
-| `"diff"` | Group-level + `res2` | Signed accuracy gain per site |
+| `"diff"` | Group-level + `res2` **or** `by_variety` alone | Signed model accuracy gain; or unobserved vs observed accuracy gap when no `res2` |
 
 Faceting into two panels is automatic when `metric = c("accuracy","gen.H2")`.
 

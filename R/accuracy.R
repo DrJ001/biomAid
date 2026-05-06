@@ -37,32 +37,20 @@
 #'   Default \code{"2gb"}.
 #' @param by_variety Logical. If \code{TRUE}, return one row per variety x
 #'   group instead of group-level summaries. Default \code{FALSE}.
-#' @param present    Logical. Controls which variety x group combinations are
-#'   included in the output when \code{by_variety = TRUE}.
-#'   \itemize{
-#'     \item \code{TRUE} (default) — restrict to variety x group combinations
-#'       that are \emph{observed} in the data. Unobserved combinations
-#'       (varieties absent from a site) are excluded, which can produce holes
-#'       in heatmaps for unbalanced trials.
-#'     \item \code{FALSE} — include \emph{all} combinations returned by
-#'       \code{predict.asreml()}, including unobserved ones. For factor-analytic
-#'       models the G-matrix allows prediction of BLUPs for unobserved variety x
-#'       site combinations; their PEV is higher than for observed combinations,
-#'       reflecting reduced information. For simpler structures (e.g.
-#'       \code{diag()}), unobserved combinations may receive the same SE as
-#'       observed ones.
-#'   }
 #'
 #' @return A data frame with columns \code{group}, \code{n_vars}, \code{G_jj},
 #'   and one or both of \code{mean_acc}/\code{sd_acc} (Mrode accuracy) and
 #'   \code{gen.H2} (Cullis H\eqn{^2}). When \code{by_variety = TRUE} the
-#'   \code{variety} and \code{pev} columns replace \code{n_vars}/\code{sd_acc}.
+#'   \code{variety}, \code{pev}, and \code{present} columns replace
+#'   \code{n_vars}/\code{sd_acc}. The \code{present} column is \code{TRUE}
+#'   for variety x group combinations observed in the data and \code{FALSE}
+#'   for unobserved variety x group combinations (e.g. unobserved variety
+#'   x site pairs in factor-analytic models).
 #'
 #' @examples
 #' \dontrun{
 #' acc <- accuracy(model_fa)
 #' acc_bv <- accuracy(model_fa, by_variety = TRUE)
-#' acc_bv_all <- accuracy(model_fa, by_variety = TRUE, present = FALSE)
 #' accuracy(model_fa, metric = "gen.H2")
 #' }
 #'
@@ -71,8 +59,7 @@ accuracy <- function(model,
                      classify   = NULL,
                      metric     = c("accuracy", "gen.H2"),
                      pworkspace = "2gb",
-                     by_variety = FALSE,
-                     present    = TRUE) {
+                     by_variety = FALSE) {
 
   metric <- match.arg(metric, several.ok = TRUE)
   want_H2  <- "gen.H2"   %in% metric
@@ -104,33 +91,37 @@ accuracy <- function(model,
   pv$pev    <- pv$std.error^2
   pv$.row   <- seq_len(nrow(pv))   # preserve original row order for SED lookup
 
-  # Mark only the variety-group combinations actually in the data.
-  # For FA models, predict() returns rows for all factor-level combinations
-  # including unobserved ones; we restrict to observed pairs via data lookup.
+  # Mark which variety x group combinations are observed in the data.
+  # pv$present = TRUE  : combination observed in the training data
+  # pv$present = FALSE : combination not observed in the data (unobserved)
+  # pv$finite          : predict() returned a usable (finite, positive) SE
   gc <- if (!single_env) tolower(p$group_var) else NULL
   vc <- tolower(p$by_var)
 
   gd <- if (!single_env) names(dat)[match(tolower(p$group_var), tolower(names(dat)))] else NULL
   vd <- names(dat)[match(tolower(p$by_var), tolower(names(dat)))]
 
-  if (!single_env && !is.null(gd) && !is.null(vd) && present) {
-    # Restrict to variety x group combinations observed in the data.
-    obs      <- paste(dat[[gd]], dat[[vd]], sep = "\001")
-    pv$valid <- paste(pv[[gc]], pv[[vc]], sep = "\001") %in% obs
+  pv$finite <- is.finite(pv$std.error) & pv$std.error > 0
+
+  if (!single_env && !is.null(gd) && !is.null(vd)) {
+    obs        <- paste(dat[[gd]], dat[[vd]], sep = "\001")
+    pv$present <- paste(pv[[gc]], pv[[vc]], sep = "\001") %in% obs
   } else {
-    # Include all combinations with finite, positive SE.
-    # For FA models this covers unobserved variety x site combinations whose
-    # BLUPs are supported by the G-matrix (present = FALSE use case).
-    pv$valid <- is.finite(pv$std.error) & pv$std.error > 0
+    # Single-environment: all finite rows are "present"
+    pv$present <- pv$finite
   }
 
   # ---- Unified loop (works for single- and multi-environment) ---------------
   rows <- lapply(gl, function(grp) {
 
-    if (single_env) {
-      idx <- which(pv$valid)
+    # Group-level: count only observed varieties (keeps n_vars meaningful).
+    # by_variety: return all finite-SE rows; observed status carried in $present.
+    if (by_variety) {
+      idx <- if (single_env) which(pv$finite)
+             else            which(pv[[gc]] == grp & pv$finite)
     } else {
-      idx <- which(pv[[gc]] == grp & pv$valid)
+      idx <- if (single_env) which(pv$present & pv$finite)
+             else            which(pv[[gc]] == grp & pv$present & pv$finite)
     }
     gjj <- unname(G[grp])   # unname() prevents row-name warnings in data.frame
 
@@ -138,7 +129,8 @@ accuracy <- function(model,
       if (by_variety) {
         # Return zero-row frame with the correct columns
         row <- data.frame(group = character(0), variety = character(0),
-                          G_jj = numeric(0),   pev     = numeric(0))
+                          G_jj = numeric(0),   pev     = numeric(0),
+                          present = logical(0))
         if (want_acc) row$accuracy  <- numeric(0)
         if (want_H2)  row$gen.H2   <- numeric(0)
       } else {
@@ -167,6 +159,7 @@ accuracy <- function(model,
                            variety  = as.character(pv[[vc]][idx]),
                            G_jj     = gjj,
                            pev      = pv$pev[idx],
+                           present  = pv$present[idx],
                            stringsAsFactors = FALSE)
       if (want_acc) out_bv$accuracy <- a
       if (want_H2)  out_bv$gen.H2  <- h2   # group-level statistic (Cullis H²)

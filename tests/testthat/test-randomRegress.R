@@ -2,12 +2,14 @@
 # Consolidated tests for randomRegress() and its private helper .condList().
 #
 # Sections:
-#   A. Unit algebra tests   – no model / no mocking required
+#   A. Unit algebra tests       – no model / no mocking required
 #   B. .condList() unit tests
+#   B2. .parse_rreg_term() unit tests
 #   C. Error conditions
-#   D. End-to-end tests     – local_mocked_bindings for predict() /
-#                             .asreml_vparams() / .fa_asreml()
-#   E. New path coverage    – FA path, pev=FALSE, sep, scalar beta, absent treatment
+#   D. End-to-end tests         – local_mocked_bindings for predict() /
+#                                  .asreml_vparams() / .fa_asreml()
+#   E. New path coverage        – FA path, pev=FALSE, sep, scalar beta, absent treatment
+#   F. New structures / wrappers – corh, corgh, vm, ide; .cor_to_cov_Gmat()
 
 # ===========================================================================
 # Shared fixtures
@@ -61,10 +63,10 @@ make_pvals_rrm <- function(levs  = c("N0","N1","N2"),
   list(pvals = pv, vcov = vcov)
 }
 
-# --- Minimal asreml model stub (non-FA) ------------------------------------
+# --- Minimal asreml model stub (non-FA, us structure) ----------------------
 
-make_rrm_model <- function() {
-  frm <- stats::as.formula("~ TSite:Variety")
+make_rrm_model <- function(struct = "us") {
+  frm <- stats::as.formula(paste0("~ ", struct, "(TSite):Variety"))
   m   <- list(formulae = list(random = frm), call = list())
   class(m) <- "asreml"
   m
@@ -251,6 +253,92 @@ test_that("TGmat dimnames include eff. and resp. prefixes", {
 })
 
 # ===========================================================================
+# SECTION B2: .parse_rreg_term() unit tests
+# ===========================================================================
+
+test_that(".parse_rreg_term: us structure parses correctly", {
+  p <- biomAid:::.parse_rreg_term("us(TSite):Variety")
+  expect_equal(p$struct,     "us")
+  expect_equal(p$group_var,  "TSite")
+  expect_equal(p$by_var,     "Variety")
+  expect_null(p$by_wrapper)
+  expect_equal(p$only_term,  "TSite:Variety")
+  expect_equal(p$classify,   "TSite:Variety")
+})
+
+test_that(".parse_rreg_term: fa structure parses order correctly", {
+  p <- biomAid:::.parse_rreg_term("fa(TSite, 2):Variety")
+  expect_equal(p$struct,    "fa")
+  expect_equal(p$group_var, "TSite")
+  expect_equal(p$by_var,    "Variety")
+  expect_equal(p$n_fa,      2L)
+  expect_equal(p$only_term, "fa(TSite, 2):Variety")
+  expect_equal(p$classify,  "TSite:Variety")
+})
+
+test_that(".parse_rreg_term: fa strips whitespace from user input", {
+  p <- biomAid:::.parse_rreg_term("fa( TSite , 2 ) : Variety")
+  expect_equal(p$struct,    "fa")
+  expect_equal(p$group_var, "TSite")
+  expect_equal(p$n_fa,      2L)
+})
+
+test_that(".parse_rreg_term: corgh structure parses correctly", {
+  p <- biomAid:::.parse_rreg_term("corgh(TSite):Variety")
+  expect_equal(p$struct,    "corgh")
+  expect_equal(p$group_var, "TSite")
+  expect_equal(p$by_var,    "Variety")
+  expect_null(p$n_fa)
+  expect_equal(p$only_term, "TSite:Variety")
+  expect_equal(p$classify,  "TSite:Variety")
+})
+
+test_that(".parse_rreg_term: corh structure parses correctly", {
+  p <- biomAid:::.parse_rreg_term("corh(TSite):Variety")
+  expect_equal(p$struct,    "corh")
+  expect_equal(p$group_var, "TSite")
+  expect_equal(p$by_var,    "Variety")
+  expect_equal(p$only_term, "TSite:Variety")
+})
+
+test_that(".parse_rreg_term: diag structure parses correctly", {
+  p <- biomAid:::.parse_rreg_term("diag(TSite):Variety")
+  expect_equal(p$struct,    "diag")
+  expect_equal(p$only_term, "TSite:Variety")
+})
+
+test_that(".parse_rreg_term: vm wrapper on by-variable", {
+  p <- biomAid:::.parse_rreg_term("us(TSite):vm(Variety, giv1)")
+  expect_equal(p$struct,      "us")
+  expect_equal(p$by_var,      "Variety")
+  expect_equal(p$by_wrapper,  "vm")
+  expect_equal(p$by_raw,      "vm(Variety,giv1)")   # whitespace stripped
+  expect_equal(p$only_term,   "TSite:Variety")
+  expect_equal(p$classify,    "TSite:Variety")
+})
+
+test_that(".parse_rreg_term: ide wrapper on by-variable", {
+  p <- biomAid:::.parse_rreg_term("us(TSite):ide(Variety)")
+  expect_equal(p$by_var,     "Variety")
+  expect_equal(p$by_wrapper, "ide")
+  expect_equal(p$only_term,  "TSite:Variety")
+})
+
+test_that(".parse_rreg_term: unsupported structure errors", {
+  expect_error(
+    biomAid:::.parse_rreg_term("ar1(TSite):Variety"),
+    "Unsupported variance structure"
+  )
+})
+
+test_that(".parse_rreg_term: missing colon errors", {
+  expect_error(
+    biomAid:::.parse_rreg_term("us(TSite)"),
+    "must be an interaction"
+  )
+})
+
+# ===========================================================================
 # SECTION C: Error conditions
 # ===========================================================================
 
@@ -278,6 +366,56 @@ test_that("singular G sub-matrix returns NULL from tryCatch", {
   expect_null(beta)
 })
 
+# Negative conditional variance path: indefinite G-matrix triggers warning,
+# sigmat entry remains NA, responsiveness BLUPs remain NA for that treatment.
+test_that("negative conditional variance: warning issued, sigmat entry is NA", {
+  # Build a 4x4 G-matrix that is indefinite (NOT positive semi-definite).
+  # Force G_11 - G_1A G_AA^-1 G_A1 < 0 by making the off-diagonals too large.
+  # Simplest: 2x2 with variance 0.5 but covariance 0.7 (correlation > 1 in effect).
+  k  <- 4L
+  lv <- c("N0-S1","N1-S1","N0-S2","N1-S2")
+  # Start from a valid G then make off-diagonal T0-T1 block much too large
+  set.seed(1L)
+  A <- matrix(rnorm(k * k), k, k)
+  G <- crossprod(A) / k + diag(0.5, k)
+  dimnames(G) <- list(lv, lv)
+  # Inflate [1,2] and [2,1] so the 2x2 T sub-block is indefinite
+  G[1, 2] <- G[2, 1] <- sqrt(G[1,1] * G[2,2]) * 1.5   # correlation > 1
+  # Build pvals fixture with the same layout
+  set.seed(1L)
+  varieties  <- paste0("Var", sprintf("%02d", 1:8))
+  tsnams_all <- lv
+  pv_df <- expand.grid(TSite = factor(tsnams_all, levels = tsnams_all),
+                       Variety = factor(varieties),
+                       KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
+  pv_df$predicted.value <- rnorm(nrow(pv_df))
+  pv_df$std.error       <- runif(nrow(pv_df), 0.1, 0.5)
+  pv_df$status          <- factor(rep("Estimable", nrow(pv_df)))
+  n    <- nrow(pv_df)
+  Avcov <- matrix(rnorm(n * n) * 0.1, n, n)
+  vcov  <- crossprod(Avcov) + diag(0.05, n)
+  pv    <- list(pvals = pv_df, vcov = vcov)
+
+  frm <- stats::as.formula("~ us(TSite):Variety")
+  mod <- list(formulae = list(random = frm), call = list())
+  class(mod) <- "asreml"
+
+  local_mocked_bindings(
+    predict         = function(...) pv,
+    .asreml_vparams = function(...) G,
+    .package        = "biomAid"
+  )
+  expect_warning(
+    res <- randomRegress(mod,
+                         term = "us(TSite):Variety",
+                         levs = c("N0","N1"),
+                         type = "baseline"),
+    "Non-positive conditional variance"
+  )
+  # sigmat entry for the affected treatment should be NA
+  expect_true(anyNA(res$sigmat))
+})
+
 # ===========================================================================
 # SECTION D: End-to-end tests (local_mocked_bindings)
 # ===========================================================================
@@ -292,7 +430,7 @@ test_that("randomRegress() baseline returns named list", {
     .package        = "biomAid"
   )
   res <- randomRegress(make_rrm_model(),
-                       Env  = "TSite:Variety",
+                       term = "us(TSite):Variety",
                        levs = c("N0","N1","N2"),
                        type = "baseline")
   expect_named(res, c("blups","TGmat","Gmat","beta","sigmat","tmat",
@@ -311,7 +449,7 @@ test_that("randomRegress() blups has correct columns", {
     .package        = "biomAid"
   )
   res <- randomRegress(make_rrm_model(),
-                       Env  = "TSite:Variety",
+                       term = "us(TSite):Variety",
                        levs = c("N0","N1","N2"))
   expect_true("Site"    %in% names(res$blups))
   expect_true("Variety" %in% names(res$blups))
@@ -330,7 +468,7 @@ test_that("randomRegress() Gmat matches mock", {
     .package        = "biomAid"
   )
   res <- randomRegress(make_rrm_model(),
-                       Env  = "TSite:Variety",
+                       term = "us(TSite):Variety",
                        levs = c("N0","N1","N2"))
   expect_equal(res$Gmat, G, tolerance = 1e-12)
 })
@@ -345,7 +483,7 @@ test_that("randomRegress() sequential: TGmat is a matrix", {
     .package        = "biomAid"
   )
   res <- randomRegress(make_rrm_model(),
-                       Env  = "TSite:Variety",
+                       term = "us(TSite):Variety",
                        levs = c("N0","N1","N2"),
                        type = "sequential")
   expect_equal(res$type, "sequential")
@@ -362,7 +500,7 @@ test_that("randomRegress() partial: resp columns for all levs", {
     .package        = "biomAid"
   )
   res <- randomRegress(make_rrm_model(),
-                       Env  = "TSite:Variety",
+                       term = "us(TSite):Variety",
                        levs = c("N0","N1","N2"),
                        type = "partial")
   expect_true(all(c("resp.N0","resp.N1","resp.N2") %in% names(res$blups)))
@@ -378,7 +516,7 @@ test_that("randomRegress() sigmat values are positive", {
     .package        = "biomAid"
   )
   res <- randomRegress(make_rrm_model(),
-                       Env  = "TSite:Variety",
+                       term = "us(TSite):Variety",
                        levs = c("N0","N1","N2"))
   expect_true(all(res$sigmat > 0, na.rm = TRUE))
 })
@@ -393,7 +531,7 @@ test_that("randomRegress() beta coefficients are finite", {
     .package        = "biomAid"
   )
   res <- randomRegress(make_rrm_model(),
-                       Env  = "TSite:Variety",
+                       term = "us(TSite):Variety",
                        levs = c("N0","N1","N2"))
   expect_true(all(is.finite(res$beta$N1), na.rm = TRUE))
 })
@@ -409,7 +547,7 @@ test_that("randomRegress() custom type runs without error", {
   )
   res <- suppressWarnings(
     randomRegress(make_rrm_model(),
-                  Env  = "TSite:Variety",
+                  term = "us(TSite):Variety",
                   levs = c("N0","N1","N2"),
                   type = "custom",
                   cond = list(N0 = NULL, N1 = "N0", N2 = c("N0","N1")))
@@ -500,7 +638,7 @@ test_that("FA path: runs without error and HSD columns are all NA", {
     .package   = "biomAid"
   )
   res <- randomRegress(make_fa_model(),
-                       Env  = "TSite:Variety",
+                       term = "fa(TSite, 1):Variety",
                        levs = c("N0","N1"),
                        type = "baseline")
   # Function should succeed and return a list
@@ -523,7 +661,7 @@ test_that("randomRegress() pev=FALSE runs without error and returns result", {
     .package        = "biomAid"
   )
   res <- randomRegress(make_rrm_model(),
-                       Env  = "TSite:Variety",
+                       term = "us(TSite):Variety",
                        levs = c("N0","N1","N2"),
                        pev  = FALSE)
   expect_true(is.list(res))
@@ -592,7 +730,7 @@ test_that("randomRegress() sep='-' correctly parses site-treatment labels", {
     .package        = "biomAid"
   )
   res <- randomRegress(make_rrm_model(),
-                       Env  = "TSite:Variety",
+                       term = "us(TSite):Variety",
                        levs = levs,
                        sep  = "-")
   expect_s3_class(res$blups, "data.frame")
@@ -640,12 +778,12 @@ test_that("randomRegress() baseline scalar path completes without error", {
   )
   # baseline: every conditioned treatment uses scalar A_j
   res_baseline <- randomRegress(make_rrm_model(),
-                                Env  = "TSite:Variety",
+                                term = "us(TSite):Variety",
                                 levs = c("N0","N1","N2"),
                                 type = "baseline")
   # sequential with |A_j|>1 uses matrix solve() for later treatments
   res_seq <- randomRegress(make_rrm_model(),
-                           Env  = "TSite:Variety",
+                           term = "us(TSite):Variety",
                            levs = c("N0","N1","N2"),
                            type = "sequential")
 
@@ -713,7 +851,7 @@ test_that("treatment absent from a site: no error, other sites return results", 
   )
   # Should run without error even though N2 is absent in S2
   res <- randomRegress(make_rrm_model(),
-                       Env  = "TSite:Variety",
+                       term = "us(TSite):Variety",
                        levs = c("N0","N1","N2"),
                        type = "baseline")
   expect_s3_class(res$blups, "data.frame")
@@ -724,4 +862,290 @@ test_that("treatment absent from a site: no error, other sites return results", 
   # S2 is missing N2: resp.N2 rows for S2 must all be NA
   s2_rows <- res$blups$Site == "S2"
   expect_true(all(is.na(res$blups$resp.N2[s2_rows])))
+})
+
+# ===========================================================================
+# SECTION F: New structures / wrappers — corh, corgh, vm, ide
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# F1. .cor_to_cov_Gmat() unit tests
+# ---------------------------------------------------------------------------
+
+# Build a known mixed variance/correlation matrix (what ASReml returns for
+# corh / corgh via vparameters[["TSite:Variety"]]).
+# Diagonal = genetic variances; off-diagonal = correlations.
+make_cor_vparams <- function(seed = 101L) {
+  set.seed(seed)
+  k    <- 4L
+  sds  <- sqrt(runif(k, 0.5, 3.0))             # heterogeneous std devs
+  R    <- cov2cor(crossprod(matrix(rnorm(k*k), k, k)) + diag(0.5, k))
+  M    <- R
+  diag(M) <- sds^2                              # variances on diagonal
+  nms  <- paste0("T", seq_len(k), "-S1")
+  dimnames(M) <- list(nms, nms)
+  list(M = M, sds = sds, R = R)
+}
+
+test_that(".cor_to_cov_Gmat: diagonal of output equals diagonal of input", {
+  obj <- make_cor_vparams()
+  G   <- biomAid:::.cor_to_cov_Gmat(obj$M)
+  expect_equal(diag(G), diag(obj$M), tolerance = 1e-12)
+})
+
+test_that(".cor_to_cov_Gmat: off-diagonal equals r_ij * sigma_i * sigma_j", {
+  obj  <- make_cor_vparams()
+  G    <- biomAid:::.cor_to_cov_Gmat(obj$M)
+  k    <- nrow(obj$M)
+  sds  <- sqrt(diag(obj$M))
+  for (i in seq_len(k)) {
+    for (j in seq_len(k)) {
+      if (i != j) {
+        expected <- unname(obj$M[i, j] * sds[i] * sds[j])
+        expect_equal(unname(G[i, j]), expected, tolerance = 1e-12)
+      }
+    }
+  }
+})
+
+test_that(".cor_to_cov_Gmat: result is symmetric", {
+  obj <- make_cor_vparams()
+  G   <- biomAid:::.cor_to_cov_Gmat(obj$M)
+  expect_equal(G, t(G), tolerance = 1e-12)
+})
+
+test_that(".cor_to_cov_Gmat: result is positive definite (all eigenvalues > 0)", {
+  obj <- make_cor_vparams()
+  G   <- biomAid:::.cor_to_cov_Gmat(obj$M)
+  evs <- eigen(G, symmetric = TRUE, only.values = TRUE)$values
+  expect_true(all(evs > 0))
+})
+
+test_that(".cor_to_cov_Gmat: cov2cor of result recovers off-diagonal correlations", {
+  obj <- make_cor_vparams()
+  G   <- biomAid:::.cor_to_cov_Gmat(obj$M)
+  R_recovered <- cov2cor(G)
+  # Off-diagonal of recovered correlation should equal off-diagonal of M
+  k <- nrow(obj$M)
+  for (i in seq_len(k))
+    for (j in seq_len(k))
+      if (i != j)
+        expect_equal(R_recovered[i, j], obj$M[i, j], tolerance = 1e-10)
+})
+
+test_that(".cor_to_cov_Gmat: preserves dimension names", {
+  obj <- make_cor_vparams()
+  G   <- biomAid:::.cor_to_cov_Gmat(obj$M)
+  expect_equal(dimnames(G), dimnames(obj$M))
+})
+
+# ---------------------------------------------------------------------------
+# F2. corgh end-to-end — mock returns mixed var/cor matrix; Gmat must be
+#     a full covariance matrix with correct off-diagonals after conversion
+# ---------------------------------------------------------------------------
+
+make_corgh_model <- function() {
+  frm <- stats::as.formula("~ corgh(TSite):Variety")
+  m   <- list(formulae = list(random = frm), call = list())
+  class(m) <- "asreml"
+  m
+}
+
+# corgh mock: .asreml_vparams() returns the mixed var/cor matrix
+make_corgh_vparams <- function(levs  = c("N0","N1","N2"),
+                                sites = c("S1","S2"),
+                                seed  = 200L) {
+  set.seed(seed)
+  tsnams <- as.vector(outer(levs, sites, paste, sep = "-"))
+  k      <- length(tsnams)
+  sds    <- sqrt(runif(k, 0.5, 2.5))
+  Atmp   <- matrix(rnorm(k * k), k, k)
+  R      <- cov2cor(crossprod(Atmp) + diag(0.5, k))
+  M      <- R
+  diag(M) <- sds^2
+  dimnames(M) <- list(tsnams, tsnams)
+  M
+}
+
+test_that("corgh: Gmat returned by randomRegress is a full covariance matrix", {
+  M  <- make_corgh_vparams()
+  pv <- make_pvals_rrm()
+  local_mocked_bindings(
+    predict         = function(...) pv,
+    .asreml_vparams = function(...) M,
+    .package        = "biomAid"
+  )
+  res <- randomRegress(make_corgh_model(),
+                       term = "corgh(TSite):Variety",
+                       levs = c("N0","N1","N2"),
+                       type = "baseline")
+  G <- res$Gmat
+  # Diagonal should equal the diagonal of M (variances unchanged)
+  expect_equal(diag(G), diag(M), tolerance = 1e-12)
+  # Off-diagonal should NOT equal the raw correlations from M
+  # (they must be covariances = r_ij * sigma_i * sigma_j)
+  k   <- nrow(M)
+  sds <- sqrt(diag(M))
+  expect_equal(unname(G[1,2]), unname(M[1,2] * sds[1] * sds[2]), tolerance = 1e-12)
+  # Result must be symmetric
+  expect_equal(G, t(G), tolerance = 1e-12)
+})
+
+test_that("corgh: randomRegress returns valid blups and positive sigmat", {
+  M  <- make_corgh_vparams()
+  pv <- make_pvals_rrm()
+  local_mocked_bindings(
+    predict         = function(...) pv,
+    .asreml_vparams = function(...) M,
+    .package        = "biomAid"
+  )
+  res <- randomRegress(make_corgh_model(),
+                       term = "corgh(TSite):Variety",
+                       levs = c("N0","N1","N2"),
+                       type = "baseline")
+  expect_s3_class(res$blups, "data.frame")
+  expect_true("resp.N1" %in% names(res$blups))
+  expect_true(all(res$sigmat > 0, na.rm = TRUE))
+})
+
+# ---------------------------------------------------------------------------
+# F3. corh end-to-end (two treatment levels)
+# ---------------------------------------------------------------------------
+
+make_corh_model <- function() {
+  frm <- stats::as.formula("~ corh(TSite):Variety")
+  m   <- list(formulae = list(random = frm), call = list())
+  class(m) <- "asreml"
+  m
+}
+
+make_corh_vparams <- function(levs  = c("N0","N1"),
+                               sites = c("S1","S2"),
+                               seed  = 300L) {
+  set.seed(seed)
+  tsnams <- as.vector(outer(levs, sites, paste, sep = "-"))
+  k      <- length(tsnams)
+  sds    <- sqrt(runif(k, 0.5, 2.5))
+  Atmp   <- matrix(rnorm(k * k), k, k)
+  R      <- cov2cor(crossprod(Atmp) + diag(0.5, k))
+  M      <- R
+  diag(M) <- sds^2
+  dimnames(M) <- list(tsnams, tsnams)
+  M
+}
+
+make_pvals_rrm_2lev <- function(levs  = c("N0","N1"),
+                                 sites = c("S1","S2"),
+                                 n_var = 10L,
+                                 seed  = 300L) {
+  make_pvals_rrm(levs = levs, sites = sites, n_var = n_var, seed = seed)
+}
+
+test_that("corh: Gmat off-diagonals are covariances not correlations", {
+  M  <- make_corh_vparams()
+  pv <- make_pvals_rrm_2lev()
+  local_mocked_bindings(
+    predict         = function(...) pv,
+    .asreml_vparams = function(...) M,
+    .package        = "biomAid"
+  )
+  res <- randomRegress(make_corh_model(),
+                       term = "corh(TSite):Variety",
+                       levs = c("N0","N1"),
+                       type = "baseline")
+  G   <- res$Gmat
+  sds <- sqrt(diag(M))
+  expect_equal(diag(G), diag(M), tolerance = 1e-12)
+  expect_equal(unname(G[1,2]), unname(M[1,2] * sds[1] * sds[2]), tolerance = 1e-12)
+  expect_equal(G, t(G), tolerance = 1e-12)
+})
+
+test_that("corh: randomRegress returns valid blups", {
+  M  <- make_corh_vparams()
+  pv <- make_pvals_rrm_2lev()
+  local_mocked_bindings(
+    predict         = function(...) pv,
+    .asreml_vparams = function(...) M,
+    .package        = "biomAid"
+  )
+  res <- randomRegress(make_corh_model(),
+                       term = "corh(TSite):Variety",
+                       levs = c("N0","N1"),
+                       type = "baseline")
+  expect_s3_class(res$blups, "data.frame")
+  expect_true("resp.N1" %in% names(res$blups))
+  expect_true(all(res$sigmat > 0, na.rm = TRUE))
+})
+
+# ---------------------------------------------------------------------------
+# F4. vm wrapper — term = "us(TSite):vm(Variety, giv1)"
+#     The bare "Variety" name must be used in pvals lookup and column names
+# ---------------------------------------------------------------------------
+
+make_vm_model <- function() {
+  frm <- stats::as.formula("~ us(TSite):vm(Variety, giv1)")
+  m   <- list(formulae = list(random = frm), call = list())
+  class(m) <- "asreml"
+  m
+}
+
+test_that("vm wrapper: randomRegress parses bare Variety name correctly", {
+  G  <- make_Gmat_rrm()
+  pv <- make_pvals_rrm()
+  local_mocked_bindings(
+    predict         = function(...) pv,
+    .asreml_vparams = function(...) G,
+    .package        = "biomAid"
+  )
+  res <- randomRegress(make_vm_model(),
+                       term = "us(TSite):vm(Variety, giv1)",
+                       levs = c("N0","N1","N2"),
+                       type = "baseline")
+  expect_s3_class(res$blups, "data.frame")
+  # Columns should use bare "Variety" name, not "vm(Variety, giv1)"
+  expect_true("Variety" %in% names(res$blups))
+  expect_true("resp.N1" %in% names(res$blups))
+})
+
+test_that("vm wrapper: by_wrapper recorded, only_term uses bare name", {
+  p <- biomAid:::.parse_rreg_term("us(TSite):vm(Variety, giv1)")
+  expect_equal(p$by_wrapper, "vm")
+  expect_equal(p$by_var,     "Variety")
+  expect_equal(p$only_term,  "TSite:Variety")
+  expect_equal(p$classify,   "TSite:Variety")
+})
+
+# ---------------------------------------------------------------------------
+# F5. ide wrapper — term = "us(TSite):ide(Variety)"
+# ---------------------------------------------------------------------------
+
+make_ide_model <- function() {
+  frm <- stats::as.formula("~ us(TSite):ide(Variety)")
+  m   <- list(formulae = list(random = frm), call = list())
+  class(m) <- "asreml"
+  m
+}
+
+test_that("ide wrapper: randomRegress parses bare Variety name correctly", {
+  G  <- make_Gmat_rrm()
+  pv <- make_pvals_rrm()
+  local_mocked_bindings(
+    predict         = function(...) pv,
+    .asreml_vparams = function(...) G,
+    .package        = "biomAid"
+  )
+  res <- randomRegress(make_ide_model(),
+                       term = "us(TSite):ide(Variety)",
+                       levs = c("N0","N1","N2"),
+                       type = "baseline")
+  expect_s3_class(res$blups, "data.frame")
+  expect_true("Variety" %in% names(res$blups))
+  expect_true("resp.N1" %in% names(res$blups))
+})
+
+test_that("ide wrapper: by_wrapper recorded, only_term uses bare name", {
+  p <- biomAid:::.parse_rreg_term("us(TSite):ide(Variety)")
+  expect_equal(p$by_wrapper, "ide")
+  expect_equal(p$by_var,     "Variety")
+  expect_equal(p$only_term,  "TSite:Variety")
 })

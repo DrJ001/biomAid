@@ -10,6 +10,7 @@ plot_randomRegress(
   treatments = NULL,
   highlight = "default",
   centre = FALSE,
+  cond_x = 1L,
   theme = ggplot2::theme_bw(),
   return_data = FALSE,
   ...
@@ -43,6 +44,23 @@ yield scale.  For true ASReml BLUPs the site mean is effectively zero
 so the change is minimal; this option is mainly useful when BLUPs have
 been computed from treatment means (e.g. in the demo).
 Ignored for \code{type = "gmat"}.}
+
+\item{cond_x}{Positive integer or integer vector (default \code{1L}).
+Selects which member of the conditioning set \eqn{A_j} is placed on
+the x-axis of the \code{"regress"} plot for each conditioned-treatment
+panel.  A scalar is recycled across all panels; a vector of the same
+length as the number of conditioned treatments plotted sets each panel
+independently.  For example, with three conditioned treatments under
+partial conditioning:
+\itemize{
+\item \code{cond_x = 1L} (default) — first member of \eqn{A_j} for every
+panel, e.g. \code{c(1, 1, 1)}.
+\item \code{cond_x = 2L} — second member for every panel.
+\item \code{cond_x = c(2, 1, 2)} — panel-specific selection.
+}
+An index that exceeds \eqn{|A_j|} for a given panel triggers a warning
+and falls back to 1.  Has no effect when \eqn{|A_j| = 1} (e.g.
+\code{type = "baseline"}).  Ignored for \code{type = "quadrant"} and \code{"gmat"}.}
 
 \item{theme}{A complete ggplot2 theme object. Default
 \code{\link[ggplot2:ggtheme]{ggplot2::theme_bw()}}.}
@@ -83,16 +101,15 @@ at zero.}
 }
 
 \strong{Variety highlighting} (\code{type = "regress"} and \code{"quadrant"} only):
-By default, six varieties are identified and annotated across all panels.
-Three come from the top-right quadrant of the efficiency x responsiveness
-space (above average on both axes) and three from the bottom-left quadrant
-(below average on both axes).  Within each quadrant the three varieties are
-chosen by their polar angle to represent an efficiency archetype (small
-angle), a balanced archetype (angle near \eqn{\pi/4}), and a
-responsiveness archetype (large angle), selecting only from varieties whose
-distance from the origin exceeds the 50th percentile within their quadrant.
-The same six varieties are consistently annotated across all site and
-treatment-pair panels.
+By default, up to six varieties are identified and annotated across all
+panels — up to three from the top-right quadrant of the efficiency x
+responsiveness space (above average on both axes, shown in orange) and up
+to three from the bottom-left quadrant (below average on both axes, shown
+in blue).  Within each quadrant only varieties whose distance from the
+origin exceeds the within-quadrant median are considered, and the final
+selection is the most extreme of those candidates ordered by decreasing
+distance.  The same varieties are consistently annotated across all site
+and treatment-pair panels.
 }
 \examples{
 \dontrun{
@@ -113,6 +130,17 @@ plot_randomRegress(res, type = "gmat")
 
 # Retrieve the tidy data frame
 df <- plot_randomRegress(res, type = "quadrant", return_data = TRUE)
+
+# Partial conditioning — default (first conditioning treatment on x)
+res_part <- randomRegress(model, term = "us(TSite):Variety",
+                          levs = c("N0","N1","N2"), type = "partial")
+plot_randomRegress(res_part, type = "regress")              # cond_x = 1L
+
+# Show the second conditioning treatment on the x-axis for all panels
+plot_randomRegress(res_part, type = "regress", cond_x = 2L)
+
+# Mixed: second for panels 1 & 3, first for panel 2
+plot_randomRegress(res_part, type = "regress", cond_x = c(2L, 1L, 2L))
 }
 
 }
