@@ -266,11 +266,10 @@ NULL
 
 # ---- Default highlight selection ---------------------------------------
 
-# Selects 6 varieties to annotate: 3 from the top-right quadrant and 3 from
-# the bottom-left quadrant of the efficiency x responsiveness space.
-# Within each quadrant the selection uses polar angles to represent three
-# archetypes: efficiency (angle ~ 0), balanced (angle ~ pi/4), and
-# responsiveness (angle ~ pi/2).
+# Selects up to 3 varieties per quadrant to annotate, choosing the most
+# extreme varieties (by distance from origin) that exceed the within-quadrant
+# median distance.  The top-right quadrant is shown in orange and the
+# bottom-left in blue.
 # @param qdata  Data frame from .rreg_quadrant_data()
 # @return Data frame with columns Variety and group ("tr" or "bl")
 #' @noRd
@@ -285,34 +284,18 @@ NULL
       return(data.frame(Variety = character(0L), group = character(0L),
                         stringsAsFactors = FALSE))
 
-    in_q$dist  <- sqrt(in_q$x^2 + in_q$y^2)
-    in_q$angle <- atan2(abs(in_q$y), abs(in_q$x))
+    in_q$dist <- sqrt(in_q$x^2 + in_q$y^2)
 
-    # Filter to > 50th percentile distance; relax progressively if needed
-    for (pct in c(0.5, 0.33, 0.0)) {
-      cands <- in_q[in_q$dist > quantile(in_q$dist, pct), , drop = FALSE]
-      if (nrow(cands) >= 3L) break
-    }
+    # Keep varieties beyond the within-quadrant median distance
+    cands <- in_q[in_q$dist > quantile(in_q$dist, 0.5), , drop = FALSE]
 
-    # Pick three archetypes sequentially, removing each pick from the pool
-    selectors <- list(
-      function(d) d$Variety[which.min(d$angle)],              # efficiency
-      function(d) d$Variety[which.min(abs(d$angle - pi/4))],  # balanced
-      function(d) d$Variety[which.max(d$angle)]               # responsiveness
-    )
-
-    chosen <- character(0L)
-    pool   <- cands
-    for (sel in selectors) {
-      if (nrow(pool) == 0L) break
-      pick   <- sel(pool)
-      chosen <- c(chosen, pick)
-      pool   <- pool[pool$Variety != pick, , drop = FALSE]
-    }
-
-    if (length(chosen) == 0L)
+    if (nrow(cands) == 0L)
       return(data.frame(Variety = character(0L), group = character(0L),
                         stringsAsFactors = FALSE))
+
+    # Return up to 3, ordered by decreasing distance (most extreme first)
+    cands  <- cands[order(cands$dist, decreasing = TRUE), , drop = FALSE]
+    chosen <- head(cands$Variety, 3L)
 
     data.frame(Variety = chosen, group = grp, stringsAsFactors = FALSE)
   }
@@ -527,17 +510,16 @@ NULL
 #'     at zero.}
 #' }
 #'
-#' **Variety highlighting** (`type = "regress"` and `"quadrant"` only):
-#' By default, six varieties are identified and annotated across all panels.
-#' Three come from the top-right quadrant of the efficiency x responsiveness
-#' space (above average on both axes) and three from the bottom-left quadrant
-#' (below average on both axes).  Within each quadrant the three varieties are
-#' chosen by their polar angle to represent an efficiency archetype (small
-#' angle), a balanced archetype (angle near \eqn{\pi/4}), and a
-#' responsiveness archetype (large angle), selecting only from varieties whose
-#' distance from the origin exceeds the 50th percentile within their quadrant.
-#' The same six varieties are consistently annotated across all site and
-#' treatment-pair panels.
+ #' **Variety highlighting** (`type = "regress"` and `"quadrant"` only):
+#' By default, up to six varieties are identified and annotated across all
+#' panels — up to three from the top-right quadrant of the efficiency x
+#' responsiveness space (above average on both axes, shown in orange) and up
+#' to three from the bottom-left quadrant (below average on both axes, shown
+#' in blue).  Within each quadrant only varieties whose distance from the
+#' origin exceeds the within-quadrant median are considered, and the final
+#' selection is the most extreme of those candidates ordered by decreasing
+#' distance.  The same varieties are consistently annotated across all site
+#' and treatment-pair panels.
 #'
 #' @param res         A list returned by [randomRegress()].
 #' @param type        Character string selecting the plot type. One of

@@ -24,7 +24,8 @@
 
 utils::globalVariables(c(
   "Estimate", "y_factor", "neg_log10_p", "CI_lower", "CI_upper",
-  "x_label", "p_label"
+  "x_label", "p_label",
+  "xmin", "xmax", "ymin", "ymax", "band_fill", "y_pos"
 ))
 
 # ---- Private helpers -------------------------------------------------------
@@ -136,12 +137,70 @@ utils::globalVariables(c(
   # Map row_id -> readable label for scale_y_discrete
   y_labs <- stats::setNames(data$label, data$row_id)
 
+  # ---- Pre-compute band / label data (non-facet multi-group only) ---------
+  # Bands are added as the very first layer so they sit behind all data.
+  # Group labels are placed in the right margin via clip = "off" so they
+  # are geometrically separated from CI bars by the panel border.
+  band_df  <- NULL
+  label_df <- NULL
+  sep_y    <- NULL
+
+  if (!facet && has_grps) {
+    grp_min_y <- tapply(as.numeric(data$y_factor), data$group, min)
+    grp_max_y <- tapply(as.numeric(data$y_factor), data$group, max)
+    ord       <- order(grp_min_y)   # bottom group first
+    n_grps    <- length(grp_min_y)
+
+    band_df <- data.frame(
+      xmin      = -Inf,
+      xmax      = Inf,
+      ymin      = grp_min_y[ord] - 0.5,
+      ymax      = grp_max_y[ord] + 0.5,
+      band_fill = rep_len(c("grey95", "white"), n_grps),
+      stringsAsFactors = FALSE
+    )
+
+    # Labels sit at the vertical midpoint of each band, in the right margin.
+    label_df <- data.frame(
+      group = names(grp_min_y)[ord],
+      y_pos = ((grp_min_y + grp_max_y) / 2)[ord],
+      stringsAsFactors = FALSE
+    )
+
+    bottom_grp <- names(which.min(grp_min_y))
+    sep_y      <- grp_min_y[names(grp_min_y) != bottom_grp] - 0.5
+  }
+
   # ---- Base plot ----------------------------------------------------------
   p <- ggplot2::ggplot(
     data,
     ggplot2::aes(x = Estimate, y = y_factor, colour = neg_log10_p)
-  ) +
+  )
 
+  # Background shading — must be the first layer so it sits behind data.
+  if (!is.null(band_df)) {
+    p <- p +
+      ggplot2::geom_rect(
+        data        = band_df,
+        ggplot2::aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax,
+                     fill = band_fill),
+        inherit.aes = FALSE,
+        colour      = NA
+      ) +
+      ggplot2::scale_fill_identity()
+  }
+
+  # Dotted separator lines — on top of shading, below data points.
+  if (!is.null(sep_y) && length(sep_y)) {
+    p <- p + ggplot2::geom_hline(
+      yintercept = unname(sep_y),
+      linetype   = "dotted",
+      colour     = "grey55",
+      linewidth  = 0.45
+    )
+  }
+
+  p <- p +
     # Vertical reference line at x = 0
     ggplot2::geom_vline(
       xintercept = 0,
@@ -215,6 +274,28 @@ utils::globalVariables(c(
                                                   hjust  = 0)
     )
 
+  # ---- Group labels in right margin (non-facet multi-group only) ----------
+  # Placed at x = Inf with clip = "off" so they sit outside the panel border.
+  # This guarantees they cannot overlap with CI bars regardless of data range.
+  if (!is.null(label_df)) {
+    p <- p +
+      ggplot2::coord_cartesian(clip = "off") +
+      ggplot2::geom_text(
+        data        = label_df,
+        ggplot2::aes(x = Inf, y = y_pos, label = group),
+        hjust       = -0.18,
+        vjust       = 0.5,
+        fontface    = "bold",
+        size        = 2.8,
+        colour      = "grey20",
+        inherit.aes = FALSE
+      ) +
+      ggplot2::theme(
+        plot.margin = ggplot2::margin(t = 5, r = 70, b = 5, l = 5,
+                                      unit = "pt")
+      )
+  }
+
   # ---- Faceting -----------------------------------------------------------
   if (facet && has_grps) {
     # One panel per group; free_y so each panel shows only its own rows
@@ -224,25 +305,6 @@ utils::globalVariables(c(
       scales         = "free_y",
       strip.position = "top"
     )
-
-  } else if (!facet && has_grps) {
-    # Single panel: add dotted horizontal separator lines between groups.
-    # Within the y factor, level 1 is at the bottom and level n at the top;
-    # as.numeric(y_factor) gives each row's level number.
-    # The separator sits 0.5 units below the lowest y-position of each group
-    # (except the bottom group which needs no separator below it).
-    grp_min_y  <- tapply(as.numeric(data$y_factor), data$group, min)
-    bottom_grp <- names(which.min(grp_min_y))
-    sep_y      <- grp_min_y[names(grp_min_y) != bottom_grp] - 0.5
-
-    if (length(sep_y)) {
-      p <- p + ggplot2::geom_hline(
-        yintercept = unname(sep_y),
-        linetype   = "dotted",
-        colour     = "grey52",
-        linewidth  = 0.4
-      )
-    }
   }
 
   p

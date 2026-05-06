@@ -487,13 +487,13 @@ test_that("by_variety: returns one row per variety x group", {
   expect_equal(nrow(res), length(fa_grps) * length(fa_vars))
 })
 
-test_that("by_variety: has group, variety, G_jj, pev, accuracy columns", {
+test_that("by_variety: has group, variety, G_jj, pev, present, accuracy columns", {
   e <- make_fa_e2e()
   local_mocked_bindings(summary = function(model, ...) list(varcomp = e$vc),
                         .package = "base")
   local_mocked_bindings(predict = function(...) e$pv, .package = "biomAid")
   res <- accuracy(e$model, by_variety = TRUE, metric = "accuracy")
-  expect_true(all(c("group","variety","G_jj","pev","accuracy") %in% names(res)))
+  expect_true(all(c("group","variety","G_jj","pev","present","accuracy") %in% names(res)))
 })
 
 test_that("by_variety: no n_vars or sd_acc columns", {
@@ -545,30 +545,69 @@ test_that("by_variety: variety column is character", {
 })
 
 # ===========================================================================
-# SECTION G: present = TRUE vs FALSE
+# SECTION G: present column in by_variety output
 # ===========================================================================
 
-test_that("present=FALSE returns >= rows as present=TRUE (by_variety)", {
-  grps <- c("E1", "E2", "E3")
-  vars <- paste0("Var", 1:8)
+test_that("by_variety: present column exists and is logical", {
+  e <- make_fa_e2e()
+  local_mocked_bindings(summary = function(model, ...) list(varcomp = e$vc),
+                        .package = "base")
+  local_mocked_bindings(predict = function(...) e$pv, .package = "biomAid")
+  res <- accuracy(e$model, by_variety = TRUE, metric = "accuracy")
+  expect_true("present" %in% names(res))
+  expect_type(res$present, "logical")
+})
 
-  # Build an unbalanced observed data frame (only a subset of combos)
-  obs_dat <- make_acc_dat(grps[1:2], vars[1:5])   # fewer combos than full grid
+test_that("by_variety: balanced fixture — all rows have present = TRUE", {
+  # Fixture data covers all group x variety combos so everything is observed
+  e <- make_fa_e2e()
+  local_mocked_bindings(summary = function(model, ...) list(varcomp = e$vc),
+                        .package = "base")
+  local_mocked_bindings(predict = function(...) e$pv, .package = "biomAid")
+  res <- accuracy(e$model, by_variety = TRUE, metric = "accuracy")
+  expect_true(all(res$present))
+})
+
+test_that("by_variety: unobserved combos have present = FALSE, observed have present = TRUE", {
+  grps    <- c("E1", "E2", "E3")
+  vars    <- paste0("Var", sprintf("%02d", 1:8))
+  # Data covers all 3 groups but E1 only has Var01-Var05 — Var06-08 at E1 are
+  # unobserved. E2 and E3 have all 8 varieties.
+  obs_dat <- rbind(make_acc_dat(grps[1],   vars[1:5]),
+                   make_acc_dat(grps[2:3], vars))
   m_obs   <- make_acc_model("~ fa(Env, 2):id(Variety)", data = obs_dat)
   vc      <- make_varcomp_fa(grps, nfa = 2L, seed = 40L)
-
-  # pvals covers full grid; some std.error = 0 (mark as unobserved)
-  pv <- make_pvals_acc(grps, vars, include_sed = FALSE, seed = 40L)
-  pv$pvals$std.error[pv$pvals$Env == "E3"] <- 0   # E3 all invalid
-
+  pv      <- make_pvals_acc(grps, vars, include_sed = FALSE, seed = 40L)
   local_mocked_bindings(summary = function(model, ...) list(varcomp = vc),
                         .package = "base")
   local_mocked_bindings(predict = function(...) pv, .package = "biomAid")
-  res_T <- accuracy(m_obs, by_variety = TRUE, metric = "accuracy",
-                    present = TRUE)
-  res_F <- accuracy(m_obs, by_variety = TRUE, metric = "accuracy",
-                    present = FALSE)
-  expect_lte(nrow(res_T), nrow(res_F))
+  res <- accuracy(m_obs, by_variety = TRUE, metric = "accuracy")
+  # E1 x Var06-08 are not in obs_dat — should be present = FALSE
+  e1_unobs <- res[res$group == "E1" & res$variety %in% vars[6:8], ]
+  expect_true(nrow(e1_unobs) > 0L)
+  expect_true(all(!e1_unobs$present))
+  # E1 x Var01-05 are in obs_dat — should be present = TRUE
+  e1_obs <- res[res$group == "E1" & res$variety %in% vars[1:5], ]
+  expect_true(all(e1_obs$present))
+  # E2 and E3 have all varieties observed — all should be present = TRUE
+  expect_true(all(res$present[res$group %in% grps[2:3]]))
+})
+
+test_that("by_variety: all finite-SE rows returned regardless of observed status", {
+  grps    <- c("E1", "E2", "E3")
+  vars    <- paste0("Var", sprintf("%02d", 1:8))
+  # Same unbalanced setup — all 3 groups in data but E1 missing Var06-08
+  obs_dat <- rbind(make_acc_dat(grps[1],   vars[1:5]),
+                   make_acc_dat(grps[2:3], vars))
+  m_obs   <- make_acc_model("~ fa(Env, 2):id(Variety)", data = obs_dat)
+  vc      <- make_varcomp_fa(grps, nfa = 2L, seed = 41L)
+  pv      <- make_pvals_acc(grps, vars, include_sed = FALSE, seed = 41L)
+  local_mocked_bindings(summary = function(model, ...) list(varcomp = vc),
+                        .package = "base")
+  local_mocked_bindings(predict = function(...) pv, .package = "biomAid")
+  res <- accuracy(m_obs, by_variety = TRUE, metric = "accuracy")
+  # All 3 groups x 8 varieties = 24 rows expected (all have finite SE)
+  expect_equal(nrow(res), length(grps) * length(vars))
 })
 
 # ===========================================================================
@@ -634,8 +673,7 @@ test_that("group with < 2 valid rows returns NA accuracy and 0L n_vars", {
   pv$predicted.value <- rnorm(nrow(pv))
   pv$std.error <- runif(nrow(pv), 0.1, 0.4)
   pv$status    <- "Estimable"
-  # Only 1 valid (std.error > 0) row for E2; use present=FALSE so validity
-  # comes from std.error filter rather than data lookup.
+  # Only 1 valid (std.error > 0) row for E2; remaining rows zeroed out.
   pv$std.error[pv$Env == "E2"][-1L] <- 0
 
   local_mocked_bindings(summary = function(model, ...) list(varcomp = vc),
@@ -644,7 +682,7 @@ test_that("group with < 2 valid rows returns NA accuracy and 0L n_vars", {
     predict = function(...) list(pvals = pv, sed = NULL),
     .package = "biomAid"
   )
-  res    <- accuracy(m, metric = "accuracy", present = FALSE)
+  res    <- accuracy(m, metric = "accuracy")
   e2_row <- res[res$group == "E2", ]
   expect_equal(e2_row$n_vars, 0L)
   expect_true(is.na(e2_row$mean_acc))

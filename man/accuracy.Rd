@@ -9,8 +9,7 @@ accuracy(
   classify = NULL,
   metric = c("accuracy", "gen.H2"),
   pworkspace = "2gb",
-  by_variety = FALSE,
-  present = TRUE
+  by_variety = FALSE
 )
 }
 \arguments{
@@ -27,28 +26,16 @@ Default \code{"2gb"}.}
 
 \item{by_variety}{Logical. If \code{TRUE}, return one row per variety x
 group instead of group-level summaries. Default \code{FALSE}.}
-
-\item{present}{Logical. Controls which variety x group combinations are
-included in the output when \code{by_variety = TRUE}.
-\itemize{
-\item \code{TRUE} (default) — restrict to variety x group combinations
-that are \emph{observed} in the data. Unobserved combinations
-(varieties absent from a site) are excluded, which can produce holes
-in heatmaps for unbalanced trials.
-\item \code{FALSE} — include \emph{all} combinations returned by
-\code{predict.asreml()}, including unobserved ones. For factor-analytic
-models the G-matrix allows prediction of BLUPs for unobserved variety x
-site combinations; their PEV is higher than for observed combinations,
-reflecting reduced information. For simpler structures (e.g.
-\code{diag()}), unobserved combinations may receive the same SE as
-observed ones.
-}}
 }
 \value{
 A data frame with columns \code{group}, \code{n_vars}, \code{G_jj},
 and one or both of \code{mean_acc}/\code{sd_acc} (Mrode accuracy) and
 \code{gen.H2} (Cullis H\eqn{^2}). When \code{by_variety = TRUE} the
-\code{variety} and \code{pev} columns replace \code{n_vars}/\code{sd_acc}.
+\code{variety}, \code{pev}, and \code{present} columns replace
+\code{n_vars}/\code{sd_acc}. The \code{present} column is \code{TRUE}
+for variety x group combinations observed in the data and \code{FALSE}
+for combinations supported only by the G-matrix (e.g. unobserved variety
+x site pairs in factor-analytic models).
 }
 \description{
 Computes per-group mean Mrode (2014) accuracy and/or Cullis (2006) H\eqn{^2}
@@ -60,7 +47,6 @@ from an ASReml-R V4 mixed model. Supports \code{fa()}, \code{diag()},
 \dontrun{
 acc <- accuracy(model_fa)
 acc_bv <- accuracy(model_fa, by_variety = TRUE)
-acc_bv_all <- accuracy(model_fa, by_variety = TRUE, present = FALSE)
 accuracy(model_fa, metric = "gen.H2")
 }
 

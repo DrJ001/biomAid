@@ -66,7 +66,7 @@ For full specification of the multi-treatment, multi-environment LMM see the
 [Simulating Multi-Environment Trials](simTrialData.html) vignette.
 
 Let $\hat{\mathbf{u}}$ be the vector of variety BLUPs stacked across all
-$p = T \times S$ treatment $\times$ site groups, where $T$ is the number
+$p = T \times S$ groups, where $T$ is the number
 of treatments and $S$ the number of sites. The genetic
 variance–covariance structure is described by the **G-matrix**:
 
@@ -121,7 +121,9 @@ argument.
 | `fa(TSite, k):Variety` | Fully unstructured covariance matrix |
 
 For `corgh()` and `corh()` the estimated matrix is converted to a fully unstructured variance
-matrix $\mathbf{G}$ in `randomRegress()` before regressions are undertaken. To ensure maxi um flexibiit
+matrix $\mathbf{G}$ in `randomRegress()` before regressions are undertaken. To ensure maximum flexibility
+then function also recognises `vm()` and `ide()` in right-hand side terms to ensure the correct components
+are extracted from the model.
 
 ---
 
@@ -217,8 +219,7 @@ The four built-in schemes differ only in how $A_j$ is chosen:
 We simulate a single-site trial with 50 varieties and three nitrogen
 treatments (T0 = control, T1 = low N, T2 = high N), three replicates per
 treatment. With only one site, the G-matrix is a $3 \times 3$ matrix
-describing the genetic (co)variances between treatments — a clean,
-interpretable structure for introducing the method.
+describing the genetic (co)variances between treatments.
 
 We use `sim.options` to restrict the auto-generated between-treatment
 genetic correlations to a moderate range (0.55–0.70). This keeps the true
@@ -408,7 +409,7 @@ carries more of the shared genetic signal.
 
 ### Quadrant plot with default highlights
 
-The quadrant plot places **efficiency** on the x-axis and
+The quadrant plot places the T0 BLUPs on the x-axis and
 **responsiveness** on the y-axis. Under partial conditioning, every
 treatment has a responsiveness axis, so there are three quadrant panels:
 
@@ -420,12 +421,23 @@ p_quad1 <- plot_randomRegress(res1, type = "quadrant", highlight = "default")
 print(p_quad1)
 ```
 
-The default highlight algorithm selects three archetypes from the top-right
-quadrant (high efficiency + high responsiveness) and three from the
-bottom-left (low efficiency + low responsiveness), annotated consistently
-across all panels. Varieties that appear in the top-right of all panels
-respond positively to every treatment; those that shift between quadrants
-across panels show treatment-specific responses.
+The default highlight algorithm (`highlight = "default"`) selects up to six
+varieties to annotate across all panels — up to three from the top-right
+quadrant (high efficiency + high responsiveness, shown in orange) and up to
+three from the bottom-left (low efficiency + low responsiveness, shown in
+blue). Within each quadrant the candidates are restricted to varieties whose
+distance from the origin exceeds the within-quadrant median, and the final
+selection is simply the most extreme of those candidates, ordered by
+decreasing distance from the origin. The same varieties are labelled in every
+site and treatment-pair panel, making it easy to trace how a variety's
+relative position shifts across panels.
+
+Varieties that appear in the top-right of all panels respond positively to
+every treatment; those that shift between quadrants across panels show
+treatment-specific responses. To highlight specific varieties instead, pass a
+character vector of variety names, e.g.
+`highlight = c("Var01", "Var15", "Var22")`; to suppress highlighting
+entirely, use `highlight = NULL`.
 
 ---
 
@@ -630,24 +642,9 @@ ggplot(df_t1, aes(x = x, y = y, colour = Site)) +
 
 ---
 
-## Return value summary
-
-`randomRegress()` returns a named list:
-
-| Element | Type | Description |
-|---------|------|-------------|
-| `blups` | Data frame | Raw BLUPs + responsiveness BLUPs + HSD per variety × site |
-| `beta` | Named list | Site-specific $\boldsymbol{\beta}_j$ matrices, one per conditioned treatment |
-| `Gmat` | Matrix | Original G-matrix (covariance) |
-| `TGmat` | Matrix | Transformed G-matrix $\mathbf{T}\mathbf{G}\mathbf{T}^\top$ |
-| `sigmat` | Matrix | Conditional genetic variances $\sigma^2_{j \mid A_j}$ per site |
-| `tmat` | Matrix | Full transformation matrix $\mathbf{T}$ |
-| `cond_list` | Named list | Resolved conditioning structure |
-| `type` | Character | Conditioning scheme used |
-
----
-
 ## Summary
+
+### `randomRegress()`
 
 | Task | Code |
 |------|------|
@@ -655,17 +652,24 @@ ggplot(df_t1, aes(x = x, y = y, colour = Site)) +
 | Fully orthogonal (Gram-Schmidt) | `type = "sequential"` |
 | Partial genetic variances | `type = "partial"` |
 | Bespoke conditioning | `type = "custom", cond = list(...)` |
+| Single site, corgh term | `term = "corgh(TSite):Variety"` |
+| Multi-site, FA term | `term = "fa(TSite, 2):Variety"` |
+| Genomic relationship matrix | `term = "us(TSite):vm(Variety, giv1)"` |
+
+### `plot_randomRegress()`
+
+| Task | Code |
+|------|------|
 | Regression scatter plot | `plot_randomRegress(res, type = "regress")` |
 | Efficiency–responsiveness plot | `plot_randomRegress(res, type = "quadrant")` |
 | G-matrix heatmap | `plot_randomRegress(res, type = "gmat")` |
-| Default archetype highlights | `highlight = "default"` |
+| Default highlights | `highlight = "default"` |
 | Named variety highlights | `highlight = c("Var01", "Var15")` |
 | Suppress highlights | `highlight = NULL` |
 | Restrict treatment panels | `treatments = "T1"` |
+| Select x-axis conditioning treatment | `cond_x = 2L` |
 | Export plot data | `return_data = TRUE` |
 | Absolute yield scale | `centre = TRUE` |
-| Single site, corgh term | `term = "corgh(TSite):Variety"` |
-| Multi-site, FA term | `term = "fa(TSite, 2):Variety"` |
 
 ---
 
