@@ -111,13 +111,15 @@
   }
 
   # ---- Build predict() strings -------------------------------------------
-  # ASReml-R uses the bare variable names (no wrappers) in both classify and only.
-  # For FA:   only = "fa(Group, k):Var"  (space after comma required by ASReml)
-  # For rest: only = "Group:Var"
+  # classify always uses bare variable names (no wrappers).
+  # only uses the bare group name (or full fa() spec) on the left, but keeps
+  # any vm() / ide() wrapper on the right — ASReml-R requires it when present.
+  # For FA:   only = "fa(Group, k):rhs"  (space after comma required by ASReml)
+  # For rest: only = "Group:rhs"
   only_term <- if (struct == "fa" && !is.null(n_fa))
-    sprintf("fa(%s, %d):%s", group_var, n_fa, by_var)
+    sprintf("fa(%s, %d):%s", group_var, n_fa, by_raw)
   else
-    paste0(group_var, ":", by_var)
+    paste0(group_var, ":", by_raw)
 
   classify <- paste0(group_var, ":", by_var)
 

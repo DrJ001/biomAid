@@ -425,21 +425,19 @@ internally to avoid fixed-effect inflation of the PEV.
 
 ```r
 accuracy(model,
-         classify   = NULL,
+         term       = NULL,
          metric     = c("accuracy", "gen.H2"),
          pworkspace = "2gb",
-         by_variety = FALSE,
-         present    = TRUE)
+         by_variety = FALSE)
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `model` | Fitted ASReml-R V4 model object |
-| `classify` | Override the auto-detected `predict()` classify string |
+| `term` | Full random-effect interaction term, e.g. `"fa(Site, 2):id(Variety)"` or `"corgh(Site):vm(Variety, giv1)"`; auto-detected from the model formula when `NULL` |
 | `metric` | One or both of `"accuracy"` and `"gen.H2"` (Cullis H²). Default = both |
 | `pworkspace` | Passed to `predict.asreml()`. Default `"2gb"` |
-| `by_variety` | `TRUE` returns one row per variety × environment |
-| `present` | `TRUE` (default) restricts to observed variety × environment combinations; `FALSE` includes all `predict.asreml()` rows (FA models can predict unobserved combinations via the G-matrix) |
+| `by_variety` | `TRUE` returns one row per variety × environment; output includes a `present` column (`TRUE` = observed, `FALSE` = unobserved) |
 
 ---
 

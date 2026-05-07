@@ -253,19 +253,22 @@ Results are at the group level — one row per environment.
 
 ```{r acc_diag}
 #| eval: !expr asreml_ok
-acc_diag <- accuracy(m_diag, metric = c("accuracy", "gen.H2"))
+acc_diag <- accuracy(m_diag, term = "diag(Site):id(Variety)",
+                     metric = c("accuracy", "gen.H2"))
 acc_diag
 ```
 
 ```{r acc_fa1}
 #| eval: !expr asreml_ok
-acc_fa1 <- accuracy(m_fa1, metric = c("accuracy", "gen.H2"))
+acc_fa1 <- accuracy(m_fa1, term = "fa(Site, 1):id(Variety)",
+                    metric = c("accuracy", "gen.H2"))
 acc_fa1
 ```
 
 ```{r acc_fa2}
 #| eval: !expr asreml_ok
-acc_fa2 <- accuracy(m_fa2, metric = c("accuracy", "gen.H2"))
+acc_fa2 <- accuracy(m_fa2, term = "fa(Site, 2):id(Variety)",
+                    metric = c("accuracy", "gen.H2"))
 acc_fa2
 ```
 
@@ -280,10 +283,10 @@ Pass a single string to `metric` when you only need one measure:
 ```{r acc_single_metric}
 #| eval: !expr asreml_ok
 # Mrode accuracy only
-accuracy(m_fa2, metric = "accuracy")
+accuracy(m_fa2, term = "fa(Site, 2):id(Variety)", metric = "accuracy")
 
 # Cullis H² (gen.H2) only
-accuracy(m_fa2, metric = "gen.H2")
+accuracy(m_fa2, term = "fa(Site, 2):id(Variety)", metric = "gen.H2")
 ```
 
 ### Per-variety accuracies
@@ -297,9 +300,11 @@ FA models the G-matrix supports prediction at unobserved combinations). The
 
 ```{r acc_bv}
 #| eval: !expr asreml_ok
-acc_fa2_bv    <- accuracy(m_fa2,  metric = c("accuracy", "gen.H2"),
+acc_fa2_bv    <- accuracy(m_fa2,  term = "fa(Site, 2):id(Variety)",
+                           metric = c("accuracy", "gen.H2"),
                            by_variety = TRUE)
-acc_diag_bv   <- accuracy(m_diag, metric = c("accuracy", "gen.H2"),
+acc_diag_bv   <- accuracy(m_diag, term = "diag(Site):id(Variety)",
+                           metric = c("accuracy", "gen.H2"),
                            by_variety = TRUE)
 
 head(acc_fa2_bv)
@@ -596,7 +601,7 @@ rd$plot +
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `model` | — | Fitted ASReml-R V4 model object |
-| `classify` | Auto-detected | Override the `predict()` classify string |
+| `term` | Auto-detected | Full random-effect interaction term, e.g. `"fa(Site, 2):id(Variety)"` or `"corgh(Site):vm(Variety, giv1)"`; auto-detected from the model formula when `NULL` |
 | `metric` | `c("accuracy","gen.H2")` | Metrics to compute; one or both |
 | `pworkspace` | `"2gb"` | Passed to `predict.asreml()` |
 | `by_variety` | `FALSE` | Return one row per variety × group; includes a `present` column (`TRUE` = observed in data, `FALSE` = unobserved) |
