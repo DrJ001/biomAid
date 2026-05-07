@@ -133,7 +133,7 @@ genetic regression derived from Gaussian conditional distribution theory.
 Supports four conditioning schemes.
 
 ```r
-randomRegress(model, Env = "TSite:Variety", levs = NULL,
+randomRegress(model, term = "us(TSite):Variety", levs = NULL,
               type = "baseline", cond = NULL,
               sep = "-", pev = TRUE, ...)
 ```
@@ -141,11 +141,11 @@ randomRegress(model, Env = "TSite:Variety", levs = NULL,
 | Argument | Description |
 |----------|-------------|
 | `model` | An ASReml-R V4 model object |
-| `Env` | Classify string identifying the G-matrix term. Default `"TSite:Variety"` |
+| `term` | Full random-effect interaction string, e.g. `"fa(TSite, 2):Variety"` or `"corgh(TSite):vm(Variety, giv1)"`. Default `"us(TSite):Variety"` |
 | `levs` | Character vector of treatment levels to decompose |
 | `type` | `"baseline"`, `"sequential"`, `"partial"`, or `"custom"` |
 | `cond` | User-supplied conditioning list when `type = "custom"` |
-| `sep` | Separator between site and treatment in composite labels. Default `"-"` |
+| `sep` | Separator between treatment and site in composite `TSite` labels. Default `"-"` |
 | `pev` | `TRUE` (default) uses PEV; `FALSE` uses posterior variance |
 
 ---
@@ -162,6 +162,7 @@ plot_randomRegress(res,
                    treatments  = NULL,
                    highlight   = "default",
                    centre      = FALSE,
+                   cond_x      = 1L,
                    theme       = ggplot2::theme_bw(),
                    return_data = FALSE,
                    ...)
@@ -172,8 +173,9 @@ plot_randomRegress(res,
 | `res` | List returned by `randomRegress()` |
 | `type` | `"regress"`, `"quadrant"`, or `"gmat"` |
 | `treatments` | Character vector to restrict conditioning pairs plotted. `NULL` = all |
-| `highlight` | `"default"` auto-selects 6 archetypes; `NULL` = no highlighting |
+| `highlight` | `"default"` auto-selects archetypes by distance from origin; character vector of variety names for custom highlights; `NULL` = no highlighting |
 | `centre` | `TRUE` adds back within-site means (useful for demo data). Default `FALSE` |
+| `cond_x` | `"regress"` only. Positive integer selecting which member of the conditioning set $A_j$ appears on the x-axis (added variable plot). Default `1L` |
 | `theme` | A ggplot2 theme object. Default `theme_bw()` |
 | `return_data` | `TRUE` returns the tidy data frame instead of the plot |
 
