@@ -29,8 +29,13 @@
 #' \code{id()} random structures for the variety term.
 #'
 #' @param model      A fitted \code{asreml} model object.
-#' @param classify   Character. Override the \code{predict()} classify string
-#'   (auto-detected from the random formula when \code{NULL}).
+#' @param term       Character. The full random-effect interaction term for the
+#'   variety effect, written in the same format as the \code{random =} formula
+#'   argument, e.g. \code{"fa(Site, 2):id(Variety)"},
+#'   \code{"corgh(Site):vm(Variety, giv1)"},
+#'   or \code{"vm(Variety, giv1)"} for a single-environment model.
+#'   When \code{NULL} (default) the term is auto-detected from the model's
+#'   random formula.
 #' @param metric     Character vector: \code{"accuracy"}, \code{"gen.H2"},
 #'   or both (default). Controls which columns appear in the output.
 #' @param pworkspace Character. Passed to \code{predict.asreml()}.
@@ -49,14 +54,17 @@
 #'
 #' @examples
 #' \dontrun{
-#' acc <- accuracy(model_fa)
+#' acc    <- accuracy(model_fa)
 #' acc_bv <- accuracy(model_fa, by_variety = TRUE)
 #' accuracy(model_fa, metric = "gen.H2")
+#' # Override auto-detection with the full term string
+#' accuracy(model_fa, term = "fa(Site, 2):id(Variety)")
+#' accuracy(model_vm, term = "corgh(Site):vm(Variety, giv1)")
 #' }
 #'
 #' @export
 accuracy <- function(model,
-                     classify   = NULL,
+                     term       = NULL,
                      metric     = c("accuracy", "gen.H2"),
                      pworkspace = "2gb",
                      by_variety = FALSE) {
@@ -65,8 +73,7 @@ accuracy <- function(model,
   want_H2  <- "gen.H2"   %in% metric
   want_acc <- "accuracy" %in% metric
 
-  p   <- .parse_met_formula(model)
-  if (!is.null(classify)) p$classify <- classify
+  p <- if (!is.null(term)) .parse_acc_term(term) else .parse_met_formula(model)
 
   dat <- .get_model_data(model)
   gl  <- if (!is.null(p$group_var))
@@ -287,6 +294,87 @@ accuracy <- function(model,
   substr(s, op + 1L, nchar(s) - 1L)
 }
 
+# Parse a full random-effect interaction term string into the components needed
+# by accuracy(): group_var, by_var, n_fa, only_term, classify.
+#
+# Accepts the same term formats as randomRegress() plus single-environment
+# terms (no colon):
+#   Multi-env:   "fa(Site, 2):id(Variety)"  "corgh(Site):vm(Variety, giv1)"
+#   Single-env:  "id(Variety)"  "vm(Variety, giv1)"  "Variety"
+#
+# Rules for classify vs only=:
+#   classify  — always bare variable names: "Site:Variety" or "Variety"
+#   only      — bare group name (or fa spec) : rhs
+#               id()  stripped; vm()/ide() kept; bare name used as-is
+#' @noRd
+.parse_acc_term <- function(term_str) {
+
+  term_str <- gsub("\\s+", "", term_str)   # strip whitespace
+
+  cp <- .top_colon(term_str)
+
+  # ---- Single-environment (no top-level colon) ----------------------------
+  if (is.na(cp)) {
+    rhs <- term_str
+    if (grepl("^id\\(", rhs)) {
+      by_var   <- .inside(rhs)
+      only_rhs <- by_var
+    } else if (grepl("^[A-Za-z][A-Za-z0-9_]*\\(", rhs)) {
+      by_var   <- trimws(strsplit(.inside(rhs), ",")[[1L]][1L])
+      only_rhs <- rhs
+    } else {
+      by_var   <- rhs
+      only_rhs <- rhs
+    }
+    return(list(group_var  = NULL,
+                by_var     = by_var,
+                n_fa       = NULL,
+                only_term  = only_rhs,
+                classify   = by_var))
+  }
+
+  # ---- Multi-environment --------------------------------------------------
+  lft  <- substr(term_str, 1L, cp - 1L)
+  rgt  <- substr(term_str, cp + 1L, nchar(term_str))
+  type <- sub("\\(.*", "", lft)
+
+  if (!type %in% c("fa", "us", "corgh", "corh", "diag"))
+    stop("Unsupported variance structure '", type, "' in term. ",
+         "Supported: fa, us, corgh, corh, diag.")
+
+  grp <- trimws(strsplit(.inside(lft), ",")[[1L]][1L])
+  nfa <- if (type == "fa")
+    suppressWarnings(as.integer(trimws(strsplit(.inside(lft), ",")[[1L]][2L])))
+  else NULL
+
+  # Right-hand side: id() stripped; vm()/ide() kept; bare used as-is
+  if (grepl("^id\\(", rgt)) {
+    by_var   <- .inside(rgt)
+    only_rhs <- by_var
+  } else if (grepl("^[A-Za-z][A-Za-z0-9_]*\\(", rgt)) {
+    by_var   <- trimws(strsplit(.inside(rgt), ",")[[1L]][1L])
+    only_rhs <- rgt
+  } else {
+    by_var   <- rgt
+    only_rhs <- rgt
+  }
+
+  # Build only= string (fa requires "fa(Group, k):rhs"; space after comma required)
+  only <- if (type == "fa" && !is.null(nfa))
+    sprintf("fa(%s, %d):%s", grp, nfa, only_rhs)
+  else
+    paste0(grp, ":", only_rhs)
+
+  list(group_var  = grp,
+       by_var     = by_var,
+       n_fa       = nfa,
+       only_term  = only,
+       classify   = paste0(grp, ":", by_var))
+}
+
+# Extract the relevant term string from the model's random formula and
+# delegate to .parse_acc_term() for the actual parsing.
+#' @noRd
 .parse_met_formula <- function(model) {
 
   raw <- tryCatch(paste(deparse(model$call$random), collapse = ""),
@@ -296,42 +384,10 @@ accuracy <- function(model,
   rnd   <- gsub("\\s+", "", sub("^~\\s*", "", raw))
   terms <- .split_top(rnd, "+")
 
-  # Supported multi-environment variance structures
-  met <- grep("^(fa|diag|corh|corgh|us)\\(", terms, value = TRUE)
+  # Prefer MET terms (supported multi-env variance structures); fall back to
+  # the first term for single-environment models.
+  met      <- grep("^(fa|diag|corh|corgh|us)\\(", terms, value = TRUE)
+  term_str <- if (length(met)) met[1L] else terms[1L]
 
-  if (!length(met)) {
-    # Single-environment: e.g.  id(Variety)  or  Variety
-    by <- .inside(terms[1L])
-    return(list(group_var  = NULL,
-                by_var     = by,
-                n_fa       = NULL,
-                only_term  = by,         # only="Variety" works for id(Variety)
-                classify   = by))
-  }
-
-  cp  <- .top_colon(met[1L])
-  lft <- substr(met[1L], 1L, cp - 1L)
-  rgt <- substr(met[1L], cp + 1L, nchar(met[1L]))
-
-  type <- sub("\\(.*", "", lft)
-  grp  <- trimws(strsplit(.inside(lft), ",")[[1L]][1L])
-  by   <- .inside(rgt)   # strip id() wrapper if present
-
-  nfa  <- if (type == "fa")
-            suppressWarnings(as.integer(trimws(strsplit(.inside(lft), ",")[[1L]][2L])))
-          else NULL
-
-  # Build only= string — must match what ASReml stores internally:
-  #   fa:  "fa(Group, k):Var"  (space after comma is required)
-  #   all others: "Group:Var"
-  only <- if (type == "fa" && !is.null(nfa))
-            sprintf("fa(%s, %d):%s", grp, nfa, by)
-          else
-            paste0(grp, ":", by)
-
-  list(group_var  = grp,
-       by_var     = by,
-       n_fa       = nfa,
-       only_term  = only,
-       classify   = paste0(grp, ":", by))
+  .parse_acc_term(term_str)
 }

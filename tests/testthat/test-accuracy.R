@@ -182,11 +182,102 @@ test_that(".parse_met_formula: single-env id() has NULL group_var", {
   expect_equal(p$classify,  "Variety")
 })
 
+test_that(".parse_met_formula: single-env vm() keeps wrapper in only_term", {
+  m <- make_acc_model("~ vm(Variety, giv1)")
+  p <- biomAid:::.parse_met_formula(m)
+  expect_null(p$group_var)
+  expect_equal(p$by_var,    "Variety")
+  expect_equal(p$only_term, "vm(Variety,giv1)")  # wrapper kept; space stripped
+  expect_equal(p$classify,  "Variety")
+})
+
+test_that(".parse_met_formula: single-env ide() keeps wrapper in only_term", {
+  m <- make_acc_model("~ ide(Variety)")
+  p <- biomAid:::.parse_met_formula(m)
+  expect_null(p$group_var)
+  expect_equal(p$by_var,    "Variety")
+  expect_equal(p$only_term, "ide(Variety)")
+  expect_equal(p$classify,  "Variety")
+})
+
 test_that(".parse_met_formula: corgh formula detected correctly", {
   m <- make_acc_model("~ corgh(Env):id(Variety)")
   p <- biomAid:::.parse_met_formula(m)
   expect_equal(p$group_var, "Env")
   expect_equal(p$only_term, "Env:Variety")
+})
+
+test_that(".parse_met_formula: vm wrapper kept in only_term, bare name in classify", {
+  m <- make_acc_model("~ fa(Env, 2):vm(Variety, giv1)")
+  p <- biomAid:::.parse_met_formula(m)
+  expect_equal(p$by_var,    "Variety")
+  expect_equal(p$only_term, "fa(Env, 2):vm(Variety,giv1)")  # wrapper kept; space stripped
+  expect_equal(p$classify,  "Env:Variety")
+})
+
+test_that(".parse_met_formula: ide wrapper kept in only_term, bare name in classify", {
+  m <- make_acc_model("~ corgh(Env):ide(Variety)")
+  p <- biomAid:::.parse_met_formula(m)
+  expect_equal(p$by_var,    "Variety")
+  expect_equal(p$only_term, "Env:ide(Variety)")
+  expect_equal(p$classify,  "Env:Variety")
+})
+
+# ===========================================================================
+# SECTION A2: .parse_acc_term() unit tests
+# ===========================================================================
+
+test_that(".parse_acc_term: multi-env FA with id() gives correct classify and only", {
+  p <- biomAid:::.parse_acc_term("fa(Site, 2):id(Variety)")
+  expect_equal(p$group_var,  "Site")
+  expect_equal(p$by_var,     "Variety")
+  expect_equal(p$n_fa,       2L)
+  expect_equal(p$only_term,  "fa(Site, 2):Variety")
+  expect_equal(p$classify,   "Site:Variety")
+})
+
+test_that(".parse_acc_term: multi-env FA with vm() keeps wrapper in only", {
+  p <- biomAid:::.parse_acc_term("fa(Site, 2):vm(Variety, giv1)")
+  expect_equal(p$by_var,     "Variety")
+  expect_equal(p$only_term,  "fa(Site, 2):vm(Variety,giv1)")
+  expect_equal(p$classify,   "Site:Variety")
+})
+
+test_that(".parse_acc_term: multi-env non-FA with id() strips wrapper", {
+  p <- biomAid:::.parse_acc_term("corgh(Site):id(Variety)")
+  expect_equal(p$group_var,  "Site")
+  expect_equal(p$by_var,     "Variety")
+  expect_null(p$n_fa)
+  expect_equal(p$only_term,  "Site:Variety")
+  expect_equal(p$classify,   "Site:Variety")
+})
+
+test_that(".parse_acc_term: multi-env non-FA with vm() keeps wrapper in only", {
+  p <- biomAid:::.parse_acc_term("corgh(Site):vm(Variety, giv1)")
+  expect_equal(p$by_var,     "Variety")
+  expect_equal(p$only_term,  "Site:vm(Variety,giv1)")
+  expect_equal(p$classify,   "Site:Variety")
+})
+
+test_that(".parse_acc_term: single-env id() strips wrapper", {
+  p <- biomAid:::.parse_acc_term("id(Variety)")
+  expect_null(p$group_var)
+  expect_equal(p$by_var,     "Variety")
+  expect_equal(p$only_term,  "Variety")
+  expect_equal(p$classify,   "Variety")
+})
+
+test_that(".parse_acc_term: single-env vm() keeps wrapper in only", {
+  p <- biomAid:::.parse_acc_term("vm(Variety, giv1)")
+  expect_null(p$group_var)
+  expect_equal(p$by_var,     "Variety")
+  expect_equal(p$only_term,  "vm(Variety,giv1)")
+  expect_equal(p$classify,   "Variety")
+})
+
+test_that(".parse_acc_term: unsupported structure errors", {
+  expect_error(biomAid:::.parse_acc_term("ar1(Site):id(Variety)"),
+               "Unsupported variance structure")
 })
 
 test_that(".extract_G_diag: FA structure returns named positive vector", {
@@ -375,12 +466,12 @@ test_that("FA group-level: gen.H2 only — no mean_acc or sd_acc columns", {
   expect_true("gen.H2"    %in% names(res))
 })
 
-test_that("FA group-level: classify override accepted without error", {
+test_that("FA group-level: term override accepted without error", {
   e <- make_fa_e2e()
   local_mocked_bindings(summary = function(model, ...) list(varcomp = e$vc),
                         .package = "base")
   local_mocked_bindings(predict = function(...) e$pv, .package = "biomAid")
-  expect_no_error(accuracy(e$model, classify = "Env:Variety",
+  expect_no_error(accuracy(e$model, term = "fa(Env, 2):id(Variety)",
                             metric = "accuracy"))
 })
 

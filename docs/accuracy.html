@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Julian Taylor">
-<meta name="dcterms.date" content="2026-05-06">
+<meta name="dcterms.date" content="2026-05-07">
 
 <title>biomAid - BLUP Accuracy in Multi-Environment Trials</title>
 <style>
@@ -4796,7 +4796,7 @@ font-weight: 400;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">May 6, 2026</p>
+      <p class="date">May 7, 2026</p>
     </div>
   </div>
   
@@ -4992,8 +4992,9 @@ H^2_j = 1 - \frac{\overline{\text{SED}}^2_j}{2\,G_{jj}},
 <h3 class="anchored" data-anchor-id="group-level-summaries">Group-level summaries</h3>
 <p>The default call returns both Mrode accuracy and Cullis H² for every site. Results are at the group level — one row per environment.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>acc_diag <span class="ot">&lt;-</span> <span class="fu">accuracy</span>(m_diag, <span class="at">metric =</span> <span class="fu">c</span>(<span class="st">&quot;accuracy&quot;</span>, <span class="st">&quot;gen.H2&quot;</span>))</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>acc_diag</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>acc_diag <span class="ot">&lt;-</span> <span class="fu">accuracy</span>(m_diag, <span class="at">term =</span> <span class="st">&quot;diag(Site):id(Variety)&quot;</span>,</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>                     <span class="at">metric =</span> <span class="fu">c</span>(<span class="st">&quot;accuracy&quot;</span>, <span class="st">&quot;gen.H2&quot;</span>))</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>acc_diag</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>  group n_vars     G_jj  mean_acc sd_acc    gen.H2
 1  Env1     31 42455.56 0.6421706      0 0.4261292
@@ -5007,8 +5008,9 @@ H^2_j = 1 - \frac{\overline{\text{SED}}^2_j}{2\,G_{jj}},
 </div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>acc_fa1 <span class="ot">&lt;-</span> <span class="fu">accuracy</span>(m_fa1, <span class="at">metric =</span> <span class="fu">c</span>(<span class="st">&quot;accuracy&quot;</span>, <span class="st">&quot;gen.H2&quot;</span>))</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>acc_fa1</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>acc_fa1 <span class="ot">&lt;-</span> <span class="fu">accuracy</span>(m_fa1, <span class="at">term =</span> <span class="st">&quot;fa(Site, 1):id(Variety)&quot;</span>,</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>                    <span class="at">metric =</span> <span class="fu">c</span>(<span class="st">&quot;accuracy&quot;</span>, <span class="st">&quot;gen.H2&quot;</span>))</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>acc_fa1</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>  group n_vars     G_jj  mean_acc      sd_acc    gen.H2
 1  Env1     31 43627.74 0.7513244 0.010951316 0.5788061
@@ -5022,8 +5024,9 @@ H^2_j = 1 - \frac{\overline{\text{SED}}^2_j}{2\,G_{jj}},
 </div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>acc_fa2 <span class="ot">&lt;-</span> <span class="fu">accuracy</span>(m_fa2, <span class="at">metric =</span> <span class="fu">c</span>(<span class="st">&quot;accuracy&quot;</span>, <span class="st">&quot;gen.H2&quot;</span>))</span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>acc_fa2</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>acc_fa2 <span class="ot">&lt;-</span> <span class="fu">accuracy</span>(m_fa2, <span class="at">term =</span> <span class="st">&quot;fa(Site, 2):id(Variety)&quot;</span>,</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>                    <span class="at">metric =</span> <span class="fu">c</span>(<span class="st">&quot;accuracy&quot;</span>, <span class="st">&quot;gen.H2&quot;</span>))</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>acc_fa2</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>  group n_vars     G_jj  mean_acc      sd_acc    gen.H2
 1  Env1     31 40356.25 0.7644036 0.018761968 0.5989723
@@ -5043,7 +5046,7 @@ H^2_j = 1 - \frac{\overline{\text{SED}}^2_j}{2\,G_{jj}},
 <p>Pass a single string to <code>metric</code> when you only need one measure:</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Mrode accuracy only</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">accuracy</span>(m_fa2, <span class="at">metric =</span> <span class="st">&quot;accuracy&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">accuracy</span>(m_fa2, <span class="at">term =</span> <span class="st">&quot;fa(Site, 2):id(Variety)&quot;</span>, <span class="at">metric =</span> <span class="st">&quot;accuracy&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>  group n_vars     G_jj  mean_acc      sd_acc
 1  Env1     31 40356.25 0.7644036 0.018761968
@@ -5056,7 +5059,7 @@ H^2_j = 1 - \frac{\overline{\text{SED}}^2_j}{2\,G_{jj}},
 8  Env8     35 84699.92 0.8447034 0.023837796</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Cullis H² (gen.H2) only</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="fu">accuracy</span>(m_fa2, <span class="at">metric =</span> <span class="st">&quot;gen.H2&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="fu">accuracy</span>(m_fa2, <span class="at">term =</span> <span class="st">&quot;fa(Site, 2):id(Variety)&quot;</span>, <span class="at">metric =</span> <span class="st">&quot;gen.H2&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>  group n_vars     G_jj    gen.H2
 1  Env1     31 40356.25 0.5989723
@@ -5074,12 +5077,14 @@ H^2_j = 1 - \frac{\overline{\text{SED}}^2_j}{2\,G_{jj}},
 <h3 class="anchored" data-anchor-id="per-variety-accuracies">Per-variety accuracies</h3>
 <p>Set <code>by_variety = TRUE</code> to return one row per variety × environment. All combinations with a finite prediction standard error are returned, including variety × site combinations that were not directly observed in the data (for FA models the G-matrix supports prediction at unobserved combinations). The <code>present</code> column indicates which combinations were observed in the data (<code>TRUE</code>) and which are unobserved (<code>FALSE</code>).</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>acc_fa2_bv    <span class="ot">&lt;-</span> <span class="fu">accuracy</span>(m_fa2,  <span class="at">metric =</span> <span class="fu">c</span>(<span class="st">&quot;accuracy&quot;</span>, <span class="st">&quot;gen.H2&quot;</span>),</span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>                           <span class="at">by_variety =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>acc_diag_bv   <span class="ot">&lt;-</span> <span class="fu">accuracy</span>(m_diag, <span class="at">metric =</span> <span class="fu">c</span>(<span class="st">&quot;accuracy&quot;</span>, <span class="st">&quot;gen.H2&quot;</span>),</span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>                           <span class="at">by_variety =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(acc_fa2_bv)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>acc_fa2_bv    <span class="ot">&lt;-</span> <span class="fu">accuracy</span>(m_fa2,  <span class="at">term =</span> <span class="st">&quot;fa(Site, 2):id(Variety)&quot;</span>,</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>                           <span class="at">metric =</span> <span class="fu">c</span>(<span class="st">&quot;accuracy&quot;</span>, <span class="st">&quot;gen.H2&quot;</span>),</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>                           <span class="at">by_variety =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>acc_diag_bv   <span class="ot">&lt;-</span> <span class="fu">accuracy</span>(m_diag, <span class="at">term =</span> <span class="st">&quot;diag(Site):id(Variety)&quot;</span>,</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>                           <span class="at">metric =</span> <span class="fu">c</span>(<span class="st">&quot;accuracy&quot;</span>, <span class="st">&quot;gen.H2&quot;</span>),</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>                           <span class="at">by_variety =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(acc_fa2_bv)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>  group variety     G_jj      pev present  accuracy    gen.H2
 1  Env1   Var01 40356.25 17361.30    TRUE 0.7548503 0.5336221
@@ -5327,9 +5332,9 @@ FALSE  TRUE
 <td>Fitted ASReml-R V4 model object</td>
 </tr>
 <tr class="even">
-<td><code>classify</code></td>
+<td><code>term</code></td>
 <td>Auto-detected</td>
-<td>Override the <code>predict()</code> classify string</td>
+<td>Full random-effect interaction term, e.g. <code>&quot;fa(Site, 2):id(Variety)&quot;</code> or <code>&quot;corgh(Site):vm(Variety, giv1)&quot;</code>; auto-detected from the model formula when <code>NULL</code></td>
 </tr>
 <tr class="odd">
 <td><code>metric</code></td>

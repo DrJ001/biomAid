@@ -6,7 +6,7 @@
 \usage{
 accuracy(
   model,
-  classify = NULL,
+  term = NULL,
   metric = c("accuracy", "gen.H2"),
   pworkspace = "2gb",
   by_variety = FALSE
@@ -15,8 +15,13 @@ accuracy(
 \arguments{
 \item{model}{A fitted \code{asreml} model object.}
 
-\item{classify}{Character. Override the \code{predict()} classify string
-(auto-detected from the random formula when \code{NULL}).}
+\item{term}{Character. The full random-effect interaction term for the
+variety effect, written in the same format as the \code{random =} formula
+argument, e.g. \code{"fa(Site, 2):id(Variety)"},
+\code{"corgh(Site):vm(Variety, giv1)"},
+or \code{"vm(Variety, giv1)"} for a single-environment model.
+When \code{NULL} (default) the term is auto-detected from the model's
+random formula.}
 
 \item{metric}{Character vector: \code{"accuracy"}, \code{"gen.H2"},
 or both (default). Controls which columns appear in the output.}
@@ -34,7 +39,7 @@ and one or both of \code{mean_acc}/\code{sd_acc} (Mrode accuracy) and
 \code{variety}, \code{pev}, and \code{present} columns replace
 \code{n_vars}/\code{sd_acc}. The \code{present} column is \code{TRUE}
 for variety x group combinations observed in the data and \code{FALSE}
-for combinations supported only by the G-matrix (e.g. unobserved variety
+for unobserved variety x group combinations (e.g. unobserved variety
 x site pairs in factor-analytic models).
 }
 \description{
@@ -45,9 +50,12 @@ from an ASReml-R V4 mixed model. Supports \code{fa()}, \code{diag()},
 }
 \examples{
 \dontrun{
-acc <- accuracy(model_fa)
+acc    <- accuracy(model_fa)
 acc_bv <- accuracy(model_fa, by_variety = TRUE)
 accuracy(model_fa, metric = "gen.H2")
+# Override auto-detection with the full term string
+accuracy(model_fa, term = "fa(Site, 2):id(Variety)")
+accuracy(model_vm, term = "corgh(Site):vm(Variety, giv1)")
 }
 
 }

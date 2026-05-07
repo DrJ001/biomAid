@@ -307,22 +307,22 @@ test_that(".parse_rreg_term: diag structure parses correctly", {
   expect_equal(p$only_term, "TSite:Variety")
 })
 
-test_that(".parse_rreg_term: vm wrapper on by-variable", {
-  p <- biomAid:::.parse_rreg_term("us(TSite):vm(Variety, giv1)")
-  expect_equal(p$struct,      "us")
-  expect_equal(p$by_var,      "Variety")
-  expect_equal(p$by_wrapper,  "vm")
-  expect_equal(p$by_raw,      "vm(Variety,giv1)")   # whitespace stripped
-  expect_equal(p$only_term,   "TSite:Variety")
-  expect_equal(p$classify,    "TSite:Variety")
-})
+  test_that(".parse_rreg_term: vm wrapper on by-variable", {
+    p <- biomAid:::.parse_rreg_term("us(TSite):vm(Variety, giv1)")
+    expect_equal(p$struct,      "us")
+    expect_equal(p$by_var,      "Variety")
+    expect_equal(p$by_wrapper,  "vm")
+    expect_equal(p$by_raw,      "vm(Variety,giv1)")   # whitespace stripped
+    expect_equal(p$only_term,   "TSite:vm(Variety,giv1)")  # wrapper kept in only
+    expect_equal(p$classify,    "TSite:Variety")           # bare name in classify
+  })
 
-test_that(".parse_rreg_term: ide wrapper on by-variable", {
-  p <- biomAid:::.parse_rreg_term("us(TSite):ide(Variety)")
-  expect_equal(p$by_var,     "Variety")
-  expect_equal(p$by_wrapper, "ide")
-  expect_equal(p$only_term,  "TSite:Variety")
-})
+  test_that(".parse_rreg_term: ide wrapper on by-variable", {
+    p <- biomAid:::.parse_rreg_term("us(TSite):ide(Variety)")
+    expect_equal(p$by_var,     "Variety")
+    expect_equal(p$by_wrapper, "ide")
+    expect_equal(p$only_term,  "TSite:ide(Variety)")  # wrapper kept in only
+  })
 
 test_that(".parse_rreg_term: unsupported structure errors", {
   expect_error(
@@ -434,7 +434,7 @@ test_that("randomRegress() baseline returns named list", {
                        levs = c("N0","N1","N2"),
                        type = "baseline")
   expect_named(res, c("blups","TGmat","Gmat","beta","sigmat","tmat",
-                      "cond_list","type"))
+                      "cond_list","type","sep"))
   expect_s3_class(res$blups, "data.frame")
   expect_equal(res$type, "baseline")
 })
@@ -1107,13 +1107,13 @@ test_that("vm wrapper: randomRegress parses bare Variety name correctly", {
   expect_true("resp.N1" %in% names(res$blups))
 })
 
-test_that("vm wrapper: by_wrapper recorded, only_term uses bare name", {
-  p <- biomAid:::.parse_rreg_term("us(TSite):vm(Variety, giv1)")
-  expect_equal(p$by_wrapper, "vm")
-  expect_equal(p$by_var,     "Variety")
-  expect_equal(p$only_term,  "TSite:Variety")
-  expect_equal(p$classify,   "TSite:Variety")
-})
+  test_that("vm wrapper: by_wrapper recorded, only_term includes vm wrapper", {
+    p <- biomAid:::.parse_rreg_term("us(TSite):vm(Variety, giv1)")
+    expect_equal(p$by_wrapper, "vm")
+    expect_equal(p$by_var,     "Variety")
+    expect_equal(p$only_term,  "TSite:vm(Variety,giv1)")
+    expect_equal(p$classify,   "TSite:Variety")
+  })
 
 # ---------------------------------------------------------------------------
 # F5. ide wrapper — term = "us(TSite):ide(Variety)"
@@ -1143,9 +1143,9 @@ test_that("ide wrapper: randomRegress parses bare Variety name correctly", {
   expect_true("resp.N1" %in% names(res$blups))
 })
 
-test_that("ide wrapper: by_wrapper recorded, only_term uses bare name", {
-  p <- biomAid:::.parse_rreg_term("us(TSite):ide(Variety)")
-  expect_equal(p$by_wrapper, "ide")
-  expect_equal(p$by_var,     "Variety")
-  expect_equal(p$only_term,  "TSite:Variety")
-})
+  test_that("ide wrapper: by_wrapper recorded, only_term includes ide wrapper", {
+    p <- biomAid:::.parse_rreg_term("us(TSite):ide(Variety)")
+    expect_equal(p$by_wrapper, "ide")
+    expect_equal(p$by_var,     "Variety")
+    expect_equal(p$only_term,  "TSite:ide(Variety)")
+  })
