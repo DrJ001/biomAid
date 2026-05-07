@@ -100,6 +100,7 @@ explicitly via the cond argument.
     <li><a class="dropdown-item" href="../fixedRegress.html">Multivariate Fixed-Effects Regression</a></li>
     <li><a class="dropdown-item" href="../padTrial.html">Extracting and Padding Field Trial Layouts</a></li>
     <li><a class="dropdown-item" href="../accuracy.html">BLUP Accuracy in Multi-Environment Trials</a></li>
+    <li><a class="dropdown-item" href="../simTrialData.html">Simulating Multi-Environment Trials</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"></ul></div>
 
@@ -157,7 +158,7 @@ explicitly via the <code>cond</code> argument.</p></dd>
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">randomRegress</span><span class="op">(</span></span>
 <span>  <span class="va">model</span>,</span>
-<span>  Env <span class="op">=</span> <span class="st">"TSite:Variety"</span>,</span>
+<span>  term <span class="op">=</span> <span class="st">"us(TSite):Variety"</span>,</span>
 <span>  levs <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  type <span class="op">=</span> <span class="st">"baseline"</span>,</span>
 <span>  cond <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -172,13 +173,55 @@ explicitly via the <code>cond</code> argument.</p></dd>
 
 
 <dl><dt id="arg-model">model<a class="anchor" aria-label="anchor" href="#arg-model"></a></dt>
-<dd><p>An ASReml-R V4 model object containing a Treatment x Site x
-Variety random term.</p></dd>
+<dd><p>An ASReml-R V4 model object containing a random
+Treatment \(\times\) Site \(\times\) Variety term.</p></dd>
 
 
-<dt id="arg-env">Env<a class="anchor" aria-label="anchor" href="#arg-env"></a></dt>
-<dd><p>Character string identifying the Treatment-Site:Variety term,
-written as <code>"&lt;TreatSite&gt;:&lt;Variety&gt;"</code>.  Defaults to <code>"TSite:Variety"</code>.</p></dd>
+<dt id="arg-term">term<a class="anchor" aria-label="anchor" href="#arg-term"></a></dt>
+<dd><p>Character string giving the <strong>full</strong> random-effect interaction
+term exactly as it appears in the model formula, written as
+<code>"&lt;struct&gt;(&lt;Group&gt;):&lt;Variety&gt;"</code>.  The function parses the structure
+keyword, group factor name, and variety factor name automatically, so
+the correct strings are used for <code>predict.asreml()</code>.</p>
+<p>Supported variance structures on the left-hand side:</p><dl><dt><code>us(TSite)</code></dt>
+<dd><p>Unstructured G-matrix — the most general form.</p></dd>
+
+<dt><code>fa(TSite, k)</code></dt>
+<dd><p>Factor-analytic of order \(k\).</p></dd>
+
+<dt><code>corgh(TSite)</code></dt>
+<dd><p>Heterogeneous correlation — one correlation
+parameter shared across groups with group-specific variances.</p></dd>
+
+<dt><code>corh(TSite)</code></dt>
+<dd><p>Correlation and variance structure for two-group
+(two-treatment-level) models.</p></dd>
+
+<dt><code>diag(TSite)</code></dt>
+<dd><p>Diagonal — independent genetic variances per group,
+zero between-group covariances.</p></dd>
+
+
+</dl><p>Supported wrappers on the right-hand side (variety factor):</p><dl><dt><code>vm(Variety, giv1)</code></dt>
+<dd><p>Genomic or pedigree relationship matrix via
+<code><a href="https://rdrr.io/pkg/asreml/man/knownStruc.html" class="external-link">asreml::vm()</a></code>.  Only the bare factor name is used for
+<code>predict.asreml()</code>.</p></dd>
+
+<dt><code>ide(Variety)</code></dt>
+<dd><p>Identity-scaled term via <code><a href="https://rdrr.io/pkg/asreml/man/knownStruc.html" class="external-link">asreml::ide()</a></code>.</p></dd>
+
+<dt><code>Variety</code> (no wrapper)</dt>
+<dd><p>Plain factor — the default.</p></dd>
+
+
+</dl><p>Examples:</p><div class="sourceCode"><pre><code><span></span>
+<span>  <span class="va">term</span> <span class="op">=</span> <span class="st">"us(TSite):Variety"</span></span>
+<span>  <span class="va">term</span> <span class="op">=</span> <span class="st">"fa(TSite, 2):Variety"</span></span>
+<span>  <span class="va">term</span> <span class="op">=</span> <span class="st">"corgh(TSite):Variety"</span></span>
+<span>  <span class="va">term</span> <span class="op">=</span> <span class="st">"corh(TSite):Variety"</span></span>
+<span>  <span class="va">term</span> <span class="op">=</span> <span class="st">"us(TSite):vm(Variety, giv1)"</span></span>
+<span>  <span class="va">term</span> <span class="op">=</span> <span class="st">"us(TSite):ide(Variety)"</span></span>
+<span>  </span></code></pre></div></dd>
 
 
 <dt id="arg-levs">levs<a class="anchor" aria-label="anchor" href="#arg-levs"></a></dt>
@@ -279,23 +322,29 @@ one element per treatment in <code>levs</code>.</p></dd>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="co">## Baseline scheme (default — same as original randomRegress for k = 2)</span></span></span>
-<span class="r-in"><span><span class="va">res_base</span> <span class="op">&lt;-</span> <span class="fu">randomRegress</span><span class="op">(</span><span class="va">model</span>, levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span>,<span class="st">"N2"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co">## Baseline scheme — unstructured G-matrix</span></span></span>
+<span class="r-in"><span><span class="va">res_base</span> <span class="op">&lt;-</span> <span class="fu">randomRegress</span><span class="op">(</span><span class="va">model</span>, term <span class="op">=</span> <span class="st">"us(TSite):Variety"</span>,</span></span>
+<span class="r-in"><span>                          levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span>,<span class="st">"N2"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## Sequential (Cholesky) — fully orthogonal components; TGmat is diagonal</span></span></span>
-<span class="r-in"><span><span class="va">res_seq</span>  <span class="op">&lt;-</span> <span class="fu">randomRegress</span><span class="op">(</span><span class="va">model</span>, levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span>,<span class="st">"N2"</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                            type <span class="op">=</span> <span class="st">"sequential"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">res_seq</span>  <span class="op">&lt;-</span> <span class="fu">randomRegress</span><span class="op">(</span><span class="va">model</span>, term <span class="op">=</span> <span class="st">"fa(TSite, 2):Variety"</span>,</span></span>
+<span class="r-in"><span>                          levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span>,<span class="st">"N2"</span><span class="op">)</span>, type <span class="op">=</span> <span class="st">"sequential"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co">## Partial — each treatment vs all others</span></span></span>
-<span class="r-in"><span><span class="va">res_part</span> <span class="op">&lt;-</span> <span class="fu">randomRegress</span><span class="op">(</span><span class="va">model</span>, levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span>,<span class="st">"N2"</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                            type <span class="op">=</span> <span class="st">"partial"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co">## Heterogeneous correlation structure</span></span></span>
+<span class="r-in"><span><span class="va">res_cor</span>  <span class="op">&lt;-</span> <span class="fu">randomRegress</span><span class="op">(</span><span class="va">model</span>, term <span class="op">=</span> <span class="st">"corgh(TSite):Variety"</span>,</span></span>
+<span class="r-in"><span>                          levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span>,<span class="st">"N2"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co">## Custom — T2 conditioned on BOTH T0 and T1; T1 conditioned on T0 only</span></span></span>
-<span class="r-in"><span><span class="va">res_cust</span> <span class="op">&lt;-</span> <span class="fu">randomRegress</span><span class="op">(</span><span class="va">model</span>, levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span>,<span class="st">"N2"</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                            type   <span class="op">=</span> <span class="st">"custom"</span>,</span></span>
-<span class="r-in"><span>                            cond   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>N0 <span class="op">=</span> <span class="cn">NULL</span>,</span></span>
-<span class="r-in"><span>                                          N1 <span class="op">=</span> <span class="st">"N0"</span>,</span></span>
-<span class="r-in"><span>                                          N2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co">## Genomic relationship matrix (vm wrapper on Variety)</span></span></span>
+<span class="r-in"><span><span class="va">res_vm</span>   <span class="op">&lt;-</span> <span class="fu">randomRegress</span><span class="op">(</span><span class="va">model</span>, term <span class="op">=</span> <span class="st">"us(TSite):vm(Variety, giv1)"</span>,</span></span>
+<span class="r-in"><span>                          levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span>,<span class="st">"N2"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co">## Custom conditioning</span></span></span>
+<span class="r-in"><span><span class="va">res_cust</span> <span class="op">&lt;-</span> <span class="fu">randomRegress</span><span class="op">(</span><span class="va">model</span>, term <span class="op">=</span> <span class="st">"us(TSite):Variety"</span>,</span></span>
+<span class="r-in"><span>                          levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span>,<span class="st">"N2"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>                          type <span class="op">=</span> <span class="st">"custom"</span>,</span></span>
+<span class="r-in"><span>                          cond <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>N0 <span class="op">=</span> <span class="cn">NULL</span>,</span></span>
+<span class="r-in"><span>                                      N1 <span class="op">=</span> <span class="st">"N0"</span>,</span></span>
+<span class="r-in"><span>                                      N2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

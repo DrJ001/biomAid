@@ -192,10 +192,16 @@ model. Default <code>TRUE</code>.</p></dd>
 <dt id="arg-sim-options">sim.options<a class="anchor" aria-label="anchor" href="#arg-sim-options"></a></dt>
 <dd><p>Named list of optional simulation controls. Unknown names
 produce a warning. Recognised elements (with defaults) are:</p><dl><dt><code>site_mean</code></dt>
-<dd><p>Numeric. Grand mean yield. Default <code>4500</code>.</p></dd>
+<dd><p>Numeric. Grand mean yield. Default <code>4500</code>.
+When changed, any of the six scale-dependent parameters below that are
+<em>not</em> explicitly supplied are automatically scaled proportionally
+to <code>site_mean / 4500</code>, preserving the default signal-to-noise
+ratios at any yield scale. Supply a parameter explicitly to override
+auto-scaling for that parameter.</p></dd>
 
 <dt><code>site_sd</code></dt>
-<dd><p>Numeric. SD of site mean yields. Default <code>600</code>.</p></dd>
+<dd><p>Numeric. SD of site mean yields.
+Auto-scaled default: <code>site_mean * (600 / 4500)</code>.</p></dd>
 
 <dt><code>treat_effects</code></dt>
 <dd><p>Numeric vector (length =
@@ -205,21 +211,49 @@ Multi-treatment only.</p></dd>
 
 <dt><code>sigma_genetic</code></dt>
 <dd><p>Numeric. Target mean genetic SD per group.
-Default <code>250</code>.</p></dd>
+Auto-scaled default: <code>site_mean * (250 / 4500)</code>.</p></dd>
 
 <dt><code>rep_sd</code></dt>
-<dd><p>Numeric. SD of replicate effects. Default <code>150</code>.</p></dd>
+<dd><p>Numeric. SD of replicate effects.
+Auto-scaled default: <code>site_mean * (150 / 4500)</code>.</p></dd>
 
 <dt><code>row_sd</code></dt>
-<dd><p>Numeric. SD of row spatial effects. Default <code>80</code>.</p></dd>
+<dd><p>Numeric. SD of row spatial effects.
+Auto-scaled default: <code>site_mean * (80 / 4500)</code>.</p></dd>
 
 <dt><code>col_sd</code></dt>
 <dd><p>Numeric. SD of column spatial effects.
-Default <code>60</code>.</p></dd>
+Auto-scaled default: <code>site_mean * (60 / 4500)</code>.</p></dd>
 
 <dt><code>error_sd</code></dt>
-<dd><p>Numeric. SD of plot-level residual.
-Default <code>350</code>.</p></dd>
+<dd><p>Numeric. SD of the independent (nugget) plot
+error. Auto-scaled default: <code>site_mean * (350 / 4500)</code>.</p></dd>
+
+<dt><code>ar1_rho_row</code></dt>
+<dd><p>Controls the first-order autoregressive
+(AR1) spatial correlation in the <strong>row</strong> direction.
+<code>NULL</code> (default) disables the spatial component entirely.
+A scalar in \((-1, 1)\) applies the same correlation at every
+site. A length-2 vector <code>c(lo, hi)</code> draws an independent
+per-site correlation uniformly from <code>[lo, hi]</code>, so each
+site has its own spatial structure.</p></dd>
+
+<dt><code>ar1_rho_col</code></dt>
+<dd><p>Controls AR1 correlation in the
+<strong>column</strong> direction. Same specification as
+<code>ar1_rho_row</code>. Default <code>NULL</code>.</p></dd>
+
+<dt><code>sigma_spatial</code></dt>
+<dd><p>Numeric. SD of the spatially correlated
+error component. Active only when at least one of
+<code>ar1_rho_row</code> or <code>ar1_rho_col</code> is non-<code>NULL</code>.
+When not supplied, defaults to <code>error_sd * 0.5</code> (at the
+current auto-scaled level). The covariance between plots at
+row-distance \(\Delta r\) and column-distance \(\Delta c\)
+within a site is
+\(\sigma^2_{\text{spatial}} \rho_r^{|\Delta r|} \rho_c^{|\Delta c|}\),
+and total plot-level variance is
+\(\sigma^2_{\text{spatial}} + \sigma^2_{\text{error}}\).</p></dd>
 
 <dt><code>sep</code></dt>
 <dd><p>Character. Separator for <code>TSite</code> labels.
