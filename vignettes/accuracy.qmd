@@ -45,13 +45,13 @@ metrics are available:
 
 - **Mrode accuracy** — per-variety accuracy derived from the prediction error
   variance (PEV) and the genetic variance.
-- **Cullis H²** — a reliability analogue based on the mean squared standard
+- **Generalised H²** — a reliability analogue based on the mean squared standard
   error of difference (SED) between BLUPs.
 
 Both metrics are bounded between 0 and 1, with values closer to 1 indicating
-better prediction. The function handles all major ASReml-R V4 random
-structures for the variety term:
-`fa()`, `diag()`, `corgh()`, `corh()`, `us()`, and single-environment `id()`.
+better prediction. The function handles all interaction combinations of major ASReml-R V4 random
+structures for the Site term: `fa()`, `diag()`, `corgh()`, `corh()`, `us()`,
+as well as structures for the variety term `id()`,`ide()`,`vm()` (see below for more info).
 
 `plot_accuracy()` visualises these results with six complementary plot types
 covering single-model summaries and head-to-head model comparisons.
@@ -71,7 +71,7 @@ $$
 $$
 
 The genetic (co)variance for environment $j$ is denoted $G_{jj}$ — the
-$j$-th diagonal of the **G-matrix** (or the corresponding variance component
+$j$-th diagonal of the $\mathbf{G}$ (or the corresponding variance component
 for simpler structures such as `diag()`).
 
 ---
@@ -116,6 +116,41 @@ basis.
 
 ---
 
+## ASReml-R `term` specifications
+
+The `term` argument of `accuracy()` takes the full interaction string from the model's
+`random =` formula (auto-detected when `NULL`) that is used to specify the Site $\times$
+Variety or Site $\times$ Treatment $\times$ Variety interaction.
+
+Supported ASReml-R covariance/correlation structures are:
+
+| Description | Structure functions |
+|----------|-------------|
+| Site relationships | `fa()`, `us()`, `corgh()`, `corh()`, `diag()` |
+| Variety relationships | `id()`, `ide()`, `vm()` |
+
+For ASReml-R multi-site models that used `corgh()` and `corh()`, `accuracy()` will extract the
+estimated matrix and convert it to a fully unstructured variance matrix $\mathbf{G}$
+before accuracy or generalised heritability calculations are undertaken. For single-environment
+models users can omit the site components and supply the variety term alone,
+e.g. `"id(Variety)"` or `"vm(Variety, K)"`. 
+
+### Example `term` strings
+
+```r
+# Multi-environment
+accuracy(model, term = "fa(Site, 2):id(Variety)")
+accuracy(model, term = "fa(Site, 1):vm(Variety, K)")
+accuracy(model, term = "diag(Site):id(Variety)")
+accuracy(model, term = "corgh(Site):id(Variety)")
+accuracy(model, term = "us(Site):vm(Variety, K)")
+# Single-environment
+accuracy(model, term = "id(Variety)")
+accuracy(model, term = "vm(Variety, K)")
+```
+
+---
+
 ## Setup
 
 ### Simulated data
@@ -126,10 +161,10 @@ basis.
 
 We use `simTrialData()` to generate a MET with 50 varieties across 8
 environments, 2 replicates, and an `"unbalanced"` incidence structure. The
-auto-generated genetic covariance matrix `G` ensures environments share
+auto-generated genetic covariance matrix $\mathbf{G}$ ensures environments share
 genuine genetic covariance (pairwise correlations in the default range
 [0.20, 0.90]), and the unbalanced incidence ensures that varieties appear
-in different subsets of environments — producing meaningful variety-to-variety
+in different subsets of environments and this produces meaningful variety-to-variety
 variation in prediction error variance that makes the per-variety accuracy
 plots informative.
 
@@ -168,7 +203,7 @@ head(dat[, c("Site", "Variety", "Rep", "Row", "Column", "yield")])
 
 ---
 
-### Fitting three models
+### Models
 
 We fit three random structures for the Site × Variety genetic term, in
 increasing order of complexity:
@@ -183,8 +218,8 @@ All three models include `at(Site):Rep` for replicate effects and a
 common homogeneous residual. The `diag` model assumes no genetic correlation
 between sites — varieties are re-ranked completely independently across
 environments. The FA models borrow information across environments: FA(1)
-captures one dominant axis of GEI; FA(2) adds a second, allowing richer
-rank-change patterns.
+captures one dominant axis of Site $\times$ Variety interaction; FA(2) adds a second, allowing richer
+rank-change patterns of the varieties across sites.
 
 ```{r fit_diag}
 #| cache: true
@@ -312,8 +347,8 @@ head(acc_fa2_bv)
 
 The `present` column flags which variety × site combinations were directly
 observed in the trial data. For an unbalanced trial, some combinations will
-be `FALSE` — the variety was not grown at that site but still receives a
-BLUP prediction with a higher (worse) PEV.
+be `FALSE` where varieties are not grown at that site but still receive a
+BLUP prediction. in most instances they will have a a higher (worse) PEV.
 
 ```{r present_counts}
 #| eval: !expr asreml_ok
@@ -383,8 +418,7 @@ Accuracy metric only. Cullis H² is a group-level constant and is suppressed
 automatically — use `type = "lollipop"` to visualise it. The width of each
 violin reflects the spread of per-variety accuracies within each environment.
 Individual points are coloured by `present` status: **blue** for varieties
-directly observed at that site, **orange** for varieties supported only by
-the FA G-matrix.
+directly observed at that site, **orange** for varieties that were unobserved.
 
 ```{r violin_fa2}
 #| eval: !expr asreml_ok
@@ -393,11 +427,9 @@ plot_accuracy(acc_fa2_bv, type = "violin", metric = "accuracy")
 ```
 
 The orange points cluster at the lower end of each violin, confirming that
-unobserved varieties have higher PEV and lower accuracy — but the FA G-matrix
-still provides predictions well above zero. "Core" varieties observed at most
+unobserved varieties have higher PEV and lower accuracy. "Core" varieties observed at most
 sites appear as blue points at the high-accuracy end; rarely-observed varieties
-as blue points lower down; and the orange unobserved predictions occupy the
-tail.
+as blue points lower down; and the orange unobserved predictions occupy the tail.
 
 ---
 
@@ -443,14 +475,14 @@ plot_accuracy(acc_fa2_bv, type = "diff", metric = "accuracy")
 ```
 
 Sites with the smallest gap (least negative) have the strongest inter-site
-genetic correlations — the FA G-matrix can borrow enough information from
-neighbouring sites to support near-observed-quality predictions. Sites with
-a larger gap are more informationally isolated: varieties not grown there
+genetic correlations. The connecticity in the FA modelling approach can borrow
+enough information from neighbouring sites to support near-observed-quality predictions.
+Sites with a larger gap are more informationally isolated: varieties not grown there
 receive much less support from the rest of the trial.
 
 ---
 
-## Comparing models with `res2 =`
+## Comparing models using the `res2` argument
 
 The three comparison plot types take a second accuracy object via `res2` and
 directly show the change in accuracy between models. This is where the story
