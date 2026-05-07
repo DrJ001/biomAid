@@ -113,17 +113,26 @@ To obtain the $\mathbf{G}$ matrix `randomRegress()` allows various specification
 of the Treatment $\times$ Site $\times$ Variety interaction through its flexible `term`
 argument. 
 
-| ASReml-R term | Estimated matrix form |
-|---|---|
-| `corgh(TSite):Variety` | Heterogeneous variances, fully unstructured correlation matrix|
-| `corh(TSite):Variety` | Heterogeneous variances, single correlation (2-group) |
-| `us(TSite):Variety` | Fully unstructured covariance matrix |
-| `fa(TSite, k):Variety` | Fully unstructured covariance matrix |
+Supported ASReml-R covariance/correlation structures are:
 
-For `corgh()` and `corh()` the estimated matrix is converted to a fully unstructured variance
-matrix $\mathbf{G}$ in `randomRegress()` before regressions are undertaken. To ensure maximum flexibility
-then function also recognises `vm()` and `ide()` in right-hand side terms to ensure the correct components
-are extracted from the model.
+| Description | Structure functions |
+|----------|-------------|
+| Site relationships | `fa()`, `us()`, `corgh()`, `corh()`, `diag()` |
+| Variety relationships | `id()`, `ide()`, `vm()` |
+
+For ASReml-R models that used `corgh()` and `corh()`, `randomRegress()` will extract the
+estimated matrix and convert it to a fully unstructured variance matrix $\mathbf{G}$
+before genetic regression calculations are undertaken.
+
+### Example `term` strings
+
+```r
+randomRegress(model, term = "fa(Site, 2):id(Variety)", ...)
+randomRegress(model, term = "fa(Site, 1):vm(Variety, K)", ...)
+randomRegress(model, term = "corgh(Site):id(Variety)", ...)
+randomRegress(model, term = "us(Site):vm(Variety, K)", ...)
+randomRegress(model, term = "corh(Site):Variety", ...)
+```
 
 ---
 
