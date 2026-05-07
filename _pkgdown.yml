@@ -83,6 +83,7 @@ reference:
       Analytic mixed models.
     contents:
       - fastIC
+      - plot_fastIC
 
   - title: "BLUP Accuracy"
     desc: >
