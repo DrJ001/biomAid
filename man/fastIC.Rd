@@ -7,7 +7,6 @@
 fastIC(
   model,
   term = "fa(Site, 4):Genotype",
-  type = c("all", "FAST", "iClass"),
   ic.num = 2L,
   ...
 )
@@ -22,23 +21,17 @@ wrapped in \code{vm(...)} (pedigree/genomic models) or \code{ide(...)}
 (identity relationship matrix) for relationship-aware models.
 Default \code{"fa(Site, 4):Genotype"}.}
 
-\item{type}{Analysis type.  One of:
-\describe{
-\item{\code{"all"} (default)}{Compute both FAST and iClass metrics.}
-\item{\code{"FAST"}}{Compute global Overall Performance and Stability only.}
-\item{\code{"iClass"}}{Compute iClass labels, iClassOP, and iClassRMSD only.}
-}}
-
 \item{ic.num}{Integer.  Number of factors used to form iClasses and compute
-iClassOP.  Must be strictly less than \eqn{k} (i.e. between 1 and
-\eqn{k - 1}) so that the kth factor remains available for iClassRMSD.
-Only used when \code{type} includes iClass.  Default \code{2}.}
+\code{iClassOP}.  Must be strictly less than \eqn{k} (i.e. between 1 and
+\eqn{k - 1}) so that the kth factor remains available for
+\code{iClassRMSD}.  Default \code{2}.}
 
 \item{...}{Additional arguments forwarded to \code{ASExtras4::fa.asreml()}.}
 }
 \value{
 A data frame with one row per environment \eqn{\times} genotype
-combination, containing:
+combination, sorted by \code{iclass} then environment then genotype,
+containing:
 \describe{
 \item{\verb{<EnvFactor>}}{Environment labels.}
 \item{\verb{<GenotypeFactor>}}{Genotype labels.}
@@ -47,27 +40,30 @@ combination, containing:
 \item{\code{score1}, ..., \code{scoreK}}{Rotated FA score EBLUPs per genotype.}
 \item{\code{fitted1}, ..., \code{fittedK}}{Per-factor contributions to CVE:
 \eqn{\hat{\lambda}_{rj}\hat{f}_{rg}}.}
-\item{\code{CVE}}{Common Variety Effect (sum of fitted values).}
+\item{\code{CVE}}{Common Variety Effect (sum of all fitted values).}
 \item{\code{VE}}{Total Variety Effect: \code{CVE + spec.var}.}
-\item{\code{OP}}{(FAST) Overall Performance  -- same value repeated for each
-environment row of a genotype.}
-\item{\code{dev}}{(FAST, \eqn{k > 1}) Residual from first-factor regression.}
-\item{\code{stab}}{(FAST, \eqn{k > 1}) RMSD stability.}
-\item{\code{iclass}}{(iClass) Sign-pattern iClass label.}
-\item{\code{iClassOP}}{(iClass) Within-iClass Overall Performance.}
-\item{\code{iClassRMSD}}{(iClass) Within-iClass RMSD.}
+\item{\code{global_op}}{Global Overall Performance (FAST): repeated for
+every environment row of a genotype.}
+\item{\code{global_dev}}{Residual from first-factor regression (FAST).
+Only present when \eqn{k > 1}.}
+\item{\code{global_stab}}{RMSD of \code{global_dev} across all environments
+(FAST stability): repeated for every environment row of a genotype.
+Only present when \eqn{k > 1}.}
+\item{\code{iclass}}{Sign-pattern iClass label for the environment.}
+\item{\code{iClassOP}}{Within-iClass Overall Performance for the genotype.}
+\item{\code{iClassRMSD}}{Within-iClass RMSD for the genotype.}
 }
 }
 \description{
-A unified implementation of the \strong{FAST} (Factor Analytic Selection Tools;
-Smith & Cullis 2018) and \strong{iClass} (interaction class; Smith et al. 2021)
-approaches for summarising variety performance from a Factor Analytic Linear
-Mixed Model fitted in ASReml-R V4.
+A unified implementation of the \strong{FAST} (Factor Analytic Selection
+Tools; Smith & Cullis 2018) and \strong{iClass} (interaction class;
+Smith et al. 2021) approaches for summarising variety performance from a
+Factor Analytic Linear Mixed Model fitted in ASReml-R V4.
 
 Both methods build on the rotated FA loadings \eqn{\hat{\bm{\Lambda}}} and
-score EBLUPs \eqn{\hat{\bm{f}}} returned by \code{ASExtras4::fa.asreml()}.  The
-\strong{Common Variety Effect} (CVE) for genotype \eqn{g} in environment \eqn{j}
-is the FA regression prediction:
+score EBLUPs \eqn{\hat{\bm{f}}} returned by \code{ASExtras4::fa.asreml()}.
+The \strong{Common Variety Effect} (CVE) for genotype \eqn{g} in environment
+\eqn{j} is the FA regression prediction:
 
 \deqn{
   \widehat{\text{CVE}}(g,j) = \sum_{r=1}^{k} \hat{\lambda}_{rj}\,\hat{f}_{rg}
@@ -76,58 +72,57 @@ is the FA regression prediction:
 and the \strong{Variety Effect} (VE) adds the environment-specific variance:
 \eqn{\widehat{\text{VE}}(g,j) = \widehat{\text{CVE}}(g,j) + \hat{\psi}_j}.
 }
-\section{FAST (\code{type = "FAST"})}{
+\section{Unified framework}{
 
-After rotation, the first factor captures the dominant non-crossover
-genotype-environment interaction (GEI) pattern and typically has all-positive
-loadings.  FAST summarises each genotype by:
+FAST and iClass are treated as a single framework.  Global FAST metrics are
+computed unconditionally across all environments; iClass metrics partition
+environments by the sign pattern of the first \code{ic.num} rotated loadings
+and compute within-class analogues.  When \code{ic.num = 1} and all
+first-factor loadings are positive (the typical outcome after rotation),
+there is exactly one iClass and \code{iClassOP} equals \code{global_op}
+while \code{iClassRMSD} equals \code{global_stab}.  When
+\code{ic.num >= 2} the environments split into multiple classes and the
+iClass metrics diverge from the global ones, revealing crossover GEI that
+FAST alone cannot detect.
+}
+
+\section{Global FAST metrics}{
 
 \describe{
-\item{\strong{Overall Performance (OP)}}{
-\eqn{\text{OP}(g) = \bar{\lambda}_1 \cdot \hat{f}_{1g}}, where
-\eqn{\bar{\lambda}_1 = t^{-1}\sum_j\hat{\lambda}_{1j}} is the mean
-first-factor loading.  This is on the same scale as the trait and
-represents the genotype's expected performance at the average
+\item{\strong{global_op}}{
+\eqn{\text{global\_op}(g) = \bar{\lambda}_1 \cdot \hat{f}_{1g}}, where
+\eqn{\bar{\lambda}_1 = t^{-1}\sum_j\hat{\lambda}_{1j}}.  On the same
+scale as the trait; the genotype's expected performance at the average
 environment.}
-\item{\strong{Stability (stab)}}{
-\eqn{\text{stab}(g) = \sqrt{t^{-1}\sum_j \text{dev}(g,j)^2}}, where
-\eqn{\text{dev}(g,j) = \widehat{\text{CVE}}(g,j) - \hat{\lambda}_{1j}
-    \hat{f}_{1g}} is the residual from the first-factor regression
-(i.e.\ the combined contribution of all higher-order bipolar factors).
-A small RMSD indicates broad adaptation.}
+\item{\strong{global_dev}}{
+\eqn{\text{global\_dev}(g,j) = \widehat{\text{CVE}}(g,j) -
+\hat{\lambda}_{1j}\hat{f}_{1g}}: residual from the first-factor
+regression.  Only present when \eqn{k > 1}.}
+\item{\strong{global_stab}}{
+\eqn{\text{global\_stab}(g) = \sqrt{t^{-1}\sum_j
+\text{global\_dev}(g,j)^2}}: RMSD of the first-factor residual across
+all environments.  Only present when \eqn{k > 1}.}
 }
 }
 
-\section{iClass (\code{type = "iClass"})}{
+\section{iClass metrics}{
 
-When non-trivial crossover GEI is present, a single global OP is
-misleading.  iClass resolves this by grouping environments into
-\strong{interaction classes} based on the sign pattern of their first
-\code{ic.num} rotated loadings:
-
-\deqn{
-  \text{iClass}(j) = \bigwedge_{r=1}^{k}
-  \begin{cases} \text{p} & \hat{\lambda}_{rj} \ge 0 \\
-                \text{n} & \hat{\lambda}_{rj} <   0 \end{cases}
-}
-
-Within each iClass \eqn{\omega}:
+Environments are grouped by the sign pattern of their first \code{ic.num}
+rotated loadings.  Within each iClass \eqn{\omega}:
 
 \describe{
 \item{\strong{iClassOP}}{
-\eqn{\text{iClassOP}(g,\omega) = \sum_{r=1}^{k}
-    \bar{\lambda}_{r\omega} \cdot \hat{f}_{rg}},
-where \eqn{\bar{\lambda}_{r\omega}} is the mean of factor \eqn{r}'s
-loadings across environments in \eqn{\omega}.  Equals the mean CVE
+\eqn{\text{iClassOP}(g,\omega) = \sum_{r=1}^{\texttt{ic.num}}
+\bar{\lambda}_{r\omega} \cdot \hat{f}_{rg}}, where
+\eqn{\bar{\lambda}_{r\omega}} is the mean of factor \eqn{r}'s loadings
 across environments in \eqn{\omega}.}
 \item{\strong{iClassRMSD}}{
 \eqn{\text{iClassRMSD}(g,\omega) = \sqrt{|\omega|^{-1}
-    \sum_{j\in\omega} \text{dev}_{ic}(g,j)^2}}, where
+\sum_{j\in\omega} \text{dev}_{ic}(g,j)^2}}, where
 \eqn{\text{dev}_{ic}(g,j) = \widehat{\text{CVE}}(g,j) -
-    \sum_{r=1}^{k} \hat{\lambda}_{rj}\hat{f}_{rg}} measures
-residual crossover GEI within the class.  The kth factor is reserved
-for iClassRMSD; therefore \code{ic.num} must be strictly less than
-\eqn{k}.}
+\sum_{r=1}^{\texttt{ic.num}} \hat{\lambda}_{rj}\hat{f}_{rg}}.
+The kth factor is reserved for this residual; therefore \code{ic.num}
+must be strictly less than \eqn{k}.}
 }
 }
 
@@ -142,5 +137,5 @@ mixed models: models with independent variety effects.
 \emph{Frontiers in Plant Science}, 12, 737462.
 }
 \seealso{
-\code{ASExtras4::fa.asreml()}
+\code{ASExtras4::fa.asreml()}, \code{\link{plot_fastIC}}
 }

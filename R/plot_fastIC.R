@@ -4,8 +4,9 @@
 # ============================================================
 
 utils::globalVariables(c(
-  "OP", "stab", "highlighted", "score1", "score2", "loads1", "loads2",
-  "iclass", "iClassOP", "iClassRMSD", "CVE", "VE", "dev",
+  "global_op", "global_stab", "global_dev",
+  "highlighted", "score1", "score2", "loads1", "loads2",
+  "iclass", "iClassOP", "iClassRMSD", "CVE", "VE",
   "x_val", "y_val", "x_class", "y_class", "winner", "winning_CVE",
   "env_ord", "geno_ord", "mean_op", "label_var", "arrow_x", "arrow_y",
   "spec.var", "fitted1", "mean_iClassOP", "iclass_lbl",
@@ -50,10 +51,10 @@ NULL
     load_cols   = load_cols,
     score_cols  = score_cols,
     fitted_cols = fitted_cols,
-    has_fast    = "OP"     %in% nms,
-    has_stab    = "stab"   %in% nms,
-    has_dev     = "dev"    %in% nms,
-    has_iclass  = "iclass" %in% nms
+    has_fast    = "global_op"   %in% nms,
+    has_stab    = "global_stab" %in% nms,
+    has_dev     = "global_dev"  %in% nms,
+    has_iclass  = "iclass"      %in% nms
   )
 }
 
@@ -88,8 +89,8 @@ NULL
 .pfi_geno_data <- function(res, p) {
 
   keep <- c(p$gterm, p$score_cols,
-            if (p$has_fast)  "OP",
-            if (p$has_stab)  "stab")
+            if (p$has_fast)  "global_op",
+            if (p$has_stab)  "global_stab")
   keep <- intersect(keep, names(res))
   gd   <- unique(res[, keep, drop = FALSE])
   rownames(gd) <- NULL
@@ -161,9 +162,9 @@ NULL
       return(as.character(gd[[gterm]][head(ord, n_highlight)]))
     }
 
-    # Fallback to OP
-    if ("OP" %in% names(gd)) {
-      ord <- order(gd[["OP"]], decreasing = TRUE, na.last = TRUE)
+    # Fallback to global_op
+    if ("global_op" %in% names(gd)) {
+      ord <- order(gd[["global_op"]], decreasing = TRUE, na.last = TRUE)
       return(as.character(gd[[gterm]][head(ord, n_highlight)]))
     }
 
@@ -171,19 +172,19 @@ NULL
   }
 
   # "fast", "biplot", "cve", "dev", "specialist", and all others
-  if ("OP" %in% names(gd)) {
+  if ("global_op" %in% names(gd)) {
 
     top_op <- head(
       as.character(gd[[gterm]][
-        order(gd[["OP"]], decreasing = TRUE, na.last = TRUE)
+        order(gd[["global_op"]], decreasing = TRUE, na.last = TRUE)
       ]),
       n_highlight
     )
 
-    if ("stab" %in% names(gd)) {
+    if ("global_stab" %in% names(gd)) {
       top_stab <- head(
         as.character(gd[[gterm]][
-          order(gd[["stab"]], decreasing = TRUE, na.last = TRUE)
+          order(gd[["global_stab"]], decreasing = TRUE, na.last = TRUE)
         ]),
         n_highlight
       )
@@ -268,8 +269,8 @@ NULL
 
   # ---- Order genotypes
   gd       <- .pfi_geno_data(res, p)
-  geno_ord <- if ("OP" %in% names(gd)) {
-    as.character(gd[[p$gterm]][order(gd$OP, decreasing = TRUE, na.last = TRUE)])
+  geno_ord <- if ("global_op" %in% names(gd)) {
+    as.character(gd[[p$gterm]][order(gd$global_op, decreasing = TRUE, na.last = TRUE)])
   } else {
     sort(unique(as.character(df[[p$gterm]])))
   }
@@ -373,11 +374,11 @@ NULL
   gd_hl  <- gd[gd$highlighted,  , drop = FALSE]
   gd_reg <- gd[!gd$highlighted, , drop = FALSE]
 
-  mean_op   <- mean(gd$OP,   na.rm = TRUE)
-  mean_stab <- mean(gd$stab, na.rm = TRUE)
+  mean_op   <- mean(gd$global_op,   na.rm = TRUE)
+  mean_stab <- mean(gd$global_stab, na.rm = TRUE)
 
-  x_rng <- range(gd$OP,   na.rm = TRUE)
-  y_rng <- range(gd$stab, na.rm = TRUE)
+  x_rng <- range(gd$global_op,   na.rm = TRUE)
+  y_rng <- range(gd$global_stab, na.rm = TRUE)
 
   x_lo <- x_rng[1L]; x_hi <- x_rng[2L]
   y_lo <- y_rng[1L]; y_hi <- y_rng[2L]
@@ -386,7 +387,7 @@ NULL
   px <- 0.03 * diff(x_rng)
   py <- 0.03 * diff(y_rng)
 
-  plt <- ggplot2::ggplot(gd, ggplot2::aes(x = OP, y = stab)) +
+  plt <- ggplot2::ggplot(gd, ggplot2::aes(x = global_op, y = global_stab)) +
     ggplot2::geom_hline(yintercept = mean_stab,
                         linetype = "dashed", colour = "grey60") +
     ggplot2::geom_vline(xintercept = mean_op,
@@ -431,9 +432,9 @@ NULL
 
   plt <- plt +
     ggplot2::labs(
-      x     = "Overall Performance (OP)",
-      y     = "Stability (RMSD)",
-      title = "FAST: OP vs Stability"
+      x     = "Global Overall Performance (global_op)",
+      y     = "Global Stability (global_stab)",
+      title = "FAST: Global OP vs Stability"
     ) +
     theme
 
@@ -1049,7 +1050,7 @@ NULL
 #' @noRd
 .pfi_plot_specialist <- function(res, p, hl_names, theme) {
 
-  spec_df <- unique(res[, c(p$gterm, "iclass", "iClassOP", "OP"),
+  spec_df <- unique(res[, c(p$gterm, "iclass", "iClassOP", "global_op"),
                          drop = FALSE])
   spec_df <- spec_df[!is.na(spec_df$iclass), , drop = FALSE]
 
@@ -1061,7 +1062,7 @@ NULL
   spec_hl  <- spec_df[spec_df$highlighted,  , drop = FALSE]
 
   plt <- ggplot2::ggplot(spec_df,
-    ggplot2::aes(x = OP, y = iClassOP)) +
+    ggplot2::aes(x = global_op, y = iClassOP)) +
     ggplot2::geom_abline(
       slope = 1, intercept = 0,
       linetype = "dashed", colour = "grey50"
@@ -1340,11 +1341,11 @@ plot_fastIC <- function(res,
   # ---- Type-specific precondition checks
   if (type == "fast") {
     if (!p$has_fast)
-      stop("plot_fastIC(): 'OP' column not found. ",
-           "Re-run fastIC() with type = 'FAST' or 'all'.")
+      stop("plot_fastIC(): 'global_op' column not found. ",
+           "Was 'res' produced by fastIC()?")
     if (!p$has_stab)
-      stop("plot_fastIC(): 'stab' column not found. ",
-           "Re-run fastIC() with type = 'FAST' or 'all'.")
+      stop("plot_fastIC(): 'global_stab' column not found; ",
+           "re-run fastIC() with k > 1.")
   }
 
   if (type %in% c("biplot", "loads") && p$k < 2L)
@@ -1353,8 +1354,8 @@ plot_fastIC <- function(res,
 
   if (type == "dev") {
     if (!p$has_dev)
-      stop("plot_fastIC(): 'dev' column not found. ",
-           "Re-run fastIC() with type = 'FAST' or 'all' and k > 1.")
+      stop("plot_fastIC(): 'global_dev' column not found; ",
+           "re-run fastIC() with k > 1.")
   }
 
   if (type %in% c("iclass", "trajectory", "pairs", "specialist")) {
@@ -1365,11 +1366,11 @@ plot_fastIC <- function(res,
 
   if (type == "specialist") {
     if (!p$has_fast)
-      stop("plot_fastIC(): type = 'specialist' requires 'OP' column. ",
-           "Re-run fastIC() with type = 'FAST' or 'all'.")
+      stop("plot_fastIC(): type = 'specialist' requires 'global_op' column. ",
+           "Was 'res' produced by fastIC()?")
     if (!"iClassOP" %in% names(res))
       stop("plot_fastIC(): type = 'specialist' requires 'iClassOP' column. ",
-           "Re-run fastIC() with type = 'iClass' or 'all'.")
+           "Was 'res' produced by fastIC()?")
   }
 
   # ------------------------------------------------------------------ #
