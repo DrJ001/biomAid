@@ -82,7 +82,7 @@ reference:
       FAST and interaction class (iClass) approaches derived from Factor
       Analytic mixed models.
     contents:
-      - fast
+      - fastIC
 
   - title: "BLUP Accuracy"
     desc: >

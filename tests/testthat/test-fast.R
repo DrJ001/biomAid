@@ -1,43 +1,46 @@
 # tests/testthat/test-fast.R
-# Consolidated tests for fast() in the biomAid package.
+# Consolidated tests for fastIC() in the biomAid package.
 #
 # Structure
 # =========
 #  A. Mathematical primitives  – pure-R recreations, no ASReml licence needed.
-#  B. End-to-end tests         – call fast() directly via local_mocked_bindings.
-#  C. New / gap-filling tests  – k=1, vm() parsing, column exclusions, sort order.
+#  B. End-to-end tests         – call fastIC() directly via local_mocked_bindings.
+#  C. Gap-filling tests        – k=1, vm()/ide() parsing, column exclusions, sort order.
+#  D. ic.num boundary tests    – new constraint: 1 <= ic.num <= k - 1 (< k).
 #
-# The fixture matrices are shared by all three sections.
+# The fixture matrices are shared by all sections.
 
 # ===========================================================================
 # SHARED FIXTURE
 # ===========================================================================
-# 4 environments × 3 genotypes × 2 factors
+# 4 environments × 3 genotypes × 3 factors
+# ic.num = 2 (default) is valid because 2 < k = 3.
+# Factor 3 (the kth factor) is reserved for iClassRMSD.
 
 .loads <- matrix(
-  c( 2.0,  1.0,
-     1.5, -0.8,
-     1.8,  0.6,
-     1.2, -1.2),
-  nrow = 4L, ncol = 2L, byrow = TRUE,
-  dimnames = list(c("E1","E2","E3","E4"), c("loads1","loads2"))
+  c( 2.0,  1.0,  0.4,
+     1.5, -0.8,  0.6,
+     1.8,  0.6, -0.5,
+     1.2, -1.2,  0.3),
+  nrow = 4L, ncol = 3L, byrow = TRUE,
+  dimnames = list(c("E1","E2","E3","E4"), c("loads1","loads2","loads3"))
 )
 
 .scores <- matrix(
-  c( 1.0,  0.5,
-     0.2, -0.3,
-    -0.5,  0.8),
-  nrow = 3L, ncol = 2L, byrow = TRUE,
-  dimnames = list(c("G1","G2","G3"), c("score1","score2"))
+  c( 1.0,  0.5,  0.3,
+     0.2, -0.3,  0.4,
+    -0.5,  0.8, -0.2),
+  nrow = 3L, ncol = 3L, byrow = TRUE,
+  dimnames = list(c("G1","G2","G3"), c("score1","score2","score3"))
 )
 
 .spec  <- c(E1 = 0.10, E2 = 0.20, E3 = 0.15, E4 = 0.25)
-.term  <- "fa(Site, 2):Genotype"
+.term  <- "fa(Site, 3):Genotype"
 .envs  <- c("E1","E2","E3","E4")
 .genos <- c("G1","G2","G3")
 .m     <- 3L
 .t     <- 4L
-.k     <- 2L
+.k     <- 3L
 
 # Pre-compute ground-truth matrices used by section A
 .CVE_mat     <- .scores %*% t(.loads)                                # 3 × 4
@@ -46,7 +49,9 @@
 .dev_mat     <- .CVE_mat - .fitted1_mat
 .stab_vec    <- sqrt(rowMeans(.dev_mat^2))
 .OP_vec      <- mean(.loads[, 1L]) * .scores[, 1L]
-.sign_str    <- apply(.loads, 1L, function(x)
+
+# Sign pattern using ic.num = 2 (first 2 factors)
+.sign_str <- apply(.loads[, 1:2, drop = FALSE], 1L, function(x)
   paste(ifelse(x >= 0, "p", "n"), collapse = ""))
 
 # Long-form index helpers (environment-major)
@@ -54,11 +59,11 @@
 .geno_rep <- rep(seq_len(.m), times = .t)
 
 # ---------------------------------------------------------------------------
-# Helpers for end-to-end tests (sections B & C)
+# Helpers for end-to-end tests (sections B, C, D)
 # ---------------------------------------------------------------------------
 .sc_long <- data.frame(
-  Site  = rep(paste0("Comp", 1:2), each = 3L),
-  blupr = c(.scores[, 1L], .scores[, 2L]),
+  Site  = rep(paste0("Comp", 1:3), each = 3L),
+  blupr = c(.scores[, 1L], .scores[, 2L], .scores[, 3L]),
   stringsAsFactors = FALSE
 )
 
@@ -73,22 +78,22 @@
   )
 )
 
-make_fast_model <- function() {
-  # fast() calls eval(model$call$data); <<- puts it in the global env so
-  # eval() finds it regardless of where fast() runs.
-  fast_mock_data <<- expand.grid(
+make_fastIC_model <- function() {
+  # fastIC() calls eval(model$call$data); <<- puts it in the global env so
+  # eval() finds it regardless of where fastIC() runs.
+  fastIC_mock_data <<- expand.grid(
     Site     = factor(c("E1","E2","E3","E4")),
     Genotype = factor(c("G1","G2","G3")),
     KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
   )
-  m <- list(call = list(data = quote(fast_mock_data)))
+  m <- list(call = list(data = quote(fastIC_mock_data)))
   class(m) <- "asreml"
   m
 }
 
-run_fast <- function(type = "all", ic.num = 2L, term = .term) {
+run_fastIC <- function(type = "all", ic.num = 2L, term = .term) {
   local_mocked_bindings(.fa_asreml = function(...) .mock_sfa, .package = "biomAid")
-  fast(make_fast_model(), term = term, type = type, ic.num = ic.num)
+  fastIC(make_fastIC_model(), term = term, type = type, ic.num = ic.num)
 }
 
 # ===========================================================================
@@ -102,18 +107,19 @@ test_that("A: CVE matrix has correct dimensions", {
   expect_equal(dim(.CVE_mat), c(.m, .t))
 })
 
-test_that("A: CVE(G1,E1) = 2.0*1.0 + 1.0*0.5 = 2.5", {
-  expect_equal(.CVE_mat["G1","E1"], 2.5, tolerance = 1e-12)
+test_that("A: CVE(G1,E1) = 2.0*1.0 + 1.0*0.5 + 0.4*0.3", {
+  expect_equal(.CVE_mat["G1","E1"],
+               2.0 * 1.0 + 1.0 * 0.5 + 0.4 * 0.3, tolerance = 1e-12)
 })
 
-test_that("A: CVE(G3,E2) = 1.5*(-0.5) + (-0.8)*0.8", {
+test_that("A: CVE(G3,E2) = 1.5*(-0.5) + (-0.8)*0.8 + 0.6*(-0.2)", {
   expect_equal(.CVE_mat["G3","E2"],
-               1.5 * (-0.5) + (-0.8) * 0.8, tolerance = 1e-12)
+               1.5 * (-0.5) + (-0.8) * 0.8 + 0.6 * (-0.2), tolerance = 1e-12)
 })
 
-test_that("A: CVE(G2,E3) = 1.8*0.2 + 0.6*(-0.3)", {
+test_that("A: CVE(G2,E3) = 1.8*0.2 + 0.6*(-0.3) + (-0.5)*0.4", {
   expect_equal(.CVE_mat["G2","E3"],
-               1.8 * 0.2 + 0.6 * (-0.3), tolerance = 1e-12)
+               1.8 * 0.2 + 0.6 * (-0.3) + (-0.5) * 0.4, tolerance = 1e-12)
 })
 
 # ---------------------------------------------------------------------------
@@ -131,9 +137,10 @@ test_that("A: fitted1 = outer(score1, loads1)", {
   expect_equal(.fitted1_mat, outer(.scores[, 1L], .loads[, 1L]), tolerance = 1e-12)
 })
 
-test_that("A: CVE = fitted1 + fitted2", {
+test_that("A: CVE = fitted1 + fitted2 + fitted3", {
   fitted2 <- outer(.scores[, 2L], .loads[, 2L])
-  expect_equal(.CVE_mat, .fitted1_mat + fitted2, tolerance = 1e-12)
+  fitted3 <- outer(.scores[, 3L], .loads[, 3L])
+  expect_equal(.CVE_mat, .fitted1_mat + fitted2 + fitted3, tolerance = 1e-12)
 })
 
 # ---------------------------------------------------------------------------
@@ -172,9 +179,13 @@ test_that("A: stab >= 0 for all genotypes", {
 })
 
 # ---------------------------------------------------------------------------
-# A7. iClass sign patterns
+# A7. iClass sign patterns (based on ic.num = 2: first 2 factors)
+# E1: loads1=2.0(p), loads2=1.0(p)   -> "pp"
+# E2: loads1=1.5(p), loads2=-0.8(n)  -> "pn"
+# E3: loads1=1.8(p), loads2=0.6(p)   -> "pp"
+# E4: loads1=1.2(p), loads2=-1.2(n)  -> "pn"
 # ---------------------------------------------------------------------------
-test_that("A: iClass sign pattern for ic.num=2 matches fixture loadings", {
+test_that("A: iClass sign pattern for ic.num=2 matches first 2 factor loadings", {
   expect_equal(unname(.sign_str["E1"]), "pp")
   expect_equal(unname(.sign_str["E2"]), "pn")
   expect_equal(unname(.sign_str["E3"]), "pp")
@@ -187,61 +198,77 @@ test_that("A: iClass sign pattern for ic.num=1 uses first loading only", {
 })
 
 # ---------------------------------------------------------------------------
-# A8. iClassOP = mean CVE within iClass
+# A8. iClassOP = mean CVE within iClass (using ic.num=2)
 # ---------------------------------------------------------------------------
-test_that("A: iClassOP for 'pp' equals mean CVE of E1 and E3", {
-  pp_idx <- which(.sign_str == "pp")
-  for (g in rownames(.scores)) {
-    mld   <- colMeans(.loads[pp_idx, , drop = FALSE])
-    iop_f <- sum(.scores[g, ] * mld)
-    expect_equal(mean(.CVE_mat[g, pp_idx]), iop_f, tolerance = 1e-10)
+test_that("A: iClassOP formula: score[1:ic.num] dot mean_loads[1:ic.num] within class", {
+  # iClassOP(g, omega) = sum_{r=1}^{ic.num} mean_{j in omega}(lambda_rj) * score_rg
+  # With ic.num=2 and k=3, this is a partial projection (not mean CVE).
+  ic.num <- 2L
+  for (w in unique(.sign_str)) {
+    env_w <- which(.sign_str == w)
+    mld_w <- colMeans(.loads[env_w, seq_len(ic.num), drop = FALSE])
+    for (g in rownames(.scores)) {
+      expected <- sum(.scores[g, seq_len(ic.num)] * mld_w)
+      # Also verify it equals matrix multiplication form
+      mat_form <- unname((.scores[g, seq_len(ic.num), drop = FALSE] %*% mld_w)[1, 1])
+      expect_equal(expected, mat_form, tolerance = 1e-12)
+    }
   }
 })
 
-test_that("A: iClassOP for 'pn' equals mean CVE of E2 and E4", {
-  pn_idx <- which(.sign_str == "pn")
-  for (g in rownames(.scores)) {
-    mld   <- colMeans(.loads[pn_idx, , drop = FALSE])
-    iop_f <- sum(.scores[g, ] * mld)
-    expect_equal(mean(.CVE_mat[g, pn_idx]), iop_f, tolerance = 1e-10)
+test_that("A: iClassOP != mean(CVE) within class when ic.num < k", {
+  # When ic.num < k, iClassOP is a partial-factor projection and differs from
+  # the full mean CVE across class environments.
+  ic.num <- 2L
+  for (w in unique(.sign_str)) {
+    env_w      <- which(.sign_str == w)
+    mld_w      <- colMeans(.loads[env_w, seq_len(ic.num), drop = FALSE])
+    iop_g      <- as.vector(.scores[, seq_len(ic.num), drop = FALSE] %*% mld_w)
+    mean_cve_g <- rowMeans(.CVE_mat[, env_w, drop = FALSE])
+    # These should differ (factor 3 contributes to CVE but not iClassOP)
+    expect_false(isTRUE(all.equal(iop_g, mean_cve_g, tolerance = 1e-6)))
   }
 })
 
 # ---------------------------------------------------------------------------
-# A9. iClassRMSD = 0 when ic.num == k (all factors used -> no residual)
+# A9. iClassRMSD > 0 when ic.num = k-1 (residual comes from factor k only)
 # ---------------------------------------------------------------------------
-test_that("A: iClassRMSD = 0 when all factors included (ic.num = k)", {
-  fitted_all <- .fitted1_mat + outer(.scores[, 2L], .loads[, 2L])
-  dev_ic     <- .CVE_mat - fitted_all
-  rmsd       <- sqrt(rowMeans(dev_ic^2))
-  expect_equal(max(abs(rmsd)), 0, tolerance = 1e-12)
+test_that("A: iClassRMSD > 0 when ic.num = k-1 (one factor reserved for RMSD)", {
+  # fitted for ic.num=2 (factors 1 and 2 only)
+  fitted_ic2 <- outer(.scores[, 1L], .loads[, 1L]) +
+                outer(.scores[, 2L], .loads[, 2L])
+  dev_ic <- .CVE_mat - fitted_ic2   # residual = contribution of factor 3 only
+  rmsd   <- sqrt(rowMeans(dev_ic^2))
+  expect_true(any(rmsd > 0))
 })
 
 # ---------------------------------------------------------------------------
-# A10. iClassRMSD > 0 when ic.num < k
+# A10. iClassRMSD per iClass when ic.num < k
 # ---------------------------------------------------------------------------
-test_that("A: iClassRMSD > 0 when ic.num < k", {
+test_that("A: iClassRMSD > 0 within each iClass when ic.num < k", {
+  fitted_ic2 <- outer(.scores[, 1L], .loads[, 1L]) +
+                outer(.scores[, 2L], .loads[, 2L])
   for (w in unique(.sign_str)) {
     env_w    <- which(.sign_str == w)
-    dev_ic_w <- .dev_mat[, env_w, drop = FALSE]
+    dev_ic_w <- (.CVE_mat - fitted_ic2)[, env_w, drop = FALSE]
     rmsd_w   <- sqrt(rowMeans(dev_ic_w^2))
     expect_true(any(rmsd_w > 0))
   }
 })
 
 # ---------------------------------------------------------------------------
-# A11. Term parsing logic (no call to fast())
+# A11. Term parsing logic (no call to fastIC())
 # ---------------------------------------------------------------------------
-test_that("A: parse 'fa(Site, 2):Genotype' -> sterm='Site'", {
-  term    <- "fa(Site, 2):Genotype"
+test_that("A: parse 'fa(Site, 3):Genotype' -> sterm='Site'", {
+  term    <- "fa(Site, 3):Genotype"
   parts   <- strsplit(term, ":")[[1L]]
   fa_idx  <- grep("^fa\\s*\\(", parts)
   sterm   <- trimws(sub(",.*", "", sub("^fa\\s*\\(", "", parts[fa_idx])))
   expect_equal(sterm, "Site")
 })
 
-test_that("A: parse 'fa(Site, 2):Genotype' -> gterm='Genotype'", {
-  term     <- "fa(Site, 2):Genotype"
+test_that("A: parse 'fa(Site, 3):Genotype' -> gterm='Genotype'", {
+  term     <- "fa(Site, 3):Genotype"
   parts    <- strsplit(term, ":")[[1L]]
   fa_idx   <- grep("^fa\\s*\\(", parts)
   gen_part <- parts[-fa_idx]
@@ -249,18 +276,26 @@ test_that("A: parse 'fa(Site, 2):Genotype' -> gterm='Genotype'", {
 })
 
 # ---------------------------------------------------------------------------
-# A12. ic.num validation logic
+# A12. ic.num validation logic (new rule: 1 <= ic.num <= k-1, i.e. ic.num < k)
 # ---------------------------------------------------------------------------
-test_that("A: ic.num = 0 is invalid", {
-  expect_false(0L >= 1L && 0L <= 2L)
+test_that("A: ic.num = 0 is invalid (below lower bound)", {
+  k <- 3L
+  expect_false(0L >= 1L && 0L < k)
 })
 
-test_that("A: ic.num = 5 is invalid when k = 2", {
-  expect_false(5L >= 1L && 5L <= 2L)
+test_that("A: ic.num = k is invalid (must be strictly less than k)", {
+  k <- 3L
+  expect_false(3L >= 1L && 3L < k)
 })
 
-test_that("A: ic.num = 1 is valid when k = 2", {
-  expect_true(1L >= 1L && 1L <= 2L)
+test_that("A: ic.num = k-1 is valid (upper boundary)", {
+  k <- 3L
+  expect_true(2L >= 1L && 2L < k)
+})
+
+test_that("A: ic.num = 1 is valid when k = 3", {
+  k <- 3L
+  expect_true(1L >= 1L && 1L < k)
 })
 
 # ---------------------------------------------------------------------------
@@ -268,8 +303,8 @@ test_that("A: ic.num = 1 is valid when k = 2", {
 # ---------------------------------------------------------------------------
 test_that("A: environment-major order: first m rows are E1", {
   env_long <- .envs[.env_rep]
-  expect_equal(env_long[seq_len(.m)],     rep("E1", .m))
-  expect_equal(env_long[(.m + 1L):(2L * .m)], rep("E2", .m))
+  expect_equal(env_long[seq_len(.m)],          rep("E1", .m))
+  expect_equal(env_long[(.m + 1L):(2L * .m)],  rep("E2", .m))
 })
 
 # ---------------------------------------------------------------------------
@@ -307,31 +342,31 @@ test_that("A: stab_vec has length m", {
 # B1. type = "all": correct dimensions and complete column set
 # ---------------------------------------------------------------------------
 test_that("B: type='all' returns 12 rows and all expected columns", {
-  out <- run_fast("all")
+  out <- run_fastIC("all")
   expect_equal(nrow(out), .t * .m)
   expected_cols <- c("Site","Genotype",
-                     "loads1","loads2","spec.var",
-                     "score1","score2",
+                     "loads1","loads2","loads3","spec.var",
+                     "score1","score2","score3",
                      "CVE","VE",
-                     "fitted1","fitted2",
+                     "fitted1","fitted2","fitted3",
                      "OP","dev","stab",
                      "iclass","iClassOP","iClassRMSD")
   expect_true(all(expected_cols %in% names(out)))
 })
 
 # ---------------------------------------------------------------------------
-# B2. CVE == fitted1 + fitted2 in the actual output
+# B2. CVE == fitted1 + fitted2 + fitted3 in the actual output
 # ---------------------------------------------------------------------------
-test_that("B: CVE == fitted1 + fitted2 in fast() output", {
-  out <- run_fast("all")
-  expect_equal(out$CVE, out$fitted1 + out$fitted2, tolerance = 1e-12)
+test_that("B: CVE == fitted1 + fitted2 + fitted3 in fastIC() output", {
+  out <- run_fastIC("all")
+  expect_equal(out$CVE, out$fitted1 + out$fitted2 + out$fitted3, tolerance = 1e-12)
 })
 
 # ---------------------------------------------------------------------------
 # B3. VE == CVE + spec.var in the actual output
 # ---------------------------------------------------------------------------
-test_that("B: VE == CVE + spec.var in fast() output", {
-  out <- run_fast("all")
+test_that("B: VE == CVE + spec.var in fastIC() output", {
+  out <- run_fastIC("all")
   expect_equal(out$VE, out$CVE + out$spec.var, tolerance = 1e-12)
 })
 
@@ -339,7 +374,7 @@ test_that("B: VE == CVE + spec.var in fast() output", {
 # B4. OP is constant within each genotype
 # ---------------------------------------------------------------------------
 test_that("B: OP is constant within each genotype", {
-  out <- run_fast("FAST")
+  out <- run_fastIC("FAST")
   for (g in .genos) {
     ops <- out$OP[out$Genotype == g]
     expect_equal(length(unique(round(ops, 12L))), 1L)
@@ -350,7 +385,7 @@ test_that("B: OP is constant within each genotype", {
 # B5. stab = RMSD of dev across all environments
 # ---------------------------------------------------------------------------
 test_that("B: stab equals RMSD of dev per genotype", {
-  out <- run_fast("FAST")
+  out <- run_fastIC("FAST")
   for (g in .genos) {
     devs    <- out$dev[out$Genotype == g]
     stab_g  <- unique(round(out$stab[out$Genotype == g], 10L))
@@ -359,40 +394,48 @@ test_that("B: stab equals RMSD of dev per genotype", {
 })
 
 # ---------------------------------------------------------------------------
-# B6. iclass labels match loading sign patterns
+# B6. iclass labels match sign pattern of first ic.num=2 loadings
 # ---------------------------------------------------------------------------
-test_that("B: iclass='pp' for E1, 'pn' for E2", {
-  out <- run_fast("iClass")
+test_that("B: iclass='pp' for E1, 'pn' for E2 (based on factors 1 and 2)", {
+  out <- run_fastIC("iClass", ic.num = 2L)
   expect_equal(as.character(out$iclass[out$Site == "E1"][1L]), "pp")
   expect_equal(as.character(out$iclass[out$Site == "E2"][1L]), "pn")
 })
 
 # ---------------------------------------------------------------------------
-# B7. iClassRMSD = 0 when ic.num == k
+# B7. iClassRMSD > 0 when ic.num = k-1 (factor k reserved for RMSD)
 # ---------------------------------------------------------------------------
-test_that("B: iClassRMSD = 0 when ic.num == k (all factors included)", {
-  out <- run_fast("iClass", ic.num = 2L)
-  expect_equal(max(out$iClassRMSD), 0, tolerance = 1e-10)
+test_that("B: iClassRMSD > 0 when ic.num = k-1 (kth factor reserved)", {
+  out <- run_fastIC("iClass", ic.num = 2L)   # k=3, so ic.num=2 = k-1
+  expect_true(any(out$iClassRMSD > 0))
 })
 
 # ---------------------------------------------------------------------------
 # B8. Error: term with no fa() component
 # ---------------------------------------------------------------------------
-test_that("B: fast() errors when term has no fa() component", {
+test_that("B: fastIC() errors when term has no fa() component", {
   local_mocked_bindings(.fa_asreml = function(...) .mock_sfa, .package = "biomAid")
   expect_error(
-    fast(make_fast_model(), term = "Site:Genotype"),
+    fastIC(make_fastIC_model(), term = "Site:Genotype"),
     "must contain a 'fa\\("
   )
 })
 
 # ---------------------------------------------------------------------------
-# B9. Error: ic.num out of range
+# B9. Error: ic.num >= k (must be strictly less than k)
 # ---------------------------------------------------------------------------
-test_that("B: fast() errors when ic.num > k", {
+test_that("B: fastIC() errors when ic.num = k", {
   local_mocked_bindings(.fa_asreml = function(...) .mock_sfa, .package = "biomAid")
   expect_error(
-    fast(make_fast_model(), term = .term, type = "iClass", ic.num = 5L),
+    fastIC(make_fastIC_model(), term = .term, type = "iClass", ic.num = 3L),
+    "ic.num.*must be between"
+  )
+})
+
+test_that("B: fastIC() errors when ic.num > k", {
+  local_mocked_bindings(.fa_asreml = function(...) .mock_sfa, .package = "biomAid")
+  expect_error(
+    fastIC(make_fastIC_model(), term = .term, type = "iClass", ic.num = 5L),
     "ic.num.*must be between"
   )
 })
@@ -402,18 +445,16 @@ test_that("B: fast() errors when ic.num > k", {
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
-# C1. k = 1: warning issued, no "dev" or "stab" columns
+# C1. k=1: warning issued for iClass, then ic.num validation errors
+# With k=1, ic.num must be < 1, which is impossible, so an error always fires.
+# type="FAST" skips the iClass block entirely; no warning, no dev/stab columns.
 # ---------------------------------------------------------------------------
-test_that("C: k=1 single-factor model issues a warning about 'one factor'", {
-  # Build a 1-factor version of the mock: loadings are a single column,
-  # scores are a single column.
+test_that("C: k=1, type='iClass' issues warning then errors on ic.num", {
   loads_1f <- matrix(.loads[, 1L, drop = FALSE],
                      nrow = 4L, dimnames = list(.envs, NULL))
-  scores_1f <- matrix(.scores[, 1L, drop = FALSE],
-                      nrow = 3L, dimnames = list(.genos, NULL))
   sc_long_1f <- data.frame(
     Site  = "Comp1",
-    blupr = scores_1f[, 1L],
+    blupr = .scores[, 1L],
     stringsAsFactors = FALSE
   )
   mock_1f <- list(
@@ -427,12 +468,39 @@ test_that("C: k=1 single-factor model issues a warning about 'one factor'", {
     )
   )
   local_mocked_bindings(.fa_asreml = function(...) mock_1f, .package = "biomAid")
-  expect_warning(
-    out <- fast(make_fast_model(), term = .term, type = "iClass", ic.num = 1L),
-    "one factor"
+  # warning fires first (k==1), then stop fires (ic.num >= k)
+  expect_error(
+    withCallingHandlers(
+      fastIC(make_fastIC_model(), term = .term, type = "iClass", ic.num = 1L),
+      warning = function(w) invokeRestart("muffleWarning")
+    ),
+    "ic.num.*must be between"
   )
+})
+
+test_that("C: k=1, type='FAST' returns output without dev or stab", {
+  loads_1f <- matrix(.loads[, 1L, drop = FALSE],
+                     nrow = 4L, dimnames = list(.envs, NULL))
+  sc_long_1f <- data.frame(
+    Site  = "Comp1",
+    blupr = .scores[, 1L],
+    stringsAsFactors = FALSE
+  )
+  mock_1f <- list(
+    gammas = setNames(
+      list(list("rotated loads" = loads_1f, "specific var" = .spec)),
+      .term
+    ),
+    blups = setNames(
+      list(list(scores = sc_long_1f)),
+      .term
+    )
+  )
+  local_mocked_bindings(.fa_asreml = function(...) mock_1f, .package = "biomAid")
+  out <- fastIC(make_fastIC_model(), term = .term, type = "FAST")
   expect_false("dev"  %in% names(out))
   expect_false("stab" %in% names(out))
+  expect_true("OP" %in% names(out))
 })
 
 # ---------------------------------------------------------------------------
@@ -448,10 +516,10 @@ test_that("C: vm(Genotype, ped) in term string extracts gterm='Genotype'", {
   expect_equal(gterm, "Genotype")
 })
 
-test_that("C: full term 'fa(Site,2):vm(Genotype,ped)' extracts gterm='Genotype'", {
-  term    <- "fa(Site,2):vm(Genotype,ped)"
-  parts   <- strsplit(term, ":")[[1L]]
-  fa_idx  <- grep("^fa\\s*\\(", parts)
+test_that("C: full term 'fa(Site,3):vm(Genotype,ped)' extracts gterm='Genotype'", {
+  term     <- "fa(Site,3):vm(Genotype,ped)"
+  parts    <- strsplit(term, ":")[[1L]]
+  fa_idx   <- grep("^fa\\s*\\(", parts)
   gen_part <- parts[-fa_idx]
   if (any(grepl("^vm\\s*\\(", gen_part))) {
     vm_part <- gen_part[grep("^vm\\s*\\(", gen_part)]
@@ -463,48 +531,153 @@ test_that("C: full term 'fa(Site,2):vm(Genotype,ped)' extracts gterm='Genotype'"
 })
 
 # ---------------------------------------------------------------------------
-# C3. type = "iClass" only: OP, dev, stab columns must be absent
+# C3. ide() genotype wrapping: gterm extracted correctly
+# ---------------------------------------------------------------------------
+test_that("C: ide(Genotype) in term string extracts gterm='Genotype'", {
+  gen_part <- "ide(Genotype)"
+  if (grepl("^ide\\s*\\(", gen_part)) {
+    gterm <- trimws(sub("[,)].*", "", sub("^ide\\s*\\(", "", gen_part)))
+  } else {
+    gterm <- trimws(gen_part)
+  }
+  expect_equal(gterm, "Genotype")
+})
+
+test_that("C: full term 'fa(Site,3):ide(Genotype)' extracts gterm='Genotype'", {
+  term     <- "fa(Site,3):ide(Genotype)"
+  parts    <- strsplit(term, ":")[[1L]]
+  fa_idx   <- grep("^fa\\s*\\(", parts)
+  gen_part <- parts[-fa_idx]
+  if (any(grepl("^vm\\s*\\(", gen_part))) {
+    vm_part <- gen_part[grep("^vm\\s*\\(", gen_part)]
+    gterm   <- trimws(sub(",.*", "", sub("^vm\\s*\\(", "", gsub("\\)", "", vm_part))))
+  } else if (any(grepl("^ide\\s*\\(", gen_part))) {
+    ide_part <- gen_part[grep("^ide\\s*\\(", gen_part)]
+    gterm    <- trimws(sub("[,)].*", "", sub("^ide\\s*\\(", "", ide_part)))
+  } else {
+    gterm <- trimws(gen_part)
+  }
+  expect_equal(gterm, "Genotype")
+})
+
+test_that("C: fastIC() end-to-end works with ide() wrapper in term", {
+  # Build a mock with an ide()-wrapped term key
+  ide_term <- "fa(Site, 3):ide(Genotype)"
+  mock_ide <- list(
+    gammas = setNames(
+      list(list("rotated loads" = .loads, "specific var" = .spec)),
+      ide_term
+    ),
+    blups = setNames(
+      list(list(scores = .sc_long)),
+      ide_term
+    )
+  )
+  local_mocked_bindings(.fa_asreml = function(...) mock_ide, .package = "biomAid")
+  out <- fastIC(make_fastIC_model(), term = ide_term, type = "FAST")
+  expect_true("Genotype" %in% names(out))
+  expect_true("OP" %in% names(out))
+  expect_equal(nrow(out), .t * .m)
+})
+
+# ---------------------------------------------------------------------------
+# C4. type = "iClass" only: OP, dev, stab columns must be absent
 # ---------------------------------------------------------------------------
 test_that("C: type='iClass' has no OP, dev, or stab columns", {
-  out <- run_fast("iClass")
+  out <- run_fastIC("iClass")
   expect_false("OP"   %in% names(out))
   expect_false("dev"  %in% names(out))
   expect_false("stab" %in% names(out))
-  # But iClass columns must be present
   expect_true("iclass"     %in% names(out))
   expect_true("iClassOP"   %in% names(out))
   expect_true("iClassRMSD" %in% names(out))
 })
 
 # ---------------------------------------------------------------------------
-# C4. type = "FAST" only: iclass, iClassOP, iClassRMSD columns must be absent
+# C5. type = "FAST" only: iclass, iClassOP, iClassRMSD columns must be absent
 # ---------------------------------------------------------------------------
 test_that("C: type='FAST' has no iclass, iClassOP, or iClassRMSD columns", {
-  out <- run_fast("FAST")
+  out <- run_fastIC("FAST")
   expect_false("iclass"     %in% names(out))
   expect_false("iClassOP"   %in% names(out))
   expect_false("iClassRMSD" %in% names(out))
-  # But FAST columns must be present
   expect_true("OP"   %in% names(out))
   expect_true("dev"  %in% names(out))
   expect_true("stab" %in% names(out))
 })
 
 # ---------------------------------------------------------------------------
-# C5. Sort order for type = "iClass": primary sort key is iclass
+# C6. Sort order for type = "iClass": primary sort key is iclass
 # ---------------------------------------------------------------------------
 test_that("C: type='iClass' output is sorted with iclass as primary key", {
-  out <- run_fast("iClass")
-  # All rows of one iClass must appear before the other iClass.
-  # Check that iclass values are non-decreasing (factor level order).
+  out <- run_fastIC("iClass")
   ic_int <- as.integer(out$iclass)
   expect_equal(ic_int, sort(ic_int))
 })
 
 test_that("C: within each iclass block, Site is the secondary sort key", {
-  out <- run_fast("iClass")
+  out <- run_fastIC("iClass")
   for (ic in levels(out$iclass)) {
     sub <- out[out$iclass == ic, ]
     expect_equal(as.character(sub$Site), sort(as.character(sub$Site)))
   }
+})
+
+# ===========================================================================
+# SECTION D – ic.num boundary validation
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# D1. ic.num = k-1 is the valid upper boundary (< k)
+# ---------------------------------------------------------------------------
+test_that("D: ic.num = k-1 is accepted (valid upper boundary)", {
+  # k=3, ic.num=2: should NOT error
+  expect_no_error(run_fastIC("iClass", ic.num = 2L))
+})
+
+test_that("D: ic.num = 1 is accepted (valid lower boundary)", {
+  expect_no_error(run_fastIC("iClass", ic.num = 1L))
+})
+
+# ---------------------------------------------------------------------------
+# D2. ic.num = k is now invalid
+# ---------------------------------------------------------------------------
+test_that("D: ic.num = k errors with informative message", {
+  local_mocked_bindings(.fa_asreml = function(...) .mock_sfa, .package = "biomAid")
+  expect_error(
+    fastIC(make_fastIC_model(), term = .term, type = "iClass", ic.num = 3L),
+    "kth factor must remain"
+  )
+})
+
+# ---------------------------------------------------------------------------
+# D3. ic.num = 0 is invalid
+# ---------------------------------------------------------------------------
+test_that("D: ic.num = 0 errors", {
+  local_mocked_bindings(.fa_asreml = function(...) .mock_sfa, .package = "biomAid")
+  expect_error(
+    fastIC(make_fastIC_model(), term = .term, type = "iClass", ic.num = 0L),
+    "ic.num.*must be between"
+  )
+})
+
+# ---------------------------------------------------------------------------
+# D4. ic.num validation is skipped for type = "FAST"
+# ---------------------------------------------------------------------------
+test_that("D: ic.num out of range is ignored when type = 'FAST'", {
+  # ic.num=99 is irrelevant for FAST — should not error
+  expect_no_error(run_fastIC("FAST", ic.num = 99L))
+})
+
+# ---------------------------------------------------------------------------
+# D5. iClassRMSD values are non-negative
+# ---------------------------------------------------------------------------
+test_that("D: all iClassRMSD values are >= 0", {
+  out <- run_fastIC("iClass", ic.num = 1L)
+  expect_true(all(out$iClassRMSD >= 0))
+})
+
+test_that("D: all iClassRMSD values are >= 0 at upper boundary ic.num=k-1", {
+  out <- run_fastIC("iClass", ic.num = 2L)
+  expect_true(all(out$iClassRMSD >= 0))
 })

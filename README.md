@@ -300,16 +300,18 @@ plot_padTrial(result,
 
 ---
 
-### `fast()` — Factor Analytic Selection Tools
+### `fastIC()` — Factor Analytic Selection Tools
 
 Implements the **FAST** (Smith & Cullis 2018) and **iClass** (Smith et al. 2021)
 approaches for summarising variety performance from an FA mixed model.
+The genotype factor may be wrapped in `vm(...)` or `ide(...)` for
+relationship-aware models.
 
 ```r
-fast(model, term = "fa(Site, 4):Genotype",
-     type   = c("all", "FAST", "iClass"),
-     ic.num = 2L,
-     ...)
+fastIC(model, term = "fa(Site, 4):Genotype",
+       type   = c("all", "FAST", "iClass"),
+       ic.num = 2L,
+       ...)
 ```
 
 | Argument | Description |
@@ -317,7 +319,7 @@ fast(model, term = "fa(Site, 4):Genotype",
 | `model` | An ASReml-R V4 model object |
 | `term` | FA model term string. Default `"fa(Site, 4):Genotype"` |
 | `type` | `"all"` (default), `"FAST"`, or `"iClass"` |
-| `ic.num` | Number of interaction class factors (1 to k). Default `2` |
+| `ic.num` | Number of interaction class factors. Must be < k (i.e. 1 to k − 1) so that the kth factor remains available for iClassRMSD. Default `2` |
 
 ---
 

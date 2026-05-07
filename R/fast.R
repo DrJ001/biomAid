@@ -64,14 +64,17 @@
 #'     \sum_{j\in\omega} \text{dev}_{ic}(g,j)^2}}, where
 #'     \eqn{\text{dev}_{ic}(g,j) = \widehat{\text{CVE}}(g,j) -
 #'     \sum_{r=1}^{k} \hat{\lambda}_{rj}\hat{f}_{rg}} measures
-#'     residual crossover GEI within the class.}
+#'     residual crossover GEI within the class.  The kth factor is
+#'     reserved for iClassRMSD; therefore \code{ic.num} must be strictly
+#'     less than \eqn{k}.}
 #' }
 #'
 #' @param model   An ASReml-R V4 model object containing a Factor Analytic
 #'   random term.
 #' @param term    Character string identifying the FA random term, written as
 #'   `"fa(<EnvFactor>, k):<GenotypeFactor>"`.  The genotype factor may be
-#'   wrapped in `vm(...)` for pedigree/genomic models.
+#'   wrapped in `vm(...)` (pedigree/genomic models) or `ide(...)` (identity
+#'   relationship matrix) for relationship-aware models.
 #'   Default `"fa(Site, 4):Genotype"`.
 #' @param type    Analysis type.  One of:
 #'   \describe{
@@ -80,8 +83,9 @@
 #'     \item{`"iClass"`}{Compute iClass labels, iClassOP, and iClassRMSD only.}
 #'   }
 #' @param ic.num  Integer.  Number of factors used to form iClasses and compute
-#'   iClassOP.  Must be \eqn{\le k}.  Only used when `type` includes iClass.
-#'   Default `2`.
+#'   iClassOP.  Must be strictly less than \eqn{k} (i.e. between 1 and
+#'   \eqn{k - 1}) so that the kth factor remains available for iClassRMSD.
+#'   Only used when `type` includes iClass.  Default `2`.
 #' @param ...     Additional arguments forwarded to `ASExtras4::fa.asreml()`.
 #'
 #' @return A data frame with one row per environment \eqn{\times} genotype
@@ -117,7 +121,7 @@
 #'
 #' @seealso `ASExtras4::fa.asreml()`
 #' @export
-fast <- function(model, term = "fa(Site, 4):Genotype",
+fastIC <- function(model, term = "fa(Site, 4):Genotype",
                  type   = c("all", "FAST", "iClass"),
                  ic.num = 2L,
                  ...) {
@@ -136,10 +140,13 @@ fast <- function(model, term = "fa(Site, 4):Genotype",
   # Environment factor name: extract first argument of fa(...)
   sterm <- trimws(sub(",.*", "", sub("^fa\\s*\\(", "", fa_part)))
 
-  # Genotype factor name: strip vm(...) wrapper if present
+  # Genotype factor name: strip vm(...) or ide(...) wrapper if present
   if (any(grepl("^vm\\s*\\(", gen_part))) {
     vm_part <- gen_part[grep("^vm\\s*\\(", gen_part)]
     gterm   <- trimws(sub(",.*", "", sub("^vm\\s*\\(", "", gsub("\\)", "", vm_part))))
+  } else if (any(grepl("^ide\\s*\\(", gen_part))) {
+    ide_part <- gen_part[grep("^ide\\s*\\(", gen_part)]
+    gterm    <- trimws(sub("[,)].*", "", sub("^ide\\s*\\(", "", ide_part)))
   } else {
     gterm <- trimws(gen_part)
   }
@@ -173,11 +180,12 @@ fast <- function(model, term = "fa(Site, 4):Genotype",
 
   if (do_iclass) {
     ic.num <- as.integer(ic.num)
-    if (ic.num < 1L || ic.num > k)
-      stop("'ic.num' must be between 1 and k = ", k, ".")
     if (k == 1L)
       warning("Only one factor  -- iClass with ic.num = 1 places all environments ",
               "in one class.", call. = FALSE)
+    if (ic.num < 1L || ic.num >= k)
+      stop("'ic.num' must be between 1 and k - 1 = ", k - 1L,
+           " (the kth factor must remain available for iClassRMSD).")
   }
 
   # ---- CVE via matrix multiplication ------------------------------------
@@ -187,7 +195,7 @@ fast <- function(model, term = "fa(Site, 4):Genotype",
 
   # ---- Build base long-format data frame (environment-major order) ------
   # Row i encodes: genotype geno_rep[i] in environment env_rep[i]
-  # as.vector(m*t matrix) is column-major = environment-major 
+  # as.vector(m*t matrix) is column-major = environment-major
   env_rep  <- rep(seq_len(t_envs), each = m)
   geno_rep <- rep(seq_len(m),      times = t_envs)
 
@@ -207,7 +215,8 @@ fast <- function(model, term = "fa(Site, 4):Genotype",
     out[[paste0("fitted", r)]] <- out[[paste0("score", r)]] * out[[paste0("loads", r)]]
 
   # ---- Pre-compute sum of first ic.num fitted values (needed for iClass) -
-  if (do_iclass && k > 1L) {
+  # ic.num >= 1 is guaranteed by validation above when do_iclass is TRUE
+  if (do_iclass) {
     fitted_ic_mat <- Reduce("+", lapply(seq_len(ic.num), function(r)
       outer(score_mat[, r], loads_mat[, r])))   # m * t: sum_r fitted_r for r=1:ic.num
   }
@@ -260,12 +269,9 @@ fast <- function(model, term = "fa(Site, 4):Genotype",
 
       # iClassRMSD(g, omega) = sqrt(mean_{jinomega}[dev_ic(g,j)^2])
       # dev_ic = CVE - sum_{r=1}^{ic.num} fitted_r  (residual from ic.num-factor part)
-      if (ic.num < k) {
-        dev_ic_w <- CVE_mat[, env_w, drop = FALSE] -
-                    fitted_ic_mat[, env_w, drop = FALSE]   # m * |env_w|
-      } else {
-        dev_ic_w <- matrix(0, m, length(env_w))
-      }
+      # ic.num < k - 1 is enforced above so there is always at least one remaining factor
+      dev_ic_w <- CVE_mat[, env_w, drop = FALSE] -
+                  fitted_ic_mat[, env_w, drop = FALSE]   # m * |env_w|
       iClassRMSD_mat[, w] <- sqrt(rowMeans(dev_ic_w^2))
     }
 
