@@ -406,6 +406,24 @@ The two iClasses partition sites by whether they respond positively or
 negatively to the second FA factor — a measure of crossover GEI that is
 invisible from the global rankings alone.
 
+### Variance Accounted For
+
+The `fastIC()1 function extracts information from `ASExtras4::fa.asreml()` that
+can be useful to visualise. The `"VAF"` plot below shows, for each environment,
+what proportion of the total genetic variance ($\sigma^2_j = \sum_r \hat{\lambda}_{rj}^2 + \hat{\psi}_j$) 
+is accounted for by each FA factor versus left in the specific variance.
+Each bar reaches 100%; Factor 1 (darkest blue) occupies the bottom and
+typically dominates, with Factor 2 and Factor 3 adding further layers, and
+the specific variance (grey) at the top representing unexplained genetic
+variation. The dashed horizontal line marks the overall mean proportion
+explained across all environments.
+
+```{r plot1_vaf}
+#| eval: !expr asreml_ok
+#| fig-height: 4.5
+plot_fastIC(res1, type = "VAF")
+```
+
 ### FAST: Global OP vs Stability
 
 The FAST plot provides the traditional entry point. Varieties in the
@@ -447,23 +465,6 @@ positive in one class but near-zero or negative in the other.
 #| eval: !expr asreml_ok
 #| fig-height: 7
 plot_fastIC(res1, type = "CVE")
-```
-
-### Variance Accounted For
-
-The `"VAF"` plot shows, for each environment, what proportion of the total
-genetic variance ($\sigma^2_j = \sum_r \hat{\lambda}_{rj}^2 + \hat{\psi}_j$)
-is accounted for by each FA factor versus left in the specific variance.
-Each bar reaches 100%; Factor 1 (darkest blue) occupies the bottom and
-typically dominates, with Factor 2 and Factor 3 adding further layers, and
-the specific variance (grey) at the top representing unexplained genetic
-variation. The dashed horizontal line marks the overall mean proportion
-explained across all environments.
-
-```{r plot1_vaf}
-#| eval: !expr asreml_ok
-#| fig-height: 4.5
-plot_fastIC(res1, type = "VAF")
 ```
 
 ### iClass: Within-class OP vs RMSD
@@ -670,6 +671,21 @@ With three classification factors and 25 environments, several distinct
 interaction classes emerge. Classes reflect groups of environments that share
 the same pattern of positive/negative response on all three bipolar factors.
 
+### Variance Accounted For
+
+With 25 environments and four FA factors, the VAF plot quickly reveals
+which sites are well captured by the common factor structure and which have
+substantial specific variance. Sites where the grey segment is large
+contribute variance beyond what the FA factors explain — these environments
+may warrant inspection for outlying observations or unusual site characteristics.
+The subtitle reports the overall proportion explained across all 25 sites.
+
+```{r plot2_vaf}
+#| eval: !expr asreml_ok
+#| fig-height: 4.5
+plot_fastIC(res2, type = "VAF")
+```
+
 ### FAST: Global OP vs Stability
 
 ```{r plot2_fast}
@@ -701,21 +717,6 @@ the global ranking, which motivates the iClass approach.
 #| eval: !expr asreml_ok
 #| fig-height: 8
 plot_fastIC(res2, type = "CVE")
-```
-
-### Variance Accounted For
-
-With 25 environments and four FA factors, the VAF plot quickly reveals
-which sites are well captured by the common factor structure and which have
-substantial specific variance. Sites where the grey segment is large
-contribute variance beyond what the FA factors explain — these environments
-may warrant inspection for outlying observations or unusual site characteristics.
-The subtitle reports the overall proportion explained across all 25 sites.
-
-```{r plot2_vaf}
-#| eval: !expr asreml_ok
-#| fig-height: 4.5
-plot_fastIC(res2, type = "VAF")
 ```
 
 ### iClass OP vs RMSD

@@ -14,7 +14,7 @@ utils::globalVariables(c(
   "fill_val", "xend", "yend", "corr", "row_var", "col_var",
   "stab_val", "op_val", "panel_col",
   "pct_var", "cum_pct", "factor", "total_var", "spec_pct",
-  "env_fac", "source", "proportion"
+  "env_fac", "source", "proportion", "ymin", "ymax", "x_num"
 ))
 
 #' @importFrom stats aggregate reshape as.formula
@@ -612,35 +612,38 @@ NULL
     as.character(ed[[p$sterm]])
   }
 
-  # ---- Pivot to long format for ggplot stacking ---------------------------
-  # Columns: sterm, source, proportion
+  # ---- Pivot to long format with explicit ymin/ymax ----------------------
+  # Pre-compute cumulative positions so every segment is placed exactly where
+  # it belongs regardless of near-zero proportions. Factor 1 at the bottom
+  # (ymin = 0), Specific at the top (ymax = 1).  This avoids position_stack
+  # entirely and is immune to the stacking artefacts caused by near-zero
+  # factor segments sandwiched between larger ones.
+  src_levels <- c(paste0("Factor ", seq_len(k)), "Specific")
+
   long_rows <- vector("list", nrow(vaf_env) * (k + 1L))
   idx <- 1L
   for (i in seq_len(nrow(vaf_env))) {
-    env_i <- as.character(vaf_env[[p$sterm]][i])
-    for (r in seq_len(k)) {
+    env_i   <- as.character(vaf_env[[p$sterm]][i])
+    props   <- c(
+      unlist(vaf_env[i, factor_cols, drop = TRUE]),
+      Specific = vaf_env$Specific[i]
+    )
+    cumul   <- c(0, cumsum(props))  # length k+2: 0, after F1, after F2, ..., after Specific
+    for (s in seq_along(src_levels)) {
       long_rows[[idx]] <- data.frame(
         env_fac    = env_i,
-        source     = paste0("Factor ", r),
-        proportion = vaf_env[[factor_cols[r]]][i],
+        source     = src_levels[s],
+        ymin       = cumul[s],
+        ymax       = cumul[s + 1L],
         stringsAsFactors = FALSE
       )
       idx <- idx + 1L
     }
-    long_rows[[idx]] <- data.frame(
-      env_fac    = env_i,
-      source     = "Specific",
-      proportion = vaf_env$Specific[i],
-      stringsAsFactors = FALSE
-    )
-    idx <- idx + 1L
   }
   long_df <- do.call(rbind, long_rows)
 
-  # Factor levels: Factor 1 at bottom, Specific at top
-  src_levels         <- c(paste0("Factor ", seq_len(k)), "Specific")
-  long_df$env_fac    <- factor(long_df$env_fac,    levels = env_ord)
-  long_df$source     <- factor(long_df$source,     levels = src_levels)
+  long_df$env_fac <- factor(long_df$env_fac, levels = env_ord)
+  long_df$source  <- factor(long_df$source,  levels = src_levels)
 
   # ---- Colour palette: sequential blues for factors, grey for specific ----
   # Use a blue-to-teal progression for factors
@@ -667,15 +670,22 @@ NULL
   overall_explained <- 1 - vaf_summ$pct_var[vaf_summ$factor == "Specific"]
 
   # ---- Build plot ---------------------------------------------------------
-  plt <- ggplot2::ggplot(
-    long_df,
-    ggplot2::aes(x = env_fac, y = proportion, fill = source)
-  ) +
-    ggplot2::geom_col(
-      width    = 0.82,
-      position = ggplot2::position_stack(reverse = FALSE),
-      colour   = "white",
-      linewidth = 0.25
+  # Use geom_rect with explicit xmin/xmax/ymin/ymax so every segment is
+  # placed exactly right — no position_stack ambiguity.
+  # x is a factor so numeric positions 1, 2, ... map to its levels.
+  long_df$x_num <- as.integer(long_df$env_fac)
+  bar_w <- 0.41   # half-width of each bar (total width = 0.82)
+
+  plt <- ggplot2::ggplot(long_df) +
+    ggplot2::geom_rect(
+      ggplot2::aes(
+        xmin = x_num - bar_w,
+        xmax = x_num + bar_w,
+        ymin = ymin,
+        ymax = ymax,
+        fill = source
+      ),
+      colour = NA
     ) +
     ggplot2::geom_hline(
       yintercept = overall_explained,
@@ -698,11 +708,16 @@ NULL
       name   = "Source",
       guide  = ggplot2::guide_legend(reverse = TRUE)
     ) +
+    ggplot2::scale_x_continuous(
+      breaks = seq_along(env_ord),
+      labels = env_ord,
+      expand = ggplot2::expansion(add = 0.6)
+    ) +
     ggplot2::scale_y_continuous(
       labels = scales::percent_format(accuracy = 1),
-      limits = c(0, 1),
       expand = ggplot2::expansion(mult = c(0, 0.04))
     ) +
+    ggplot2::coord_cartesian(ylim = c(0, 1)) +
     ggplot2::labs(
       x        = p$sterm,
       y        = "Proportion of genetic variance",

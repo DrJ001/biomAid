@@ -207,13 +207,18 @@ fastIC <- function(model, term = "fa(Site, 4):Genotype",
   CVE_mat <- score_mat %*% t(loads_mat)        # m × t
 
   # ---- VAF (Variance Accounted For) per environment --------------------
-  # total genetic variance for env j = sum of squared loadings + specific var
-  loads_sq   <- loads_mat^2                              # t × k
-  total_var  <- rowSums(loads_sq) + spec_var             # length t
+  # total genetic variance for env j = sum of squared loadings + specific var.
+  # Clamp spec_var to >= 0 for VAF only: boundary estimates from ASReml-R can
+  # be exactly 0 or fractionally negative (numerical noise after rotation),
+  # which would produce negative proportions and whitespace in the plot.
+  # The original spec_var values are preserved in the main data frame (spec.var).
+  loads_sq      <- loads_mat^2                           # t × k
+  spec_var_vaf  <- pmax(0, spec_var)                     # clamped copy for VAF
+  total_var     <- rowSums(loads_sq) + spec_var_vaf      # length t
 
   # Per-environment, per-factor proportion of variance explained
   vaf_mat    <- loads_sq / total_var                     # t × k  (proportions)
-  spec_pct   <- spec_var / total_var                     # length t
+  spec_pct   <- spec_var_vaf / total_var                 # length t
 
   # env-level VAF data frame: one row per environment
   vaf_env_df        <- as.data.frame(vaf_mat)
@@ -227,8 +232,8 @@ fastIC <- function(model, term = "fa(Site, 4):Genotype",
 
   # Overall VAF summary: proportion of total genetic variance across all envs
   total_all  <- sum(total_var)
-  pct_factor <- colSums(loads_sq) / total_all            # length k
-  pct_spec   <- sum(spec_var)     / total_all
+  pct_factor <- colSums(loads_sq)   / total_all          # length k
+  pct_spec   <- sum(spec_var_vaf)   / total_all
 
   vaf_summary <- data.frame(
     factor  = c(paste0("Factor ", seq_len(k)), "Specific"),
