@@ -20,6 +20,8 @@ Depends:
 Imports:
     ggplot2,
     knitr,
+    rlang,
+    scales,
     stats,
     utils
 Suggests:
@@ -31,6 +33,8 @@ Suggests:
     jsonlite,
     htmlwidgets,
     pkgdown,
+    ggrepel,
+    patchwork,
     asreml,
     ASExtras4
 Config/testthat/edition: 3
