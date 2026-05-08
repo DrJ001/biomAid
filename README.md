@@ -6,10 +6,12 @@
 [![Codecov](https://app.codecov.io/gh/DrJ001/biomAid/graph/badge.svg)](https://app.codecov.io/gh/DrJ001/biomAid)
 [![R >= 4.1](https://img.shields.io/badge/R-%3E%3D4.1-blue)](https://cran.r-project.org/)
 
+---
+
+<img src="man/figures/biomAid_logo.png" align="right" height="110" alt="biomAid"/>
+
 Biometric tools to support the analysis of comparative experiment data fitted
 with **ASReml-R V4** mixed models. Watch this space, there are a lot more functions coming.
-
-<br clear="right"/>
 
 ---
 
