@@ -9,7 +9,7 @@
 <img src="man/figures/biomAid_logo.png" align="right" height="150" alt="biomAid"/>
 
 Welcome to bioMaid! This package has been specifically built to provide
-biometricians with flexible functions for intepreting and further modelling of results
+biometricians with flexible functions for interpreting and further modelling of results
 from complex linear mixed models such **ASReml-R V4** mixed models. Watch this
 space, there are a lot more functions coming. 
 
