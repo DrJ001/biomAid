@@ -62,7 +62,6 @@ local({
     score2   = scores[geno_rep, 2L],
     score3   = scores[geno_rep, 3L],
     CVE      = CVE_mat[cbind(geno_rep, env_rep)],
-    VE       = CVE_mat[cbind(geno_rep, env_rep)] + spec_var[env_rep],
     stringsAsFactors = FALSE
   )
 
@@ -103,6 +102,32 @@ local({
 
   df <- df[order(df$iclass, df$Site, df$Genotype), ]
   rownames(df) <- NULL
+
+  # ---- VAF attributes (mirrors fastIC() computation) --------------------
+  loads_sq  <- loads^2                              # t x k
+  total_var <- rowSums(loads_sq) + spec_var         # length t
+  vaf_mat   <- loads_sq / total_var                 # t x k proportions
+
+  vaf_env_df        <- as.data.frame(vaf_mat)
+  names(vaf_env_df) <- paste0("Factor", 1:k)
+  vaf_env_df$Site      <- envs
+  vaf_env_df$Specific  <- spec_var / total_var
+  vaf_env_df$total_var <- total_var
+  vaf_env_df <- vaf_env_df[, c("Site", paste0("Factor", 1:k), "Specific", "total_var")]
+  rownames(vaf_env_df) <- NULL
+
+  total_all  <- sum(total_var)
+  pct_factor <- colSums(loads_sq) / total_all
+  pct_spec   <- sum(spec_var) / total_all
+  vaf_summ   <- data.frame(
+    factor  = c(paste0("Factor ", 1:k), "Specific"),
+    pct_var = c(pct_factor, pct_spec),
+    stringsAsFactors = FALSE
+  )
+  vaf_summ$cum_pct <- cumsum(vaf_summ$pct_var)
+
+  attr(df, "vaf_env")     <- vaf_env_df
+  attr(df, "vaf_summary") <- vaf_summ
 
   # Assign to parent env so tests can use .pfi_res
   .pfi_res <<- df
@@ -166,6 +191,14 @@ test_that("B: removed type 'winner' is rejected", {
   expect_error(plot_fastIC(.pfi_res, type = "winner"), "should be one of")
 })
 
+test_that("B: old type 'dev' is rejected (removed)", {
+  expect_error(plot_fastIC(.pfi_res, type = "dev"), "should be one of")
+})
+
+test_that("B: old type 'VE' is rejected (replaced by 'VAF')", {
+  expect_error(plot_fastIC(.pfi_res, type = "VE"), "should be one of")
+})
+
 # ===========================================================================
 # SECTION C – Precondition checks
 # ===========================================================================
@@ -182,9 +215,15 @@ test_that("C: 'fast' errors when global_stab is absent", {
   expect_error(plot_fastIC(res_no_stab, type = "fast"), "global_stab")
 })
 
-test_that("C: 'dev' errors when global_dev is absent", {
-  res_no_dev <- .pfi_res[, setdiff(names(.pfi_res), "global_dev")]
-  expect_error(plot_fastIC(res_no_dev, type = "dev"), "global_dev")
+test_that("C: 'VAF' works when vaf_env attribute is present", {
+  p <- plot_fastIC(.pfi_res, type = "VAF")
+  expect_true(inherits(p, "ggplot"))
+})
+
+test_that("C: 'VAF' errors informatively when vaf_env attribute is absent", {
+  res_no_vaf <- .pfi_res
+  attr(res_no_vaf, "vaf_env") <- NULL
+  expect_error(plot_fastIC(res_no_vaf, type = "VAF"), "vaf_env")
 })
 
 test_that("C: 'iclass' errors when iclass column is absent", {
@@ -227,8 +266,8 @@ test_that("D: 'CVE' returns a ggplot", {
   expect_s3_class(p, "ggplot")
 })
 
-test_that("D: 'dev' returns a ggplot", {
-  p <- plot_fastIC(.pfi_res, type = "dev")
+test_that("D: 'VAF' returns a ggplot", {
+  p <- plot_fastIC(.pfi_res, type = "VAF")
   expect_s3_class(p, "ggplot")
 })
 
@@ -248,7 +287,7 @@ test_that("D: 'OP.pairs' returns a ggplot", {
 })
 
 test_that("D: return_data = TRUE returns a named list with $plot and $data", {
-  for (typ in c("fast", "biplot", "CVE", "dev", "iclass", "OP.variety", "OP.pairs")) {
+  for (typ in c("fast", "biplot", "CVE", "VAF", "iclass", "OP.variety", "OP.pairs")) {
     out <- plot_fastIC(.pfi_res, type = typ, return_data = TRUE)
     expect_type(out, "list")
     expect_true("plot" %in% names(out), label = paste(typ, "has $plot"))
@@ -293,10 +332,37 @@ test_that("E: 'CVE' return_data is a wide matrix (genotype rows, env columns)", 
   expect_equal(ncol(out$data), n_envs + 1L)
 })
 
-test_that("E: 'dev' return_data is a wide matrix with correct dimensions", {
-  out <- plot_fastIC(.pfi_res, type = "dev", return_data = TRUE)
+test_that("E: 'VAF' return_data is a list with $env and $summary", {
+  out <- plot_fastIC(.pfi_res, type = "VAF", return_data = TRUE)
+  expect_type(out$data, "list")
+  expect_true("env"     %in% names(out$data))
+  expect_true("summary" %in% names(out$data))
+})
+
+test_that("E: 'VAF' $data$env has one row per environment", {
+  out    <- plot_fastIC(.pfi_res, type = "VAF", return_data = TRUE)
   n_envs <- length(unique(.pfi_res$Site))
-  expect_equal(ncol(out$data), n_envs + 1L)
+  expect_equal(nrow(out$data$env), n_envs)
+})
+
+test_that("E: 'VAF' $data$summary has k+1 rows (factors + Specific)", {
+  out <- plot_fastIC(.pfi_res, type = "VAF", return_data = TRUE)
+  p   <- biomAid:::.pfi_parse(.pfi_res)
+  expect_equal(nrow(out$data$summary), p$k + 1L)
+})
+
+test_that("E: 'VAF' proportions sum to ~1 per environment", {
+  out     <- plot_fastIC(.pfi_res, type = "VAF", return_data = TRUE)
+  env_df  <- out$data$env
+  p       <- biomAid:::.pfi_parse(.pfi_res)
+  fac_cols <- paste0("Factor", seq_len(p$k))
+  row_sums <- rowSums(env_df[, c(fac_cols, "Specific"), drop = FALSE])
+  expect_true(all(abs(row_sums - 1.0) < 1e-10))
+})
+
+test_that("E: 'VAF' $data$summary pct_var sums to ~1", {
+  out <- plot_fastIC(.pfi_res, type = "VAF", return_data = TRUE)
+  expect_equal(sum(out$data$summary$pct_var), 1.0, tolerance = 1e-10)
 })
 
 test_that("E: 'iclass' return_data has iclass, iClassOP, iClassRMSD columns", {
@@ -350,7 +416,7 @@ test_that("F: highlight = named character vector is accepted", {
 })
 
 test_that("F: highlight = 'default' produces a ggplot without error", {
-  for (typ in c("fast", "biplot", "CVE", "dev", "iclass", "OP.variety", "OP.pairs")) {
+  for (typ in c("fast", "biplot", "CVE", "VAF", "iclass", "OP.variety", "OP.pairs")) {
     p <- plot_fastIC(.pfi_res, type = typ, highlight = "default")
     expect_true(inherits(p, "ggplot"), label = paste(typ, "default highlight is ggplot"))
   }
@@ -382,11 +448,10 @@ test_that("G: .pfi_parse() counts k = 3 factors", {
   expect_equal(p$k, 3L)
 })
 
-test_that("G: .pfi_parse() sets has_fast, has_stab, has_dev, has_iclass TRUE", {
+test_that("G: .pfi_parse() sets has_fast, has_stab, has_iclass TRUE", {
   p <- biomAid:::.pfi_parse(.pfi_res)
   expect_true(p$has_fast)
   expect_true(p$has_stab)
-  expect_true(p$has_dev)
   expect_true(p$has_iclass)
 })
 
@@ -394,6 +459,17 @@ test_that("G: .pfi_parse() sets has_fast FALSE when global_op absent", {
   res2 <- .pfi_res[, setdiff(names(.pfi_res), "global_op")]
   p    <- biomAid:::.pfi_parse(res2)
   expect_false(p$has_fast)
+})
+
+test_that("G: 'vaf_env' attribute present — 'VAF' type can proceed", {
+  expect_false(is.null(attr(.pfi_res, "vaf_env")))
+})
+
+test_that("G: 'vaf_summary' has 'factor', 'pct_var', 'cum_pct' columns", {
+  summ <- attr(.pfi_res, "vaf_summary")
+  expect_true("factor"  %in% names(summ))
+  expect_true("pct_var" %in% names(summ))
+  expect_true("cum_pct" %in% names(summ))
 })
 
 test_that("G: .pfi_geno_data() returns one row per genotype", {

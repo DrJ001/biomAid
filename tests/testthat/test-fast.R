@@ -340,7 +340,7 @@ test_that("B: fastIC() returns 12 rows and all expected columns", {
   expected_cols <- c("Site", "Genotype",
                      "loads1", "loads2", "loads3", "spec.var",
                      "score1", "score2", "score3",
-                     "CVE", "VE",
+                     "CVE",
                      "fitted1", "fitted2", "fitted3",
                      "global_op", "global_dev", "global_stab",
                      "iclass", "iClassOP", "iClassRMSD")
@@ -357,11 +357,28 @@ test_that("B: CVE == fitted1 + fitted2 + fitted3", {
 })
 
 # ---------------------------------------------------------------------------
-# B3. VE == CVE + spec.var
+# B3. VAF attributes are attached to the result
 # ---------------------------------------------------------------------------
-test_that("B: VE == CVE + spec.var", {
+test_that("B: fastIC() result has vaf_env and vaf_summary attributes", {
   out <- run_fastIC()
-  expect_equal(out$VE, out$CVE + out$spec.var, tolerance = 1e-12)
+  expect_false(is.null(attr(out, "vaf_env")))
+  expect_false(is.null(attr(out, "vaf_summary")))
+})
+
+test_that("B: vaf_env has one row per environment with proportions summing to 1", {
+  out     <- run_fastIC()
+  vaf_env <- attr(out, "vaf_env")
+  expect_equal(nrow(vaf_env), length(.envs))
+  fac_cols <- paste0("Factor", 1:.k)
+  row_sums <- rowSums(vaf_env[, c(fac_cols, "Specific"), drop = FALSE])
+  expect_true(all(abs(row_sums - 1.0) < 1e-10))
+})
+
+test_that("B: vaf_summary has k+1 rows and pct_var sums to 1", {
+  out  <- run_fastIC()
+  summ <- attr(out, "vaf_summary")
+  expect_equal(nrow(summ), .k + 1L)
+  expect_equal(sum(summ$pct_var), 1.0, tolerance = 1e-10)
 })
 
 # ---------------------------------------------------------------------------

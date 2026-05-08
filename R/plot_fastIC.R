@@ -6,13 +6,15 @@
 utils::globalVariables(c(
   "global_op", "global_stab", "global_dev",
   "highlighted", "score1", "score2", "loads1", "loads2",
-  "iclass", "iClassOP", "iClassRMSD", "CVE", "VE",
+  "iclass", "iClassOP", "iClassRMSD", "CVE",
   "x_val", "y_val", "x_class", "y_class", "winner", "winning_CVE",
   "env_ord", "geno_ord", "mean_op", "label_var", "arrow_x", "arrow_y",
   "spec.var", "fitted1", "mean_iClassOP", "iclass_lbl",
   "env_label", "geno_label", "ic_label", "panel_x", "panel_y",
   "fill_val", "xend", "yend", "corr", "row_var", "col_var",
-  "stab_val", "op_val", "panel_col"
+  "stab_val", "op_val", "panel_col",
+  "pct_var", "cum_pct", "factor", "total_var", "spec_pct",
+  "env_fac", "source", "proportion"
 ))
 
 #' @importFrom stats aggregate reshape as.formula
@@ -53,7 +55,6 @@ NULL
     fitted_cols = fitted_cols,
     has_fast    = "global_op"   %in% nms,
     has_stab    = "global_stab" %in% nms,
-    has_dev     = "global_dev"  %in% nms,
     has_iclass  = "iclass"      %in% nms
   )
 }
@@ -564,7 +565,7 @@ NULL
   list(plot = plt, data = list(geno = gd, envs = ed_sc))
 }
 
-# ---- "CVE" and "dev" ---------------------------------------------------
+# ---- "CVE" -------------------------------------------------------------
 
 #' @noRd
 .pfi_plot_CVE <- function(res, p, theme) {
@@ -578,16 +579,145 @@ NULL
   )
 }
 
+# ---- "VAF" -------------------------------------------------------------
+
+#' Build the Variance Accounted For stacked bar chart
+#'
+#' @param res   Long-format data frame returned by fastIC().
+#' @param p     Metadata list from .pfi_parse().
+#' @param theme ggplot2 theme object.
+#' @return Named list with $plot (ggplot) and $data (list with $env and $summary).
 #' @noRd
-.pfi_plot_dev <- function(res, p, theme) {
-  .pfi_heatmap(
-    res      = res,
-    p        = p,
-    fill_col = "global_dev",
-    fill_lab = "dev",
-    title    = "Residual deviation (dev) \u2014 GEI beyond Factor 1",
-    theme    = theme
+.pfi_plot_VAF <- function(res, p, theme) {
+
+  vaf_env  <- attr(res, "vaf_env")
+  vaf_summ <- attr(res, "vaf_summary")
+
+  if (is.null(vaf_env) || is.null(vaf_summ))
+    stop("plot_fastIC(): VAF data not found. ",
+         "Please re-run fastIC() to generate the 'vaf_env' and 'vaf_summary' attributes.",
+         call. = FALSE)
+
+  k          <- p$k
+  factor_cols <- paste0("Factor", seq_len(k))
+
+  # ---- Order environments: by iclass then loads1 descending (matches CVE) --
+  env_ord <- if (p$has_iclass && "iclass" %in% names(res)) {
+    ed <- unique(res[, c(p$sterm, "loads1", "iclass"), drop = FALSE])
+    ed <- ed[order(ed$iclass, -ed$loads1), ]
+    as.character(ed[[p$sterm]])
+  } else {
+    ed <- unique(res[, c(p$sterm, "loads1"), drop = FALSE])
+    ed <- ed[order(-ed$loads1), ]
+    as.character(ed[[p$sterm]])
+  }
+
+  # ---- Pivot to long format for ggplot stacking ---------------------------
+  # Columns: sterm, source, proportion
+  long_rows <- vector("list", nrow(vaf_env) * (k + 1L))
+  idx <- 1L
+  for (i in seq_len(nrow(vaf_env))) {
+    env_i <- as.character(vaf_env[[p$sterm]][i])
+    for (r in seq_len(k)) {
+      long_rows[[idx]] <- data.frame(
+        env_fac    = env_i,
+        source     = paste0("Factor ", r),
+        proportion = vaf_env[[factor_cols[r]]][i],
+        stringsAsFactors = FALSE
+      )
+      idx <- idx + 1L
+    }
+    long_rows[[idx]] <- data.frame(
+      env_fac    = env_i,
+      source     = "Specific",
+      proportion = vaf_env$Specific[i],
+      stringsAsFactors = FALSE
+    )
+    idx <- idx + 1L
+  }
+  long_df <- do.call(rbind, long_rows)
+
+  # Factor levels: Factor 1 at bottom, Specific at top
+  src_levels         <- c(paste0("Factor ", seq_len(k)), "Specific")
+  long_df$env_fac    <- factor(long_df$env_fac,    levels = env_ord)
+  long_df$source     <- factor(long_df$source,     levels = src_levels)
+
+  # ---- Colour palette: sequential blues for factors, grey for specific ----
+  # Use a blue-to-teal progression for factors
+  if (k == 1L) {
+    factor_cols_pal <- "#2166AC"
+  } else {
+    # Interpolate from steel blue to teal across k factors
+    factor_cols_pal <- grDevices::colorRampPalette(
+      c("#2166AC", "#41B6C4")
+    )(k)
+  }
+  pal <- c(factor_cols_pal, "grey75")
+  names(pal) <- src_levels
+
+  # ---- Overall % explained label for subtitle ----------------------------
+  pct_explained <- round(100 * (1 - vaf_summ$pct_var[vaf_summ$factor == "Specific"]), 1)
+  pct_specific  <- round(100 * vaf_summ$pct_var[vaf_summ$factor == "Specific"], 1)
+  subtitle_txt  <- sprintf(
+    "Overall: %.1f%% explained by FA factors  |  %.1f%% specific (unexplained)",
+    pct_explained, pct_specific
   )
+
+  # ---- Overall mean explained line (1 - overall specific proportion) -----
+  overall_explained <- 1 - vaf_summ$pct_var[vaf_summ$factor == "Specific"]
+
+  # ---- Build plot ---------------------------------------------------------
+  plt <- ggplot2::ggplot(
+    long_df,
+    ggplot2::aes(x = env_fac, y = proportion, fill = source)
+  ) +
+    ggplot2::geom_col(
+      width    = 0.82,
+      position = ggplot2::position_stack(reverse = FALSE),
+      colour   = "white",
+      linewidth = 0.25
+    ) +
+    ggplot2::geom_hline(
+      yintercept = overall_explained,
+      linetype   = "dashed",
+      colour     = "grey30",
+      linewidth  = 0.5
+    ) +
+    ggplot2::annotate(
+      "text",
+      x      = length(env_ord) + 0.4,
+      y      = overall_explained,
+      label  = sprintf("Mean\n%.0f%%", 100 * overall_explained),
+      hjust  = 0,
+      vjust  = 0.5,
+      size   = 2.8,
+      colour = "grey30"
+    ) +
+    ggplot2::scale_fill_manual(
+      values = pal,
+      name   = "Source",
+      guide  = ggplot2::guide_legend(reverse = TRUE)
+    ) +
+    ggplot2::scale_y_continuous(
+      labels = scales::percent_format(accuracy = 1),
+      limits = c(0, 1),
+      expand = ggplot2::expansion(mult = c(0, 0.04))
+    ) +
+    ggplot2::labs(
+      x        = p$sterm,
+      y        = "Proportion of genetic variance",
+      title    = "Variance Accounted For (VAF) by FA factors per environment",
+      subtitle = subtitle_txt
+    ) +
+    theme +
+    ggplot2::theme(
+      axis.text.x      = ggplot2::element_text(angle = 45, hjust = 1, size = 7),
+      plot.subtitle    = ggplot2::element_text(size = 8, colour = "grey40"),
+      legend.key.size  = ggplot2::unit(0.45, "cm"),
+      plot.margin      = ggplot2::margin(5, 40, 5, 5)
+    )
+
+  list(plot = plt, data = list(env = vaf_env, summary = vaf_summ))
 }
 
 # ---- "iclass" ----------------------------------------------------------
@@ -839,9 +969,12 @@ NULL
   use_pw <- requireNamespace("patchwork", quietly = TRUE)
 
   if (use_pw) {
-    # Build individual panel plots and assemble
+    # Build individual panel plots and assemble.
+    # Layout is (n_ic-1) x (n_ic-1); lower-triangular panels hold real data,
+    # diagonal and upper-triangular are plot_spacer() (true empty space).
+    # y-axis shown only in leftmost column (j_idx == 1).
+    # x-axis shown only in bottom row    (i_idx == n_ic).
     panel_list <- vector("list", (n_ic - 1L) * (n_ic - 1L))
-    panel_mat  <- matrix(seq_len((n_ic - 1L)^2), n_ic - 1L, n_ic - 1L)
 
     for (i_idx in seq(2L, n_ic)) {
       for (j_idx in seq(1L, n_ic - 1L)) {
@@ -849,7 +982,7 @@ NULL
         p_idx <- (i_idx - 2L) * (n_ic - 1L) + j_idx
 
         if (j_idx < i_idx) {
-          # Lower-triangular: real data
+          # ---- Lower-triangular: real data panel --------------------------
           sub_reg <- pairs_reg[
             pairs_reg$y_class == ic_levels[i_idx] &
             pairs_reg$x_class == ic_levels[j_idx], , drop = FALSE
@@ -889,40 +1022,41 @@ NULL
               )
           }
 
+          # Axis labels only on border panels
+          x_lab <- if (i_idx == n_ic)  ic_levels[j_idx]  else ""
+          y_lab <- if (j_idx == 1L)    ic_levels[i_idx]  else ""
+
           pp <- pp +
-            ggplot2::labs(
-              x = paste("iClassOP:", ic_levels[j_idx]),
-              y = paste("iClassOP:", ic_levels[i_idx])
-            ) +
+            ggplot2::labs(x = x_lab, y = y_lab) +
             theme
 
-        } else if (j_idx == i_idx) {
-          # On-diagonal: blank
-          pp <- ggplot2::ggplot() +
-            ggplot2::theme_void() +
-            ggplot2::theme(
-              panel.background = ggplot2::element_rect(fill = "grey95",
-                                                        colour = NA)
+          # Strip axis text/ticks from non-border panels to maximise space
+          if (j_idx > 1L)
+            pp <- pp + ggplot2::theme(
+              axis.text.y  = ggplot2::element_blank(),
+              axis.ticks.y = ggplot2::element_blank()
             )
-        } else {
-          # Upper-triangular: blank
-          pp <- ggplot2::ggplot() +
-            ggplot2::theme_void() +
-            ggplot2::theme(
-              panel.background = ggplot2::element_rect(fill = "grey95",
-                                                        colour = NA)
+          if (i_idx < n_ic)
+            pp <- pp + ggplot2::theme(
+              axis.text.x  = ggplot2::element_blank(),
+              axis.ticks.x = ggplot2::element_blank()
             )
-        }
 
-        panel_list[[p_idx]] <- pp
+          panel_list[[p_idx]] <- pp
+
+        } else {
+          # ---- Diagonal or upper-triangular: true empty space -------------
+          panel_list[[p_idx]] <- patchwork::plot_spacer()
+        }
       }
     }
 
-    plt <- patchwork::wrap_plots(panel_list,
-                                  ncol = n_ic - 1L) +
+    plt <- patchwork::wrap_plots(panel_list, ncol = n_ic - 1L) +
+      patchwork::plot_layout(guides = "collect") +
       patchwork::plot_annotation(
         title = "Pairs plot of iClassOP across interaction classes"
       )
+    plt <- plt & ggplot2::theme(legend.position = "right")
 
   } else {
     # Fallback: facet_grid on lower-triangular subset
@@ -1000,8 +1134,13 @@ NULL
 #'   \item{`"CVE"`}{Diverging-colour heatmap of the Common Variety Effect
 #'     (genotype \eqn{\times} environment), ordered by iClass then
 #'     first-factor loading.}
-#'   \item{`"dev"`}{As `"CVE"` but shows the residual global deviation beyond
-#'     Factor 1.  Requires k \eqn{>} 1.}
+#'   \item{`"VAF"`}{Stacked 100\% bar chart of Variance Accounted For per
+#'     environment.  Each bar is subdivided by FA factor (blues, bottom to top)
+#'     plus specific variance (grey, top).  A dashed line marks the
+#'     overall (across-environment) mean proportion explained.  Environments
+#'     are ordered to match the `"CVE"` heatmap (iClass then first-factor
+#'     loading descending).  Requires the `vaf_env` attribute produced by
+#'     [fastIC()].}
 #'   \item{`"iclass"`}{Scatter of within-class OP vs within-class RMSD,
 #'     faceted by iClass.}
 #'   \item{`"OP.pairs"`}{Lower-triangular pairs plot of iClassOP values across
@@ -1015,9 +1154,10 @@ NULL
 #' When `highlight = "default"` the function automatically selects genotypes
 #' to annotate based on the plot type:
 #' \itemize{
-#'   \item For `"fast"`, `"biplot"`, `"CVE"`, `"dev"`: top `n_highlight` by
+#'   \item For `"fast"`, `"biplot"`, `"CVE"`: top `n_highlight` by
 #'     `global_op` \emph{and} top `n_highlight` by instability (`global_stab`),
 #'     deduplicated.
+#'   \item For `"VAF"`: highlighting is not applicable (environment-level plot).
 #'   \item For `"iclass"`, `"OP.pairs"`, `"OP.variety"`: top `n_highlight` by
 #'     mean iClassOP across classes (or by `global_op` as fallback).
 #' }
@@ -1032,7 +1172,7 @@ NULL
 #'
 #' @param res         A long-format data frame returned by [fastIC()].
 #' @param type        Character; the visualisation to produce. One of
-#'   `"fast"` (default), `"biplot"`, `"CVE"`, `"dev"`, `"iclass"`,
+#'   `"fast"` (default), `"biplot"`, `"CVE"`, `"VAF"`, `"iclass"`,
 #'   `"OP.pairs"`, `"OP.variety"`.  May be abbreviated.
 #' @param highlight   Controls variety annotation. One of `"default"`
 #'   (automatic; see Details), a character vector of variety names, or `NULL`
@@ -1067,6 +1207,9 @@ NULL
 #' out <- plot_fastIC(res, type = "CVE", return_data = TRUE)
 #' head(out$data)
 #'
+#' # VAF stacked bar chart
+#' plot_fastIC(res, type = "VAF")
+#'
 #' # iClassOP trajectory for top 5 varieties
 #' plot_fastIC(res, type = "OP.variety", n_highlight = 5L)
 #'
@@ -1076,7 +1219,7 @@ NULL
 #'
 #' @export
 plot_fastIC <- function(res,
-                        type        = c("fast", "biplot", "CVE", "dev",
+                        type        = c("fast", "biplot", "CVE", "VAF",
                                         "iclass", "OP.pairs", "OP.variety"),
                         highlight   = "default",
                         n_highlight = 3L,
@@ -1118,16 +1261,17 @@ plot_fastIC <- function(res,
     stop("plot_fastIC(): type = 'biplot' requires k >= 2 factors; ",
          "only ", p$k, " factor(s) found.")
 
-  if (type == "dev") {
-    if (!p$has_dev)
-      stop("plot_fastIC(): 'global_dev' column not found; ",
-           "re-run fastIC() with k > 1.")
-  }
-
   if (type %in% c("iclass", "OP.variety", "OP.pairs")) {
     if (!p$has_iclass)
       stop("plot_fastIC(): 'iclass' column not found. ",
            "Was 'res' produced by fastIC()?")
+  }
+
+  if (type == "VAF") {
+    if (is.null(attr(res, "vaf_env")))
+      stop("plot_fastIC(): VAF data not found. ",
+           "Please re-run fastIC() to generate the 'vaf_env' attribute.",
+           call. = FALSE)
   }
 
   # ------------------------------------------------------------------ #
@@ -1144,7 +1288,7 @@ plot_fastIC <- function(res,
     fast       = .pfi_plot_fast(      res, p, hl_names, theme),
     biplot     = .pfi_plot_biplot(    res, p, hl_names, theme),
     CVE        = .pfi_plot_CVE(       res, p,           theme),
-    dev        = .pfi_plot_dev(       res, p,           theme),
+    VAF        = .pfi_plot_VAF(       res, p,           theme),
     iclass     = .pfi_plot_iclass(    res, p, hl_names, theme),
     OP.pairs   = .pfi_plot_op_pairs(  res, p, hl_names, theme),
     OP.variety = .pfi_plot_op_variety(res, p, hl_names, theme)

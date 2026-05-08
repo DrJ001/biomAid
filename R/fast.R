@@ -15,8 +15,10 @@
 #'   \widehat{\text{CVE}}(g,j) = \sum_{r=1}^{k} \hat{\lambda}_{rj}\,\hat{f}_{rg}
 #' }
 #'
-#' and the **Variety Effect** (VE) adds the environment-specific variance:
-#' \eqn{\widehat{\text{VE}}(g,j) = \widehat{\text{CVE}}(g,j) + \hat{\psi}_j}.
+#' The **Variance Accounted For** (VAF) by each factor in environment \eqn{j}
+#' is \eqn{\hat{\lambda}_{rj}^2 / (\sum_r \hat{\lambda}_{rj}^2 + \hat{\psi}_j)},
+#' and the specific variance accounts for the remainder; see [plot_fastIC()] with
+#' `type = "VAF"` for a per-environment visualisation.
 #'
 #' @section Unified framework:
 #' FAST and iClass are treated as a single framework.  FAST global metrics
@@ -104,7 +106,6 @@
 #'     \item{`fitted1`, ..., `fittedK`}{Per-factor contributions to CVE:
 #'       \eqn{\hat{\lambda}_{rj}\hat{f}_{rg}}.}
 #'     \item{`CVE`}{Common Variety Effect (sum of all fitted values).}
-#'     \item{`VE`}{Total Variety Effect: `CVE + spec.var`.}
 #'     \item{`global_op`}{Global Overall Performance (FAST): repeated for
 #'       every environment row of a genotype.}
 #'     \item{`global_dev`}{Residual from first-factor regression (FAST):
@@ -116,6 +117,18 @@
 #'     \item{`iclass`}{Sign-pattern iClass label for the environment.}
 #'     \item{`iClassOP`}{Within-iClass Overall Performance for the genotype.}
 #'     \item{`iClassRMSD`}{Within-iClass RMSD for the genotype.}
+#'   }
+#'
+#'   Two attributes are attached to the returned data frame for use by
+#'   [plot_fastIC()] with `type = "VAF"`:
+#'   \describe{
+#'     \item{`vaf_env`}{Data frame with one row per environment containing the
+#'       proportion of genetic variance accounted for by each factor
+#'       (`Factor1`, ..., `FactorK`) and the specific variance (`Specific`),
+#'       plus the total genetic variance (`total_var`) for that environment.}
+#'     \item{`vaf_summary`}{Data frame with one row per source (`Factor 1`, ...,
+#'       `Factor K`, `Specific`) containing the overall proportion of total
+#'       genetic variance (`pct_var`) and cumulative proportion (`cum_pct`).}
 #'   }
 #'
 #' @references
@@ -192,7 +205,37 @@ fastIC <- function(model, term = "fa(Site, 4):Genotype",
 
   # ---- CVE via matrix multiplication -----------------------------------
   CVE_mat <- score_mat %*% t(loads_mat)        # m × t
-  VE_mat  <- CVE_mat + rep(spec_var, each = m) # broadcast spec_var
+
+  # ---- VAF (Variance Accounted For) per environment --------------------
+  # total genetic variance for env j = sum of squared loadings + specific var
+  loads_sq   <- loads_mat^2                              # t × k
+  total_var  <- rowSums(loads_sq) + spec_var             # length t
+
+  # Per-environment, per-factor proportion of variance explained
+  vaf_mat    <- loads_sq / total_var                     # t × k  (proportions)
+  spec_pct   <- spec_var / total_var                     # length t
+
+  # env-level VAF data frame: one row per environment
+  vaf_env_df        <- as.data.frame(vaf_mat)
+  names(vaf_env_df) <- paste0("Factor", seq_len(k))
+  vaf_env_df[[sterm]]   <- envs
+  vaf_env_df$Specific   <- spec_pct
+  vaf_env_df$total_var  <- total_var
+  vaf_env_df            <- vaf_env_df[, c(sterm, paste0("Factor", seq_len(k)),
+                                          "Specific", "total_var"), drop = FALSE]
+  rownames(vaf_env_df) <- NULL
+
+  # Overall VAF summary: proportion of total genetic variance across all envs
+  total_all  <- sum(total_var)
+  pct_factor <- colSums(loads_sq) / total_all            # length k
+  pct_spec   <- sum(spec_var)     / total_all
+
+  vaf_summary <- data.frame(
+    factor  = c(paste0("Factor ", seq_len(k)), "Specific"),
+    pct_var = c(pct_factor, pct_spec),
+    stringsAsFactors = FALSE
+  )
+  vaf_summary$cum_pct <- cumsum(vaf_summary$pct_var)
 
   # ---- Build base long-format data frame (environment-major order) -----
   env_rep  <- rep(seq_len(t_envs), each = m)
@@ -205,7 +248,6 @@ fastIC <- function(model, term = "fa(Site, 4):Genotype",
     spec.var = spec_var[env_rep],
     score_mat[geno_rep, , drop = FALSE],
     CVE = as.vector(CVE_mat),
-    VE  = as.vector(VE_mat),
     stringsAsFactors = FALSE
   )
 
@@ -267,8 +309,12 @@ fastIC <- function(model, term = "fa(Site, 4):Genotype",
   out$iClassOP   <- iClassOP_mat[gi]
   out$iClassRMSD <- iClassRMSD_mat[gi]
 
-  # ---- Sort and return ---------------------------------------------------
+  # ---- Sort and attach VAF attributes -----------------------------------
   out <- out[do.call(order, out[, c("iclass", sterm, gterm)]), ]
   rownames(out) <- NULL
+
+  attr(out, "vaf_env")     <- vaf_env_df
+  attr(out, "vaf_summary") <- vaf_summary
+
   out
 }

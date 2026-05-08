@@ -1,0 +1,731 @@
+---
+title: "Factor Analytic Selection Tools: FAST and iClass"
+subtitle: "`fastIC()` and `plot_fastIC()`"
+author: "Julian Taylor"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: false
+    smooth-scroll: true
+    embed-resources: true
+    theme: litera
+    css: custom.css
+    highlight-style: github
+    code-fold: false
+    fig-width: 9
+    fig-height: 5.5
+    fig-dpi: 150
+    html-math-method: katex
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| include: false
+library(biomAid)
+library(ggplot2)
+asreml_ok <- requireNamespace("asreml",    quietly = TRUE) &&
+             requireNamespace("ASExtras4", quietly = TRUE)
+if (asreml_ok) {
+  library(asreml)
+  library(ASExtras4)
+  asreml.options(trace = FALSE)
+}
+```
+
+---
+
+## Overview
+
+`fastIC()` provides a unified implementation of two complementary approaches
+for summarising variety performance from a **Factor Analytic (FA) linear
+mixed model** fitted in ASReml-R V4:
+
+- **FAST** (Factor Analytic Selection Tools; Smith & Cullis, 2018) — global
+  Overall Performance and stability across all environments.
+- **iClass** (interaction class; Smith et al., 2021) — within-class
+  performance and stability for environments grouped by their loading
+  sign patterns.
+
+Both frameworks are treated as a single continuum. FAST global metrics
+(`global_op`, `global_stab`) are always computed across **all** environments.
+iClass metrics (`iclass`, `iClassOP`, `iClassRMSD`) partition environments
+by the sign pattern of their first `ic.num` rotated loadings. When
+`ic.num = 1` and — as is typical after rotation — all first-factor
+loadings are positive, there is exactly one iClass and the two frameworks
+agree exactly: `iClassOP = global_op` and `iClassRMSD = global_stab`.
+
+`plot_fastIC()` provides seven complementary visualisations:
+
+| Type | Description |
+|------|-------------|
+| `"fast"` | Global OP vs stability scatter with quadrant annotations |
+| `"biplot"` | FA biplot: genotype scores + environment loading arrows |
+| `"CVE"` | Common Variety Effect heatmap (genotype × environment) |
+| `"dev"` | Residual deviation heatmap (GEI beyond Factor 1) |
+| `"iclass"` | iClassOP vs iClassRMSD scatter, faceted by interaction class |
+| `"OP.pairs"` | Lower-triangular pairs plot of iClassOP across all classes |
+| `"OP.variety"` | iClassOP trajectory for highlighted varieties across classes |
+
+---
+
+## Mathematical Framework
+
+### Factor Analytic mixed model
+
+Let $\hat{\mathbf{U}} \in \mathbb{R}^{n \times t}$ be the matrix of variety
+BLUPs across $n$ varieties and $t$ environments, obtained from an FA($k$)
+random structure fitted to the Site × Variety term. The FA model
+decomposes the genetic covariance as
+$\mathbf{G} = \hat{\boldsymbol{\Lambda}}\hat{\boldsymbol{\Lambda}}^\top +
+\hat{\boldsymbol{\Psi}}$, where
+$\hat{\boldsymbol{\Psi}} = \operatorname{diag}(\hat{\psi}_1,\ldots,\hat{\psi}_t)$
+is the diagonal matrix of specific variances.
+
+After varimax rotation, `ASExtras4::fa.asreml()` returns:
+
+- **Rotated loadings** $\hat{\boldsymbol{\Lambda}} \in \mathbb{R}^{t \times k}$
+  — element $\hat{\lambda}_{rj}$ is the loading of factor $r$ on environment
+  $j$. After rotation, factor 1 is the general (non-crossover) factor with
+  typically all-positive loadings; higher factors are bipolar.
+- **Score EBLUPs** $\hat{\mathbf{F}} \in \mathbb{R}^{n \times k}$ — element
+  $\hat{f}_{rg}$ is the EBLUP of variety $g$ on factor $r$. The score
+  vector for variety $g$ is $\hat{\mathbf{f}}_g = (\hat{f}_{1g}, \ldots,
+  \hat{f}_{kg})^\top$.
+- **Specific variances** $\hat{\psi}_j$ — the environment-specific residual
+  genetic variance for environment $j$.
+
+The **Common Variety Effect** (CVE) and **Variety Effect** (VE) for variety
+$g$ in environment $j$ are:
+
+$$
+\widehat{\text{CVE}}(g,j)
+  = \hat{\boldsymbol{\lambda}}_j^\top \hat{\mathbf{f}}_g
+  = \sum_{r=1}^{k} \hat{\lambda}_{rj}\,\hat{f}_{rg},
+\qquad
+\widehat{\text{VE}}(g,j) = \widehat{\text{CVE}}(g,j) + \hat{\psi}_j,
+$$
+
+where $\hat{\boldsymbol{\lambda}}_j = (\hat{\lambda}_{1j}, \ldots,
+\hat{\lambda}_{kj})^\top$ is the loading vector for environment $j$.
+In matrix form, the full $n \times t$ CVE matrix is
+$\widehat{\mathbf{CVE}} = \hat{\mathbf{F}}\hat{\boldsymbol{\Lambda}}^\top$.
+
+### Global FAST metrics
+
+The global metrics summarise each variety across **all** $t$ environments
+and are invariant to the iClass classification. Define
+$\bar{\boldsymbol{\lambda}}_r = t^{-1}\mathbf{1}_t^\top\hat{\boldsymbol{\Lambda}}_{*r}$
+as the mean of the $r$th column of $\hat{\boldsymbol{\Lambda}}$. Then:
+
+$$
+\text{global\_op}(g)
+  = \bar{\lambda}_{1} \cdot \hat{f}_{1g}
+  = t^{-1}\bigl(\mathbf{1}_t^\top\hat{\boldsymbol{\lambda}}_{\cdot 1}\bigr)\hat{f}_{1g},
+$$
+
+which is on the same scale as the trait and represents expected performance
+at an average environment. The **global deviation** vector and **global
+stability** for variety $g$ are (for $k > 1$):
+
+$$
+\mathbf{d}_g = \widehat{\mathbf{CVE}}_{g\cdot} - \hat{f}_{1g}\,\hat{\boldsymbol{\lambda}}_{\cdot 1}^\top
+  \in \mathbb{R}^t,
+\qquad
+\text{global\_stab}(g) = \|\mathbf{d}_g\|_2 / \sqrt{t}
+  = \sqrt{t^{-1}\,\mathbf{d}_g^\top\mathbf{d}_g},
+$$
+
+where $\widehat{\mathbf{CVE}}_{g\cdot}$ is the $g$th row of the CVE matrix
+and $\hat{\boldsymbol{\lambda}}_{\cdot 1}$ is the first column of
+$\hat{\boldsymbol{\Lambda}}$. A small `global_stab` indicates broad
+adaptation; larger values signal environment-specific response (crossover GEI).
+
+### iClass metrics
+
+Environments are grouped by the sign pattern of their first `ic.num`
+rotated loadings. Let
+$\hat{\boldsymbol{\Lambda}}_{[q]} \in \mathbb{R}^{t \times q}$,
+$q = \texttt{ic.num}$, denote the first $q$ columns of
+$\hat{\boldsymbol{\Lambda}}$. The iClass label for environment $j$ is:
+
+$$
+\text{iClass}(j) = \bigotimes_{r=1}^{q}
+\begin{cases} \textup{p} & \hat{\lambda}_{rj} \ge 0 \\ \textup{n} & \hat{\lambda}_{rj} < 0 \end{cases}.
+$$
+
+For each iClass $\omega$ let $\mathbf{E}_\omega$ denote the index set of
+environments in $\omega$ and define the **class mean loading vector**
+$\bar{\boldsymbol{\lambda}}_\omega = |\omega|^{-1}
+\sum_{j\in\mathbf{E}_\omega} \hat{\boldsymbol{\lambda}}_{j,[q]}
+\in \mathbb{R}^q$.
+The **iClassOP** for variety $g$ in class $\omega$ is:
+
+$$
+\text{iClassOP}(g,\omega)
+  = \bar{\boldsymbol{\lambda}}_\omega^\top \hat{\mathbf{f}}_{g,[q]}
+  = \sum_{r=1}^{q} \bar{\lambda}_{r\omega}\,\hat{f}_{rg},
+$$
+
+where $\hat{\mathbf{f}}_{g,[q]} = (\hat{f}_{1g},\ldots,\hat{f}_{qg})^\top$
+are the first $q$ scores for variety $g$. The **iClassRMSD** uses the
+remaining factors as a residual:
+
+$$
+\text{iClassRMSD}(g,\omega)
+  = \frac{1}{\sqrt{|\omega|}}\,
+    \bigl\|\widehat{\mathbf{CVE}}_{g,\mathbf{E}_\omega}
+    - \hat{\mathbf{F}}_{g,[q]}\hat{\boldsymbol{\Lambda}}_{\mathbf{E}_\omega,[q]}^\top
+    \bigr\|_2,
+$$
+
+where the residual $\mathbf{dev}_{ic}(g,\omega) = \widehat{\mathbf{CVE}}_{g,\mathbf{E}_\omega}
+- \hat{\mathbf{F}}_{g,[q]}\hat{\boldsymbol{\Lambda}}_{\mathbf{E}_\omega,[q]}^\top$
+is the within-class GEI unexplained by the first $q$ factors. The kth
+factor is **reserved for this residual**; therefore
+$1 \le \texttt{ic.num} \le k - 1$.
+
+### Relationship between FAST and iClass
+
+When $\texttt{ic.num} = 1$ and all first-factor loadings are positive (one
+iClass containing all environments):
+
+$$
+\text{iClassOP}(g,\{\text{all envs}\}) = \text{global\_op}(g),
+\qquad
+\text{iClassRMSD}(g,\{\text{all envs}\}) = \text{global\_stab}(g).
+$$
+
+When $\texttt{ic.num} \ge 2$ environments split into multiple classes.
+`iClassOP` then captures a variety's expected performance **within
+environments of each class**, isolating crossover GEI that `global_op`
+averages away.
+
+---
+
+## Example 1 — Balanced MET: 50 Varieties × 12 Sites, FA(3), ic.num = 2
+
+### Data simulation
+
+> **Requires:** ASReml-R V4 and ASExtras4. The vignette is pre-rendered so
+> no licence is needed to read it; run the code chunks only if you have the
+> packages installed.
+
+We simulate a balanced MET with pronounced Site × Variety interaction by
+using a narrow correlation range for the genetic covariance matrix.
+With `g_cor_min = 0.10` and `g_cor_max = 0.65`, genetic correlations span a
+wide range, generating both positive-positive and positive-negative loading
+patterns on higher FA factors — the precondition for meaningful iClass
+structure.
+
+```{r sim1}
+#| cache: true
+#| eval: !expr asreml_ok
+set.seed(101L)
+sim1 <- simTrialData(
+  nvar        = 50L,
+  nsite       = 12L,
+  nrep        = 3L,
+  G           = "auto",
+  incidence   = "balanced",
+  seed        = 101L,
+  verbose     = FALSE,
+  sim.options = list(
+    g_cor_min     = 0.10,
+    g_cor_max     = 0.65,
+    sigma_genetic = 300,
+    error_sd      = 280,
+    site_mean     = 4500,
+    site_sd       = 450
+  )
+)
+dat1         <- sim1$data
+dat1$Site    <- factor(dat1$Site)
+dat1$Variety <- factor(dat1$Variety)
+dat1$Rep     <- factor(dat1$Rep)
+dat1$Row     <- factor(dat1$Row)
+dat1$Column  <- factor(dat1$Column)
+```
+
+A quick look at the true genetic correlation structure confirms meaningful
+variability — some environments are quite poorly correlated with others,
+providing scope for crossover interaction.
+
+```{r plot_sim1_cor}
+#| eval: !expr asreml_ok
+#| fig-height: 5
+plot_simTrialData(sim1, type = "correlation")
+```
+
+### Fitting FA(1), FA(2) and FA(3) models
+
+We fit three models of increasing complexity, using `at(Site):Rep` for
+replicate effects within sites:
+
+```{r fit1_fa1}
+#| cache: true
+#| dependson: sim1
+#| eval: !expr asreml_ok
+#| results: hide
+m1_fa1 <- asreml(
+  yield  ~ Site,
+  random = ~ fa(Site, 1):Variety + at(Site):Rep,
+  data   = dat1,
+  maxit  = 30L
+)
+m1_fa1 <- update(m1_fa1)
+```
+
+```{r fit1_fa2}
+#| cache: true
+#| dependson: fit1_fa1
+#| eval: !expr asreml_ok
+#| results: hide
+m1_fa2 <- asreml(
+  yield  ~ Site,
+  random = ~ fa(Site, 2):Variety + at(Site):Rep,
+  data   = dat1,
+  maxit  = 30L
+)
+m1_fa2 <- update(m1_fa2)
+```
+
+```{r fit1_fa3}
+#| cache: true
+#| dependson: fit1_fa2
+#| eval: !expr asreml_ok
+#| results: hide
+m1_fa3 <- asreml(
+  yield  ~ Site,
+  random = ~ fa(Site, 3):Variety + at(Site):Rep,
+  data   = dat1,
+  maxit  = 30L
+)
+m1_fa3 <- update(m1_fa3)
+```
+
+AIC confirms that the FA(3) model provides the best fit:
+
+```{r aic1}
+#| eval: !expr asreml_ok
+.aic <- function(m) -2 * m$loglik + 2 * nrow(summary(m)$varcomp)
+data.frame(
+  Model  = c("FA(1)", "FA(2)", "FA(3)"),
+  LogLik = round(c(m1_fa1$loglik, m1_fa2$loglik, m1_fa3$loglik), 2),
+  npar   = c(nrow(summary(m1_fa1)$varcomp),
+             nrow(summary(m1_fa2)$varcomp),
+             nrow(summary(m1_fa3)$varcomp)),
+  AIC    = round(c(.aic(m1_fa1), .aic(m1_fa2), .aic(m1_fa3)), 2)
+)
+```
+
+### Running `fastIC()`
+
+We run `fastIC()` on the FA(3) model with `ic.num = 2`. The first two
+rotated factors define the iClass labels — environments with loading sign
+pattern `"pp"` (positive on both factors) form one class, those with
+pattern `"pn"` form another. Factor 3 is reserved for iClassRMSD.
+
+```{r fastIC1}
+#| cache: true
+#| dependson: fit1_fa3
+#| eval: !expr asreml_ok
+res1 <- fastIC(
+  model  = m1_fa3,
+  term   = "fa(Site, 3):Variety",
+  ic.num = 2L
+)
+```
+
+```{r show_res1}
+#| eval: !expr asreml_ok
+# iClass assignments for each site
+unique(res1[, c("Site", "iclass")])[order(unique(res1[, c("Site","iclass")])$iclass), ]
+```
+
+```{r iclass_sizes1}
+#| eval: !expr asreml_ok
+cat("iClass sizes (number of environments):\n")
+print(table(unique(res1[, c("Site","iclass")])$iclass))
+```
+
+The two iClasses partition sites by whether they respond positively or
+negatively to the second FA factor — a measure of crossover GEI that is
+invisible from the global rankings alone.
+
+### FAST: Global OP vs Stability
+
+The FAST plot provides the traditional entry point. Varieties in the
+upper-right quadrant are high-performing **and** broadly adapted; those in
+the upper-left combine good average performance with more environment-specific
+response.
+
+```{r plot1_fast}
+#| eval: !expr asreml_ok
+#| fig-height: 5.5
+plot_fastIC(res1, type = "fast", n_highlight = 5L)
+```
+
+### FA biplot
+
+The biplot places genotypes in the space of factor scores (1 vs 2) and
+environments as arrows scaled by their loadings. Environments coloured by
+iClass visually confirm the separation: `"pp"` sites point into the positive
+upper-right; `"pn"` sites point into the positive-negative quadrant.
+Varieties closest to an environment arrow tend to perform well in that
+environment.
+
+```{r plot1_biplot}
+#| eval: !expr asreml_ok
+#| fig-height: 6
+plot_fastIC(res1, type = "biplot", n_highlight = 5L)
+```
+
+### CVE heatmap
+
+The Common Variety Effect heatmap shows the full genotype × environment
+performance surface. Environments are grouped by iClass (column facets) and
+ordered by first-factor loading within each class, while varieties are ordered
+by `global_op` from top (best) to bottom (poorest). The diverging palette
+makes crossover patterns immediately visible — varieties that are strongly
+positive in one class but near-zero or negative in the other.
+
+```{r plot1_cve}
+#| eval: !expr asreml_ok
+#| fig-height: 7
+plot_fastIC(res1, type = "CVE")
+```
+
+### Residual deviation heatmap
+
+The `"dev"` heatmap shows `global_dev` — the residual CVE after removing the
+first-factor contribution. Cells with large absolute values indicate
+varieties whose performance deviates most from the global trend in specific
+environments.
+
+```{r plot1_dev}
+#| eval: !expr asreml_ok
+#| fig-height: 7
+plot_fastIC(res1, type = "dev")
+```
+
+### iClass: Within-class OP vs RMSD
+
+Faceting by iClass separates the OP vs RMSD trade-off within each
+interaction class. The vertical dashed line marks the mean iClassOP within
+the class. Varieties above-right of the intersection are class champions —
+high within-class performance with low within-class instability.
+
+```{r plot1_iclass}
+#| eval: !expr asreml_ok
+#| fig-height: 5
+plot_fastIC(res1, type = "iclass", n_highlight = 4L)
+```
+
+### iClassOP pairs plot
+
+With two iClasses the `"OP.pairs"` plot is a single scatter of iClassOP in
+class `"pn"` (x-axis) against class `"pp"` (y-axis). The dashed diagonal
+marks equal performance across classes. Varieties well above the line are
+specialists for `"pp"` environments; those below favour `"pn"` environments.
+Points near the diagonal are generalists.
+
+```{r plot1_pairs}
+#| eval: !expr asreml_ok
+#| fig-height: 5
+plot_fastIC(res1, type = "OP.pairs", n_highlight = 5L)
+```
+
+### Variety trajectory
+
+The `"OP.variety"` plot traces each variety's iClassOP across the ordered
+interaction classes. Highlighted varieties are selected by default as those
+with the largest range in iClassOP (i.e. the greatest crossover). Steep
+crossing lines indicate strong specialists; near-parallel lines indicate
+stable generalists.
+
+```{r plot1_trajectory}
+#| eval: !expr asreml_ok
+#| fig-height: 5
+plot_fastIC(res1, type = "OP.variety", n_highlight = 6L)
+```
+
+---
+
+## Example 2 — Unbalanced MET: 75 Varieties × 25 Sites, FA(4), ic.num = 3
+
+When the number of environments is larger and the genetic covariance
+structure is more complex, higher-order FA models and more interaction
+classes are needed to fully characterise GEI. Here we use an unbalanced
+incidence structure to reflect a realistic breeding programme where not all
+varieties are evaluated at every site.
+
+### Data simulation
+
+```{r sim2}
+#| cache: true
+#| eval: !expr asreml_ok
+set.seed(202L)
+sim2 <- simTrialData(
+  nvar        = 75L,
+  nsite       = 25L,
+  nrep        = 2L,
+  G           = "auto",
+  incidence   = "unbalanced",
+  seed        = 202L,
+  verbose     = FALSE,
+  sim.options = list(
+    g_cor_min     = 0.05,
+    g_cor_max     = 0.60,
+    sigma_genetic = 320,
+    error_sd      = 300,
+    site_mean     = 4500,
+    site_sd       = 500,
+    core_pct      = 0.25,
+    core_min_sites_pct = 0.80,
+    reg_min_sites_pct  = 0.35,
+    reg_max_sites_pct  = 0.75
+  )
+)
+dat2         <- sim2$data
+dat2$Site    <- factor(dat2$Site)
+dat2$Variety <- factor(dat2$Variety)
+dat2$Rep     <- factor(dat2$Rep)
+dat2$Row     <- factor(dat2$Row)
+dat2$Column  <- factor(dat2$Column)
+```
+
+The unbalanced incidence creates a core set of varieties present across
+most sites and a peripheral set with sparser coverage:
+
+```{r plot_sim2_incidence}
+#| eval: !expr asreml_ok
+#| fig-height: 7
+plot_simTrialData(sim2, type = "incidence")
+```
+
+Connectivity summary:
+
+```{r connectivity2}
+#| eval: !expr asreml_ok
+inc <- sim2$params$incidence
+cat("Varieties per site — mean:", round(mean(colSums(inc)), 1),
+    " range [", min(colSums(inc)), ",", max(colSums(inc)), "]\n")
+cat("Sites per variety  — mean:", round(mean(rowSums(inc)), 1),
+    " range [", min(rowSums(inc)), ",", max(rowSums(inc)), "]\n")
+```
+
+The true genetic correlation structure shows considerable variability
+across the 25 sites, with some site pairs sharing very low or even
+negative genetic correlations — precisely the conditions under which
+four FA factors and three iClasses are warranted.
+
+```{r plot_sim2_cor}
+#| eval: !expr asreml_ok
+#| fig-height: 5.5
+plot_simTrialData(sim2, type = "correlation")
+```
+
+### Fitting FA(2), FA(3) and FA(4) models
+
+```{r fit2_fa2}
+#| cache: true
+#| dependson: sim2
+#| eval: !expr asreml_ok
+#| results: hide
+m2_fa2 <- asreml(
+  yield  ~ Site,
+  random = ~ fa(Site, 2):Variety + at(Site):Rep,
+  data   = dat2,
+  maxit  = 30L
+)
+m2_fa2 <- update(m2_fa2)
+```
+
+```{r fit2_fa3}
+#| cache: true
+#| dependson: fit2_fa2
+#| eval: !expr asreml_ok
+#| results: hide
+m2_fa3 <- asreml(
+  yield  ~ Site,
+  random = ~ fa(Site, 3):Variety + at(Site):Rep,
+  data   = dat2,
+  maxit  = 30L
+)
+m2_fa3 <- update(m2_fa3)
+```
+
+```{r fit2_fa4}
+#| cache: true
+#| dependson: fit2_fa3
+#| eval: !expr asreml_ok
+#| results: hide
+m2_fa4 <- asreml(
+  yield  ~ Site,
+  random = ~ fa(Site, 4):Variety + at(Site):Rep,
+  data   = dat2,
+  maxit  = 30L
+)
+m2_fa4 <- update(m2_fa4)
+```
+
+```{r aic2}
+#| eval: !expr asreml_ok
+data.frame(
+  Model  = c("FA(2)", "FA(3)", "FA(4)"),
+  LogLik = round(c(m2_fa2$loglik, m2_fa3$loglik, m2_fa4$loglik), 2),
+  npar   = c(nrow(summary(m2_fa2)$varcomp),
+             nrow(summary(m2_fa3)$varcomp),
+             nrow(summary(m2_fa4)$varcomp)),
+  AIC    = round(c(.aic(m2_fa2), .aic(m2_fa3), .aic(m2_fa4)), 2)
+)
+```
+
+### Running `fastIC()` with ic.num = 3
+
+With a FA(4) model and `ic.num = 3`, the first three factors define up to
+$2^3 = 8$ potential iClasses, though only those sign patterns that are
+actually represented by at least one environment will appear. Factor 4 is
+reserved for iClassRMSD.
+
+```{r fastIC2}
+#| cache: true
+#| dependson: fit2_fa4
+#| eval: !expr asreml_ok
+res2 <- fastIC(
+  model  = m2_fa4,
+  term   = "fa(Site, 4):Variety",
+  ic.num = 3L
+)
+```
+
+```{r show_iclasses2}
+#| eval: !expr asreml_ok
+# iClass assignments
+ic_tab <- unique(res2[, c("Site", "iclass")])
+ic_tab <- ic_tab[order(ic_tab$iclass, ic_tab$Site), ]
+cat("iClass sizes (number of environments):\n")
+print(table(ic_tab$iclass))
+```
+
+With three classification factors and 25 environments, several distinct
+interaction classes emerge. Classes reflect groups of environments that share
+the same pattern of positive/negative response on all three bipolar factors.
+
+### FAST: Global OP vs Stability
+
+```{r plot2_fast}
+#| eval: !expr asreml_ok
+#| fig-height: 5.5
+plot_fastIC(res2, type = "fast", n_highlight = 6L)
+```
+
+### FA biplot
+
+The biplot for the larger 25-site dataset shows a richer loading structure,
+with environments spread more widely through the (factor 1, factor 2)
+loading space and clearly distinguished by iClass colour.
+
+```{r plot2_biplot}
+#| eval: !expr asreml_ok
+#| fig-height: 6.5
+plot_fastIC(res2, type = "biplot", n_highlight = 5L)
+```
+
+### CVE heatmap
+
+With four iClasses the CVE heatmap is faceted into four columns, each
+grouping the sites that share the same three-factor loading sign pattern.
+The within-class rank ordering of varieties often differs strikingly from
+the global ranking, which motivates the iClass approach.
+
+```{r plot2_cve}
+#| eval: !expr asreml_ok
+#| fig-height: 8
+plot_fastIC(res2, type = "CVE")
+```
+
+### iClass OP vs RMSD
+
+Faceted across all iClasses, this plot highlights that the within-class
+RMSD for most varieties is considerably smaller than `global_stab` —
+evidence that the crossover GEI captured by the first three factors has
+been successfully isolated into the class structure.
+
+```{r plot2_iclass}
+#| eval: !expr asreml_ok
+#| fig-height: 6
+plot_fastIC(res2, type = "iclass", n_highlight = 4L)
+```
+
+### Lower-triangular iClassOP pairs plot
+
+With four iClasses the `"OP.pairs"` plot becomes a $3 \times 3$
+lower-triangular matrix of pairwise iClassOP scatters — one panel for each
+combination of classes. Each panel uses the same diagonal reference line;
+points far from the diagonal are class specialists, while points near it
+perform similarly across both classes. The iClass structure is most
+informative when the cloud of points in each panel shows clear deviation
+from the diagonal in a consistent direction.
+
+```{r plot2_pairs}
+#| eval: !expr asreml_ok
+#| fig-width: 10
+#| fig-height: 9
+plot_fastIC(res2, type = "OP.pairs", n_highlight = 5L)
+```
+
+### Variety trajectory
+
+The trajectory plot is particularly striking with multiple iClasses. Each
+line traces a variety's iClassOP from the first class (left) through to the
+last (right). Strongly crossing lines — and especially varieties that switch
+rank — illustrate precisely the crossover GEI that a global OP ranking
+misses. The highlighted varieties are automatically chosen as those with the
+greatest range in iClassOP.
+
+```{r plot2_trajectory}
+#| eval: !expr asreml_ok
+#| fig-height: 5.5
+plot_fastIC(res2, type = "OP.variety", n_highlight = 8L)
+```
+
+---
+
+## Summary
+
+| Feature | Example 1 | Example 2 |
+|---------|-----------|-----------|
+| Varieties | 50 | 75 |
+| Sites | 12 | 25 |
+| Incidence | Balanced | Unbalanced |
+| FA order | FA(3) | FA(4) |
+| `ic.num` | 2 | 3 |
+| iClasses | 2 | up to 4 |
+| Key plots | FAST, biplot, CVE, pairs | All 7 types |
+
+The two examples illustrate a progression from a moderate-GEI balanced trial
+where two iClasses cleanly separate environments, to a larger unbalanced
+programme where three classification factors and up to four iClasses reveal a
+richer GEI landscape. In both cases, the `"OP.pairs"` and `"OP.variety"` plots
+are the most direct tools for identifying class specialists — varieties whose
+ranking changes substantially depending on the interaction class of the
+target environment.
+
+---
+
+## References
+
+Smith, A.B. & Cullis, B.R. (2018). Plant breeding selection tools built on
+factor analytic mixed models for multi-environment trial data.
+*Euphytica*, **214**, 143.
+
+Smith, A.B., Norman, A., Kuchel, H. & Cullis, B.R. (2021). Plant variety
+selection using interaction classes derived from factor analytic linear
+mixed models: models with independent variety effects.
+*Frontiers in Plant Science*, **12**, 737462.
