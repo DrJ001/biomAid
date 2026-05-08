@@ -10,10 +10,9 @@
 
 Welcome to bioMaid! This package has been specifically built to provide
 biometricians with flexible functions for interpreting and further modelling of results
-from complex linear mixed models such **ASReml-R V4** mixed models. Watch this
+from complex linear mixed models fitted wth software such as **ASReml-R V4**. Watch this
 space, there are a lot more functions coming. 
 
----
 
 ## Vignettes
 
