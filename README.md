@@ -1,3 +1,5 @@
+<img src="man/figures/biomAid_logo.png" align="right" height="120" alt="biomAid"/>
+
 # biomAid
 
 [![R-CMD-check](https://github.com/DrJ001/biomAid/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/DrJ001/biomAid/actions/workflows/R-CMD-check.yml)

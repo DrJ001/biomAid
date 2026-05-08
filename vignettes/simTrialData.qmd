@@ -30,6 +30,9 @@ library(biomAid)
 library(ggplot2)
 ```
 
+<img id="biomaid-logo" src="../man/figures/biomAid_logo.png" alt="biomAid"/>
+<script>(function(){ var i=document.getElementById('biomaid-logo'),h=document.getElementById('title-block-header'); if(i&&h){h.appendChild(i);} })();</script>
+
 ---
 
 ## Overview

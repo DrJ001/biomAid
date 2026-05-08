@@ -37,6 +37,9 @@ if (asreml_ok) {
 }
 ```
 
+<img id="biomaid-logo" src="../man/figures/biomAid_logo.png" alt="biomAid"/>
+<script>(function(){ var i=document.getElementById('biomaid-logo'),h=document.getElementById('title-block-header'); if(i&&h){h.appendChild(i);} })();</script>
+
 ---
 
 ## Overview
@@ -52,18 +55,18 @@ mixed model** fitted in ASReml-R V4:
   sign patterns.
 
 Both frameworks are treated as a single continuum. FAST global metrics
-(`global_op`, `global_stab`) are always computed across **all** environments.
+(`GlobalOP`, `GlobalRMSD`) are always computed across **all** environments.
 iClass metrics (`iclass`, `iClassOP`, `iClassRMSD`) partition environments
 by the sign pattern of their first `ic.num` rotated loadings. When
 `ic.num = 1` and — as is typical after rotation — all first-factor
 loadings are positive, there is exactly one iClass and the two frameworks
-agree exactly: `iClassOP = global_op` and `iClassRMSD = global_stab`.
+agree exactly: `iClassOP = GlobalOP` and `iClassRMSD = GlobalRMSD`.
 
 `plot_fastIC()` provides seven complementary visualisations:
 
 | Type | Description |
 |------|-------------|
-| `"fast"` | Global OP vs stability scatter with quadrant annotations |
+| `"fast"` | Global OP vs stability (GlobalRMSD) scatter with quadrant annotations |
 | `"biplot"` | FA biplot: genotype scores + environment loading arrows |
 | `"CVE"` | Common Variety Effect heatmap (genotype × environment) |
 | `"VAF"` | Variance Accounted For per environment: stacked 100% bar chart by FA factor |
@@ -77,186 +80,86 @@ agree exactly: `iClassOP = global_op` and `iClassRMSD = global_stab`.
 
 ### Factor Analytic mixed model
 
-Let $\hat{\mathbf{U}} \in \mathbb{R}^{n \times t}$ be the matrix of variety
-BLUPs across $n$ varieties and $t$ environments, obtained from an FA($k$)
-random structure fitted to the Site × Variety term. The FA model
-decomposes the genetic covariance as
-$\mathbf{G} = \hat{\boldsymbol{\Lambda}}\hat{\boldsymbol{\Lambda}}^\top +
-\hat{\boldsymbol{\Psi}}$, where
-$\hat{\boldsymbol{\Psi}} = \operatorname{diag}(\hat{\psi}_1,\ldots,\hat{\psi}_t)$
-is the diagonal matrix of specific variances.
+An FA($k$) random structure decomposes the $t \times t$ genetic covariance
+matrix as $\mathbf{G} = \hat{\boldsymbol{\Lambda}}\hat{\boldsymbol{\Lambda}}^\top + \hat{\boldsymbol{\Psi}}$,
+where $\hat{\boldsymbol{\Lambda}} \in \mathbb{R}^{t \times k}$ are the
+varimax-rotated loadings (element $\hat{\lambda}_{rj}$: factor $r$,
+environment $j$) and $\hat{\boldsymbol{\Psi}} = \operatorname{diag}(\hat{\psi}_1,\ldots,\hat{\psi}_t)$
+is the diagonal specific-variance matrix. After rotation, factor 1 captures
+the dominant non-crossover GEI with typically all-positive loadings; higher
+factors are bipolar. `ASExtras4::fa.asreml()` additionally returns score
+EBLUPs $\hat{\mathbf{F}} \in \mathbb{R}^{n \times k}$ (element $\hat{f}_{rg}$:
+factor $r$, variety $g$).
 
-After varimax rotation, `ASExtras4::fa.asreml()` returns:
-
-- **Rotated loadings** $\hat{\boldsymbol{\Lambda}} \in \mathbb{R}^{t \times k}$
-  — element $\hat{\lambda}_{rj}$ is the loading of factor $r$ on environment
-  $j$. After rotation, factor 1 is the general (non-crossover) factor with
-  typically all-positive loadings; higher factors are bipolar.
-- **Score EBLUPs** $\hat{\mathbf{F}} \in \mathbb{R}^{n \times k}$ — element
-  $\hat{f}_{rg}$ is the EBLUP of variety $g$ on factor $r$. The score
-  vector for variety $g$ is $\hat{\mathbf{f}}_g = (\hat{f}_{1g}, \ldots,
-  \hat{f}_{kg})^\top$.
-- **Specific variances** $\hat{\psi}_j$ — the environment-specific residual
-  genetic variance for environment $j$.
-
-The **Common Variety Effect** (CVE) for variety $g$ in environment $j$ is
-the inner product of the environment's loading vector and the variety's score
-vector:
+The **Common Variety Effect** for variety $g$ in environment $j$ is:
 
 $$
-\widehat{\text{CVE}}(g,j)
-  = \hat{\boldsymbol{\lambda}}_j^\top \hat{\mathbf{f}}_g
+\widehat{\text{CVE}}(g,j) = \hat{\boldsymbol{\lambda}}_j^\top \hat{\mathbf{f}}_g
   = \sum_{r=1}^{k} \hat{\lambda}_{rj}\,\hat{f}_{rg},
-$$
-
-where $\hat{\boldsymbol{\lambda}}_j = (\hat{\lambda}_{1j}, \ldots,
-\hat{\lambda}_{kj})^\top$ is the loading vector for environment $j$.
-In matrix form the full $n \times t$ CVE matrix is
-$\widehat{\mathbf{CVE}} = \hat{\mathbf{F}}\hat{\boldsymbol{\Lambda}}^\top$.
-
-### Global FAST metrics
-
-The global metrics summarise each variety across **all** $t$ environments.
-Let $\omega_{\text{all}}$ denote the single class containing all $t$
-environments and define the global mean loading vector:
-
-$$
-\bar{\boldsymbol{\lambda}}_{\text{all}}
-  = t^{-1}\sum_{j=1}^{t}\hat{\boldsymbol{\lambda}}_j
-  = t^{-1}\hat{\boldsymbol{\Lambda}}^\top\mathbf{1}_t
-  \in \mathbb{R}^k.
-$$
-
-FAST uses only the first component of this vector. Denoting
-$\bar{\lambda}_{1} = [\bar{\boldsymbol{\lambda}}_{\text{all}}]_1 =
-t^{-1}\sum_j \hat{\lambda}_{1j}$:
-
-$$
-\text{global\_op}(g)
-  = \bar{\lambda}_{1}\,\hat{f}_{1g},
-$$
-
-which is on the same scale as the trait and represents expected performance
-at an average environment. The **global deviation** and **global stability**
-for variety $g$ (defined for $k > 1$) use the first-factor residual:
-
-$$
-\mathbf{d}_g
-  = \widehat{\mathbf{CVE}}_{g\cdot} - \hat{f}_{1g}\,\hat{\boldsymbol{\lambda}}_{\cdot 1}^\top
-  \in \mathbb{R}^t,
 \qquad
-\text{global\_stab}(g)
-  = \sqrt{t^{-1}\,\mathbf{d}_g^\top\mathbf{d}_g},
+\widehat{\mathbf{CVE}} = \hat{\mathbf{F}}\hat{\boldsymbol{\Lambda}}^\top \in \mathbb{R}^{n \times t}.
 $$
 
-where $\widehat{\mathbf{CVE}}_{g\cdot}$ is row $g$ of the CVE matrix and
-$\hat{\boldsymbol{\lambda}}_{\cdot 1}$ is the first column of
-$\hat{\boldsymbol{\Lambda}}$.  A small `global_stab` indicates broad
-adaptation; larger values signal environment-specific response.
+### FAST global metrics
+
+Let $\bar{\lambda}_{1} = t^{-1}\sum_j \hat{\lambda}_{1j}$ be the mean of
+the first-factor loadings. The global metrics for variety $g$ are:
+
+$$
+\text{GlobalOP}(g) = \bar{\lambda}_{1}\,\hat{f}_{1g}, \qquad
+\text{GlobalRMSD}(g) = \sqrt{t^{-1}\sum_j \bigl(\widehat{\text{CVE}}(g,j) - \hat{\lambda}_{1j}\hat{f}_{1g}\bigr)^2}.
+$$
+
+`global_op` is on the trait scale (expected performance at an average
+environment); `global_stab` is the RMSD of the first-factor residual — small
+for broadly adapted varieties, large for environment-specific responders.
 
 ### iClass metrics
 
-Environments are grouped by the sign pattern of their first
-$q = \texttt{ic.num}$ rotated loadings. The iClass label for environment
-$j$ is formed from the signs of $\hat{\lambda}_{1j}, \ldots, \hat{\lambda}_{qj}$:
+Each environment is assigned a class label from the sign pattern of its
+first $q = \texttt{ic.num}$ loadings:
 
 $$
 \text{iClass}(j) = \bigotimes_{r=1}^{q}
 \begin{cases} \textup{p} & \hat{\lambda}_{rj} \ge 0 \\ \textup{n} & \hat{\lambda}_{rj} < 0 \end{cases}.
 $$
 
-For each iClass $\omega$ let $\mathbf{E}_\omega$ denote the index set of
-environments in $\omega$ with $|\omega| = |\mathbf{E}_\omega|$. The
-**class mean loading vector** is defined analogously to $\bar{\boldsymbol{\lambda}}_{\text{all}}$
-above, but restricted to the first $q$ factors and to environments in $\omega$:
+For class $\omega$ with environment index set $\mathbf{E}_\omega$, let
+$\bar{\boldsymbol{\lambda}}_\omega = |\omega|^{-1}\sum_{j\in\mathbf{E}_\omega}(\hat{\lambda}_{1j},\ldots,\hat{\lambda}_{qj})^\top$
+be the class mean loading vector. Then:
 
 $$
-\bar{\boldsymbol{\lambda}}_\omega
-  = |\omega|^{-1}\sum_{j\in\mathbf{E}_\omega}\hat{\boldsymbol{\lambda}}_{j,[q]}
-  \in \mathbb{R}^q,
+\text{iClassOP}(g,\omega) = \sum_{r=1}^{q} \bar{\lambda}_{r\omega}\,\hat{f}_{rg}, \qquad
+\text{iClassRMSD}(g,\omega) = \sqrt{|\omega|^{-1}\sum_{j\in\mathbf{E}_\omega}
+  \Bigl(\widehat{\text{CVE}}(g,j) - \sum_{r=1}^{q}\hat{\lambda}_{rj}\hat{f}_{rg}\Bigr)^2}.
 $$
 
-where $\hat{\boldsymbol{\lambda}}_{j,[q]} = (\hat{\lambda}_{1j},\ldots,\hat{\lambda}_{qj})^\top$
-is the truncated loading vector for environment $j$.
-The **iClassOP** for variety $g$ in class $\omega$ mirrors `global_op` but
-uses the class mean loadings and the first $q$ scores:
+`iClassRMSD` uses the residual from the first $q$ factors; the $k$th factor
+is reserved for this purpose, so $1 \le \texttt{ic.num} \le k-1$.
 
-$$
-\text{iClassOP}(g,\omega)
-  = \bar{\boldsymbol{\lambda}}_\omega^\top \hat{\mathbf{f}}_{g,[q]}
-  = \sum_{r=1}^{q} \bar{\lambda}_{r\omega}\,\hat{f}_{rg},
-$$
-
-where $\hat{\mathbf{f}}_{g,[q]} = (\hat{f}_{1g},\ldots,\hat{f}_{qg})^\top$
-are the first $q$ scores for variety $g$. The **iClassRMSD** is the RMSD
-of the within-class residual from the first $q$ factors — mirroring
-`global_stab` but scoped to environments in $\omega$:
-
-$$
-\text{iClassRMSD}(g,\omega)
-  = \sqrt{|\omega|^{-1}\,\bigl\|
-    \widehat{\mathbf{CVE}}_{g,\mathbf{E}_\omega}
-    - \hat{\mathbf{f}}_{g,[q]}^\top
-      \hat{\boldsymbol{\Lambda}}_{\mathbf{E}_\omega,[q]}^\top
-    \bigr\|_2^2},
-$$
-
-where $\hat{\boldsymbol{\Lambda}}_{\mathbf{E}_\omega,[q]}$ is the
-$|\omega| \times q$ sub-matrix of $\hat{\boldsymbol{\Lambda}}$ for the
-environments in $\omega$ and the first $q$ factors. The kth factor is
-**reserved for this residual**; therefore $1 \le \texttt{ic.num} \le k - 1$.
-
-### Relationship between FAST and iClass
-
-The two frameworks share the same underlying objects — loadings, scores, and
-mean loading vectors — and differ only in scope. When $\texttt{ic.num} = 1$
-and all first-factor loadings are positive (one iClass $\omega_{\text{all}}$
-containing all environments):
-
-$$
-\bar{\boldsymbol{\lambda}}_{\omega_{\text{all}}} = (\bar{\lambda}_1) \in \mathbb{R}^1,
-\qquad
-\text{iClassOP}(g,\omega_{\text{all}}) = \bar{\lambda}_1\,\hat{f}_{1g} = \text{global\_op}(g),
-\qquad
-\text{iClassRMSD}(g,\omega_{\text{all}}) = \text{global\_stab}(g).
-$$
-
-When $\texttt{ic.num} \ge 2$ environments split into multiple classes, each
-with its own mean loading vector $\bar{\boldsymbol{\lambda}}_\omega \in \mathbb{R}^q$.
-`iClassOP` then captures expected performance **within each class**,
-isolating crossover GEI that `global_op` averages away.
+FAST is the special case $q = 1$ with one class spanning all environments:
+$\text{iClassOP} = \text{GlobalOP}$ and $\text{iClassRMSD} = \text{GlobalRMSD}$.
+When $q \ge 2$, environments split into classes and `iClassOP` captures
+within-class performance, revealing crossover GEI invisible to `GlobalOP`.
 
 ### Variance Accounted For (VAF)
 
-The total genetic variance for environment $j$ is the sum of the
-factor-structured variance and the specific variance:
+The total genetic variance for environment $j$ is
+$\sigma^2_j = \sum_r \hat{\lambda}_{rj}^2 + \hat{\psi}_j$.
+The per-factor and specific proportions are:
 
 $$
-\sigma^2_j = \sum_{r=1}^{k} \hat{\lambda}_{rj}^2 + \hat{\psi}_j.
+\text{VAF}(r,j) = \frac{\hat{\lambda}_{rj}^2}{\sigma^2_j}, \qquad
+\text{Specific}(j) = \frac{\hat{\psi}_j}{\sigma^2_j}, \qquad
+\sum_{r=1}^{k}\text{VAF}(r,j) + \text{Specific}(j) = 1.
 $$
 
-The proportion of $\sigma^2_j$ accounted for by factor $r$ is:
-
-$$
-\text{VAF}(r,j) = \frac{\hat{\lambda}_{rj}^2}{\sigma^2_j},
-\qquad
-\text{Specific}(j) = \frac{\hat{\psi}_j}{\sigma^2_j},
-$$
-
-with $\sum_{r=1}^{k}\text{VAF}(r,j) + \text{Specific}(j) = 1$ for all $j$.
-The overall VAF for factor $r$ across all environments is:
-
-$$
-\overline{\text{VAF}}(r) = \frac{\sum_{j=1}^{t}\hat{\lambda}_{rj}^2}{\sum_{j=1}^{t}\sigma^2_j}.
-$$
-
-These quantities are computed by `fastIC()` and stored in the `vaf_env` and
-`vaf_summary` attributes of the returned data frame for use by
-`plot_fastIC(type = "VAF")`.
+The overall VAF for factor $r$ pools across all environments:
+$\overline{\text{VAF}}(r) = \sum_j\hat{\lambda}_{rj}^2 \,/\, \sum_j\sigma^2_j$.
 
 ---
 
-## Example 1 — Balanced MET: 50 Varieties × 12 Sites, FA(3), ic.num = 2
+## Example 1 — Balanced MET: 50 Varieties × 12 Sites
 
 ### Data simulation
 
@@ -306,7 +209,7 @@ providing scope for crossover interaction.
 
 ```{r plot_sim1_cor}
 #| eval: !expr asreml_ok
-#| fig-height: 5
+#| fig-height: 7
 plot_simTrialData(sim1, type = "correlation")
 ```
 
@@ -510,7 +413,7 @@ plot_fastIC(res1, type = "OP.variety", n_highlight = 6L)
 
 ---
 
-## Example 2 — Unbalanced MET: 75 Varieties × 25 Sites, FA(4), ic.num = 3
+## Example 2 — Unbalanced MET: 75 Varieties × 25 Sites
 
 When the number of environments is larger and the genetic covariance
 structure is more complex, higher-order FA models and more interaction
@@ -682,7 +585,7 @@ The subtitle reports the overall proportion explained across all 25 sites.
 
 ```{r plot2_vaf}
 #| eval: !expr asreml_ok
-#| fig-height: 4.5
+#| fig-height: 6.0
 plot_fastIC(res2, type = "VAF")
 ```
 
