@@ -39,6 +39,8 @@ navbar:
           href: accuracy.html
         - text: "Simulating Multi-Environment Trials"
           href: simTrialData.html
+        - text: "Factor Analytic Selection Tools: FAST and iClass"
+          href: fastIC.html
 
 reference:
   - title: "Pairwise Comparison Criteria"
@@ -82,7 +84,8 @@ reference:
       FAST and interaction class (iClass) approaches derived from Factor
       Analytic mixed models.
     contents:
-      - fast
+      - fastIC
+      - plot_fastIC
 
   - title: "BLUP Accuracy"
     desc: >

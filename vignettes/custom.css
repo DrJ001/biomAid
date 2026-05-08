@@ -117,3 +117,20 @@ hr {
   font-size: 1.05rem;
   font-weight: 400;
 }
+
+/* --- Package logo in title block -------------------------- */
+/* The <img id="biomaid-logo"> element is injected into       */
+/* #title-block-header by a small inline script in each       */
+/* vignette, so embed-resources embeds the image via its src  */
+/* attribute before the script moves it into the title block. */
+#title-block-header {
+  position: relative;
+}
+
+#biomaid-logo {
+  position: absolute;
+  right: 0;
+  bottom: 0.6em;
+  width: 105px;
+  opacity: 0.92;
+}

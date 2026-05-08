@@ -20,6 +20,8 @@ website:
             href: compare.html
           - text: "BLUP Accuracy in Multi-Environment Trials"
             href: accuracy.html
+          - text: "Factor Analytic Selection Tools: FAST and iClass"
+            href: fastIC.html
 
 format:
   html:

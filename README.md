@@ -1,3 +1,5 @@
+<img src="man/figures/biomAid_logo.png" align="right" height="120" alt="biomAid"/>
+
 # biomAid
 
 [![R-CMD-check](https://github.com/DrJ001/biomAid/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/DrJ001/biomAid/actions/workflows/R-CMD-check.yml)
@@ -20,6 +22,7 @@ with **ASReml-R V4** mixed models. Watch this space, there are a lot more functi
 | [Multiple Comparison Criteria](https://DrJ001.github.io/biomAid/compare.html) | HSD, LSD, and Bonferroni criteria, by-group comparisons, and all three plot types for `compare()` and `plot_compare()` |
 | [BLUP Accuracy in Multi-Environment Trials](https://DrJ001.github.io/biomAid/accuracy.html) | Mrode accuracy and Cullis H², supported random structures, and all six plot types for `accuracy()` and `plot_accuracy()` |
 | [Simulating Multi-Environment Trials](https://DrJ001.github.io/biomAid/simTrialData.html) | Mathematical framework, balanced/unbalanced/split-plot designs, and all four plot types for `simTrialData()` and `plot_simTrialData()` |
+| [Factor Analytic Selection Tools: FAST and iClass](https://DrJ001.github.io/biomAid/fastIC.html) | Mathematical framework, FAST global metrics, iClass interaction classes, and all seven plot types for `fastIC()` and `plot_fastIC()` |
 
 ## Function reference
 
@@ -300,24 +303,69 @@ plot_padTrial(result,
 
 ---
 
-### `fast()` — Factor Analytic Selection Tools
+### `fastIC()` — Factor Analytic Selection Tools
 
 Implements the **FAST** (Smith & Cullis 2018) and **iClass** (Smith et al. 2021)
-approaches for summarising variety performance from an FA mixed model.
+approaches for summarising variety performance from an FA mixed model fitted in
+ASReml-R V4. Always computes both global FAST metrics (`global_op`,
+`global_stab`) and within-class iClass metrics (`iClassOP`, `iClassRMSD`).
+The genotype factor may be wrapped in `vm(...)` or `ide(...)` for
+relationship-aware models.
+
+Two attributes are attached to the returned data frame for use by `plot_fastIC()`:
+`vaf_env` (per-environment variance accounted for by each factor and the specific
+variance) and `vaf_summary` (overall proportions across all environments).
 
 ```r
-fast(model, term = "fa(Site, 4):Genotype",
-     type   = c("all", "FAST", "iClass"),
-     ic.num = 2L,
-     ...)
+fastIC(model, term = "fa(Site, 4):Genotype",
+       ic.num = 2L,
+       ...)
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `model` | An ASReml-R V4 model object |
 | `term` | FA model term string. Default `"fa(Site, 4):Genotype"` |
-| `type` | `"all"` (default), `"FAST"`, or `"iClass"` |
-| `ic.num` | Number of interaction class factors (1 to k). Default `2` |
+| `ic.num` | Number of factors used for iClass sign-pattern classification and iClassOP. Must be < k (i.e. 1 to k − 1) so that the kth factor remains available for iClassRMSD. Default `2` |
+
+---
+
+### `plot_fastIC()` — Visualise FAST and iClass results
+
+Seven plot types for exploring the output of `fastIC()`. Covers global
+performance and stability, the FA factor structure, per-environment variance
+decomposition, within-class metrics, and cross-class comparisons — together
+providing a comprehensive view of the GEI landscape captured by the FA model.
+
+```r
+plot_fastIC(res,
+            type        = c("fast", "biplot", "CVE", "VAF",
+                            "iclass", "OP.pairs", "OP.variety"),
+            highlight   = "default",
+            n_highlight = 3L,
+            theme       = ggplot2::theme_bw(),
+            return_data = FALSE,
+            ...)
+```
+
+| Type | Description |
+|------|-------------|
+| `"fast"` | Scatter of global Overall Performance (`global_op`) vs global stability (`global_stab`) with quadrant annotations (Broadly adapted / Responsive / Poor & stable / Poor & unstable). |
+| `"biplot"` | FA biplot with genotype score points and environment loading arrows for Factors 1 and 2. Arrows coloured by iClass when present. |
+| `"CVE"` | Diverging-colour heatmap of the Common Variety Effect (genotype × environment). Environments ordered by iClass then first-factor loading; genotypes by `global_op`. |
+| `"VAF"` | Stacked 100% bar chart of Variance Accounted For per environment. Each bar is subdivided by FA factor (sequential blues, bottom to top) plus specific variance (grey, top). A dashed line marks the overall mean proportion explained across environments. |
+| `"iclass"` | Scatter of within-class iClassOP vs iClassRMSD, faceted by iClass with a per-class mean-OP reference line. |
+| `"OP.pairs"` | Lower-triangular pairs plot of iClassOP across all iClass levels. Uses `patchwork` when available; falls back to `facet_grid`. Requires ≥ 2 iClass levels. |
+| `"OP.variety"` | Line plot of iClassOP across ordered interaction classes. Highlighted varieties drawn in colour over a grey background of all other varieties. |
+
+| Argument | Description |
+|----------|-------------|
+| `res` | Data frame returned by `fastIC()` |
+| `type` | Plot type. Default `"fast"` |
+| `highlight` | `"default"` auto-selects varieties (by `global_op` / instability for `"fast"`, `"biplot"`, `"CVE"`; by mean iClassOP for `"iclass"`, `"OP.pairs"`, `"OP.variety"`); character vector for explicit names; `NULL` = no annotation. Not applicable to `"VAF"` |
+| `n_highlight` | Maximum number of varieties to highlight automatically. Default `3L` |
+| `theme` | A ggplot2 theme object. Default `theme_bw()` |
+| `return_data` | `TRUE` returns a list with `$plot` and `$data`. Default `FALSE` |
 
 ---
 
