@@ -9,6 +9,8 @@
 Biometric tools to support the analysis of comparative experiment data fitted
 with **ASReml-R V4** mixed models. Watch this space, there are a lot more functions coming.
 
+<br clear="right"/>
+
 ---
 
 ## Vignettes
@@ -93,13 +95,6 @@ plot_compare(res,
              ...)
 ```
 
-| Type | Description |
-|------|-------------|
-| `"dotplot"` | Varieties sorted by predicted value (highest at top). A shaded band of width equal to the criterion is drawn below the top-ranked variety — points inside the band are not significantly different from the best; points outside are red. `reference` anchors the band to a named check variety instead. |
-| `"errbar"` | Each variety shown as a point with a horizontal error bar spanning ±½ criterion. Two varieties are significantly different if and only if their bars do not overlap — an exact visual equivalent of the criterion test. |
-| `"letters"` | Compact letter display (CLD) overlaid on the sorted dot plot. Varieties sharing at least one letter are not significantly different. |
-| `"heatmap"` | n × n pairwise absolute-difference tile matrix; white × marks significantly different pairs. Useful for large variety sets where a letter display becomes unreadable. |
-
 | Argument | Description |
 |----------|-------------|
 | `res` | Data frame returned by `compare()` |
@@ -108,6 +103,13 @@ plot_compare(res,
 | `interactive` | `TRUE` converts to a plotly object with hover tooltips. Requires **plotly**. Default `FALSE` |
 | `theme` | A ggplot2 theme object. Default `theme_bw()` |
 | `return_data` | `TRUE` returns the tidy data frame instead of the plot |
+
+| Type | Description |
+|------|-------------|
+| `"dotplot"` | Varieties sorted by predicted value (highest at top). A shaded band of width equal to the criterion is drawn below the top-ranked variety — points inside the band are not significantly different from the best; points outside are red. `reference` anchors the band to a named check variety instead. |
+| `"errbar"` | Each variety shown as a point with a horizontal error bar spanning ±½ criterion. Two varieties are significantly different if and only if their bars do not overlap — an exact visual equivalent of the criterion test. |
+| `"letters"` | Compact letter display (CLD) overlaid on the sorted dot plot. Varieties sharing at least one letter are not significantly different. |
+| `"heatmap"` | n × n pairwise absolute-difference tile matrix; white × marks significantly different pairs. Useful for large variety sets where a letter display becomes unreadable. |
 
 ---
 
@@ -384,6 +386,15 @@ plot_fastIC(res,
             ...)
 ```
 
+| Argument | Description |
+|----------|-------------|
+| `res` | Data frame returned by `fastIC()` |
+| `type` | Plot type. Default `"fast"` |
+| `highlight` | `"default"` auto-selects varieties (by `global_op` / instability for `"fast"`, `"biplot"`, `"CVE"`; by mean iClassOP for `"iclass"`, `"OP.pairs"`, `"OP.variety"`); character vector for explicit names; `NULL` = no annotation. Not applicable to `"VAF"` |
+| `n_highlight` | Maximum number of varieties to highlight automatically. Default `3L` |
+| `theme` | A ggplot2 theme object. Default `theme_bw()` |
+| `return_data` | `TRUE` returns a list with `$plot` and `$data`. Default `FALSE` |
+
 | Type | Description |
 |------|-------------|
 | `"fast"` | Scatter of global Overall Performance (`global_op`) vs global stability (`global_stab`) with quadrant annotations (Broadly adapted / Responsive / Poor & stable / Poor & unstable). |
@@ -393,15 +404,6 @@ plot_fastIC(res,
 | `"iclass"` | Scatter of within-class iClassOP vs iClassRMSD, faceted by iClass with a per-class mean-OP reference line. |
 | `"OP.pairs"` | Lower-triangular pairs plot of iClassOP across all iClass levels. Uses `patchwork` when available; falls back to `facet_grid`. Requires ≥ 2 iClass levels. |
 | `"OP.variety"` | Line plot of iClassOP across ordered interaction classes. Highlighted varieties drawn in colour over a grey background of all other varieties. |
-
-| Argument | Description |
-|----------|-------------|
-| `res` | Data frame returned by `fastIC()` |
-| `type` | Plot type. Default `"fast"` |
-| `highlight` | `"default"` auto-selects varieties (by `global_op` / instability for `"fast"`, `"biplot"`, `"CVE"`; by mean iClassOP for `"iclass"`, `"OP.pairs"`, `"OP.variety"`); character vector for explicit names; `NULL` = no annotation. Not applicable to `"VAF"` |
-| `n_highlight` | Maximum number of varieties to highlight automatically. Default `3L` |
-| `theme` | A ggplot2 theme object. Default `theme_bw()` |
-| `return_data` | `TRUE` returns a list with `$plot` and `$data`. Default `FALSE` |
 
 ---
 
@@ -475,13 +477,6 @@ plot_simTrialData(res,
                   ...)
 ```
 
-| Type | Description |
-|------|-------------|
-| `"trial"` | Tiled Row × Column field layout, one panel per site. `fill` maps any data column onto tile colour (`NULL` → `Rep`; numeric → viridis; factor → discrete palette). `label` overlays text from any column. |
-| `"incidence"` | Variety × Site presence/absence grid. Each variety label shows its site count `[n]`; each site header shows its variety count `[n]`. `sort = TRUE` orders varieties from most- to least-connected (top to bottom). |
-| `"correlation"` | Full heatmap of `cov2cor(params$G)`. Diverging RdBu palette centred at zero; correlation values printed when the matrix is ≤ 15 × 15. |
-| `"blup"` | Heatmap of `params$g_arr` (Variety × Group). Diverging RdBu palette centred at zero reveals the true GEI structure. `sort = TRUE` orders varieties by decreasing mean BLUP. |
-
 | Argument | Description |
 |----------|-------------|
 | `res` | List returned by `simTrialData()` |
@@ -492,6 +487,14 @@ plot_simTrialData(res,
 | `ncol` | `"trial"` only. Number of facet columns. `NULL` = ggplot2 default |
 | `theme` | A ggplot2 theme object. Default `theme_bw()` |
 | `return_data` | `TRUE` returns a list with `$plot` and `$data`. Default `FALSE` |
+
+
+| Type | Description |
+|------|-------------|
+| `"trial"` | Tiled Row × Column field layout, one panel per site. `fill` maps any data column onto tile colour (`NULL` → `Rep`; numeric → viridis; factor → discrete palette). `label` overlays text from any column. |
+| `"incidence"` | Variety × Site presence/absence grid. Each variety label shows its site count `[n]`; each site header shows its variety count `[n]`. `sort = TRUE` orders varieties from most- to least-connected (top to bottom). |
+| `"correlation"` | Full heatmap of `cov2cor(params$G)`. Diverging RdBu palette centred at zero; correlation values printed when the matrix is ≤ 15 × 15. |
+| `"blup"` | Heatmap of `params$g_arr` (Variety × Group). Diverging RdBu palette centred at zero reveals the true GEI structure. `sort = TRUE` orders varieties by decreasing mean BLUP. |
 
 ---
 
@@ -544,6 +547,16 @@ plot_accuracy(res,
               return_data = FALSE,
               ...)
 ```
+| Argument | Description |
+|----------|-------------|
+| `res` | Data frame returned by `accuracy()` |
+| `res2` | Optional second `accuracy()` result for two-model comparison plots (`"dumbbell"`, `"scatter"`, `"diff"`). `NULL` (default) = single-model plots only |
+| `type` | Plot type. Default `"lollipop"` |
+| `metric` | One or both of `"accuracy"` (Mrode) and `"gen.H2"` (Cullis H²). When both are supplied the plot is split into two facet panels. Default = both |
+| `label1` | Label for `res` in two-model plots. Default `"Model 1"` |
+| `label2` | Label for `res2` in two-model plots. Default `"Model 2"` |
+| `theme` | A ggplot2 theme object. Default `theme_bw()` |
+| `return_data` | `TRUE` returns a list with `$plot` and `$data` instead of the plot alone |
 
 | Type | Input | Description |
 |------|-------|-------------|
