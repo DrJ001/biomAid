@@ -75,6 +75,42 @@ compare(model, term, by = NULL,
 
 ---
 
+### `plot_compare()` — Visualise pairwise comparison results
+
+Four plot types for exploring the output of `compare()`. All types handle
+multi-factor `by`-group structure automatically through faceting, and support
+an optional interactive [plotly](https://plotly.com/r/) version with hover
+tooltips. The result object supports `+` for adding ggplot2 layers before
+plotly conversion via `pc_add()`.
+
+```r
+plot_compare(res,
+             type        = c("dotplot", "errbar", "letters", "heatmap"),
+             reference   = NULL,
+             interactive = FALSE,
+             theme       = ggplot2::theme_bw(),
+             return_data = FALSE,
+             ...)
+```
+
+| Type | Description |
+|------|-------------|
+| `"dotplot"` | Varieties sorted by predicted value (highest at top). A shaded band of width equal to the criterion is drawn below the top-ranked variety — points inside the band are not significantly different from the best; points outside are red. `reference` anchors the band to a named check variety instead. |
+| `"errbar"` | Each variety shown as a point with a horizontal error bar spanning ±½ criterion. Two varieties are significantly different if and only if their bars do not overlap — an exact visual equivalent of the criterion test. |
+| `"letters"` | Compact letter display (CLD) overlaid on the sorted dot plot. Varieties sharing at least one letter are not significantly different. |
+| `"heatmap"` | n × n pairwise absolute-difference tile matrix; white × marks significantly different pairs. Useful for large variety sets where a letter display becomes unreadable. |
+
+| Argument | Description |
+|----------|-------------|
+| `res` | Data frame returned by `compare()` |
+| `type` | Plot type. Default `"dotplot"` |
+| `reference` | `"dotplot"` only. Character name of a check variety to anchor the criterion band; `NULL` (default) anchors to the top-ranked variety |
+| `interactive` | `TRUE` converts to a plotly object with hover tooltips. Requires **plotly**. Default `FALSE` |
+| `theme` | A ggplot2 theme object. Default `theme_bw()` |
+| `return_data` | `TRUE` returns the tidy data frame instead of the plot |
+
+---
+
 ### `waldTest()` — Wald / F-tests on contrasts
 
 Tests linear contrasts of predicted values using prediction error information
