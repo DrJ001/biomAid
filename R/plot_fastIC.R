@@ -150,7 +150,7 @@ NULL
     return(intersect(highlight, all_genos))
 
   # "default" logic: branch by plot type
-  if (type %in% c("iclass", "pairs", "trajectory")) {
+  if (type %in% c("iclass", "OP.pairs", "OP.variety")) {
 
     # Try to use mean iClassOP across classes
     ic_op_cols <- grep("^iClassOP_", names(gd), value = TRUE)
@@ -171,7 +171,7 @@ NULL
     return(as.character(head(all_genos, n_highlight)))
   }
 
-  # "fast", "biplot", "cve", "dev", "specialist", and all others
+  # "fast", "biplot", "CVE", "dev", and all others
   if ("global_op" %in% names(gd)) {
 
     top_op <- head(
@@ -503,8 +503,7 @@ NULL
         data    = ed_sc,
         mapping = ggplot2::aes(x = loads1, y = loads2,
                                label = !!rlang::sym(p$sterm),
-                               colour = iclass),
-        size    = 2.8
+                               colour = iclass)
       )
   } else {
     plt <- plt +
@@ -519,8 +518,7 @@ NULL
         data    = ed_sc,
         mapping = ggplot2::aes(x = loads1, y = loads2,
                                label = !!rlang::sym(p$sterm)),
-        colour  = "grey30",
-        size    = 2.8
+        colour  = "grey30"
       )
   }
 
@@ -566,75 +564,10 @@ NULL
   list(plot = plt, data = list(geno = gd, envs = ed_sc))
 }
 
-# ---- "loads" -----------------------------------------------------------
+# ---- "CVE" and "dev" ---------------------------------------------------
 
 #' @noRd
-.pfi_plot_loads <- function(res, p, theme) {
-
-  ed <- .pfi_env_data(res, p)
-
-  l_rng <- range(c(ed$loads1, ed$loads2), na.rm = TRUE)
-  px    <- 0.03 * diff(range(ed$loads1, na.rm = TRUE))
-  py    <- 0.03 * diff(range(ed$loads2, na.rm = TRUE))
-  x_lo  <- min(ed$loads1, na.rm = TRUE)
-  x_hi  <- max(ed$loads1, na.rm = TRUE)
-  y_lo  <- min(ed$loads2, na.rm = TRUE)
-  y_hi  <- max(ed$loads2, na.rm = TRUE)
-
-  plt <- ggplot2::ggplot(ed,
-    ggplot2::aes(x = loads1, y = loads2)) +
-    ggplot2::geom_hline(yintercept = 0,
-                        linetype = "dashed", colour = "grey60") +
-    ggplot2::geom_vline(xintercept = 0,
-                        linetype = "dashed", colour = "grey60")
-
-  if (p$has_iclass && "iclass" %in% names(ed)) {
-    plt <- plt +
-      ggplot2::geom_point(
-        ggplot2::aes(colour = iclass),
-        size = 3
-      )
-  } else {
-    plt <- plt +
-      ggplot2::geom_point(colour = "#2166AC", size = 3)
-  }
-
-  plt <- plt +
-    .pfi_text_layer(
-      data    = ed,
-      mapping = ggplot2::aes(label = !!rlang::sym(p$sterm)),
-      size    = 3
-    ) +
-    ggplot2::annotate("text",
-      x = x_hi - px, y = y_hi - py,
-      label = "pp", hjust = 1, vjust = 1, alpha = 0.35, size = 5
-    ) +
-    ggplot2::annotate("text",
-      x = x_hi - px, y = y_lo + py,
-      label = "pn", hjust = 1, vjust = 0, alpha = 0.35, size = 5
-    ) +
-    ggplot2::annotate("text",
-      x = x_lo + px, y = y_hi - py,
-      label = "np", hjust = 0, vjust = 1, alpha = 0.35, size = 5
-    ) +
-    ggplot2::annotate("text",
-      x = x_lo + px, y = y_lo + py,
-      label = "nn", hjust = 0, vjust = 0, alpha = 0.35, size = 5
-    ) +
-    ggplot2::labs(
-      x     = "Factor 1 loading",
-      y     = "Factor 2 loading",
-      title = "Environment factor loadings (Factors 1 & 2)"
-    ) +
-    theme
-
-  list(plot = plt, data = ed)
-}
-
-# ---- "cve" and "dev" ---------------------------------------------------
-
-#' @noRd
-.pfi_plot_cve <- function(res, p, theme) {
+.pfi_plot_CVE <- function(res, p, theme) {
   .pfi_heatmap(
     res      = res,
     p        = p,
@@ -650,7 +583,7 @@ NULL
   .pfi_heatmap(
     res      = res,
     p        = p,
-    fill_col = "dev",
+    fill_col = "global_dev",
     fill_lab = "dev",
     title    = "Residual deviation (dev) \u2014 GEI beyond Factor 1",
     theme    = theme
@@ -743,10 +676,10 @@ NULL
   list(plot = plt, data = ic_df)
 }
 
-# ---- "trajectory" ------------------------------------------------------
+# ---- "OP.variety" -------------------------------------------------------
 
 #' @noRd
-.pfi_plot_trajectory <- function(res, p, hl_names, theme) {
+.pfi_plot_op_variety <- function(res, p, hl_names, theme) {
 
   traj_df <- unique(res[, c(p$gterm, "iclass", "iClassOP"), drop = FALSE])
   traj_df <- traj_df[!is.na(traj_df$iclass), , drop = FALSE]
@@ -822,17 +755,17 @@ NULL
     ggplot2::labs(
       x     = "iClass",
       y     = "iClassOP",
-      title = "iClassOP trajectory across interaction classes"
+      title = "iClassOP across interaction classes (variety trajectories)"
     ) +
     theme
 
   list(plot = plt, data = traj_df)
 }
 
-# ---- "pairs" -----------------------------------------------------------
+# ---- "OP.pairs" --------------------------------------------------------
 
 #' @noRd
-.pfi_plot_pairs <- function(res, p, hl_names, theme) {
+.pfi_plot_op_pairs <- function(res, p, hl_names, theme) {
 
   traj_df <- unique(res[, c(p$gterm, "iclass", "iClassOP"), drop = FALSE])
   traj_df <- traj_df[!is.na(traj_df$iclass), , drop = FALSE]
@@ -849,7 +782,7 @@ NULL
     warning("plot_fastIC(): 'pairs' plot requires >= 2 iClass levels; ",
             "only ", n_ic, " found. Returning empty plot.")
     plt <- ggplot2::ggplot() +
-      ggplot2::labs(title = "pairs: insufficient iClass levels") +
+      ggplot2::labs(title = "OP.pairs: insufficient iClass levels") +
       theme
     return(list(plot = plt, data = traj_df))
   }
@@ -1045,167 +978,6 @@ NULL
   list(plot = plt, data = pairs_df)
 }
 
-# ---- "specialist" ------------------------------------------------------
-
-#' @noRd
-.pfi_plot_specialist <- function(res, p, hl_names, theme) {
-
-  spec_df <- unique(res[, c(p$gterm, "iclass", "iClassOP", "global_op"),
-                         drop = FALSE])
-  spec_df <- spec_df[!is.na(spec_df$iclass), , drop = FALSE]
-
-  spec_df$highlighted <- spec_df[[p$gterm]] %in% hl_names
-  n_hl    <- length(hl_names)
-  hl_cols <- if (n_hl > 0L) .pfi_pal(n_hl) else character(0L)
-
-  spec_reg <- spec_df[!spec_df$highlighted, , drop = FALSE]
-  spec_hl  <- spec_df[spec_df$highlighted,  , drop = FALSE]
-
-  plt <- ggplot2::ggplot(spec_df,
-    ggplot2::aes(x = global_op, y = iClassOP)) +
-    ggplot2::geom_abline(
-      slope = 1, intercept = 0,
-      linetype = "dashed", colour = "grey50"
-    ) +
-    ggplot2::geom_point(
-      data   = spec_reg,
-      colour = "grey70",
-      size   = 2
-    )
-
-  if (n_hl > 0L && nrow(spec_hl) > 0L) {
-    spec_hl[[p$gterm]] <- factor(spec_hl[[p$gterm]], levels = hl_names)
-    plt <- plt +
-      ggplot2::geom_point(
-        data    = spec_hl,
-        mapping = ggplot2::aes(colour = !!rlang::sym(p$gterm)),
-        size    = 2.5
-      ) +
-      ggplot2::scale_colour_manual(values = hl_cols, name = p$gterm) +
-      .pfi_text_layer(
-        data    = spec_hl,
-        mapping = ggplot2::aes(label  = !!rlang::sym(p$gterm),
-                               colour = !!rlang::sym(p$gterm))
-      )
-  }
-
-  plt <- plt +
-    ggplot2::facet_wrap(
-      stats::as.formula("~ iclass"),
-      scales = "free"
-    ) +
-    ggplot2::labs(
-      x     = "Global OP",
-      y     = "iClassOP",
-      title = "Class specialist plot: iClassOP vs global OP"
-    ) +
-    theme +
-    ggplot2::theme(
-      strip.background = ggplot2::element_rect(fill = "grey88",
-                                                colour = "grey70"),
-      strip.text       = ggplot2::element_text(face = "bold")
-    )
-
-  list(plot = plt, data = spec_df)
-}
-
-# ---- "winner" ----------------------------------------------------------
-
-#' @noRd
-.pfi_plot_winner <- function(res, p, theme) {
-
-  # Find winner per environment (highest CVE; ties broken alphabetically)
-  env_df   <- res[, c(p$sterm, p$gterm, "CVE",
-                       if (p$has_iclass) "iclass",
-                       if ("loads1" %in% names(res)) "loads1"),
-                   drop = FALSE]
-
-  # Sort so that alphabetical tie-breaking works with first()
-  env_df   <- env_df[order(env_df[[p$sterm]],
-                            as.character(env_df[[p$gterm]])), ]
-
-  # Per-environment max CVE
-  win_list <- lapply(split(env_df, env_df[[p$sterm]]), function(sub) {
-    best_idx <- which.max(sub$CVE)
-    data.frame(
-      env         = sub[[p$sterm]][1L],
-      winner      = as.character(sub[[p$gterm]][best_idx]),
-      winning_CVE = sub$CVE[best_idx],
-      iclass      = if (p$has_iclass) as.character(sub$iclass[1L]) else NA,
-      loads1      = if ("loads1" %in% names(sub)) sub$loads1[1L] else NA,
-      stringsAsFactors = FALSE
-    )
-  })
-  winner_df <- do.call(rbind, win_list)
-  rownames(winner_df) <- NULL
-  names(winner_df)[1L] <- p$sterm
-
-  # Order environments
-  if (p$has_iclass && !all(is.na(winner_df$iclass))) {
-    ic_ord <- order(winner_df$iclass,
-                    if (!all(is.na(winner_df$loads1))) -winner_df$loads1
-                    else seq_len(nrow(winner_df)))
-    winner_df <- winner_df[ic_ord, , drop = FALSE]
-  } else if (!all(is.na(winner_df$loads1))) {
-    winner_df <- winner_df[order(-winner_df$loads1), , drop = FALSE]
-  }
-
-  env_levs <- as.character(winner_df[[p$sterm]])
-  winner_df[[p$sterm]] <- factor(winner_df[[p$sterm]], levels = env_levs)
-
-  n_winners  <- length(unique(winner_df$winner))
-  winner_pal <- .pfi_pal(min(n_winners, 20L))
-
-  plt <- ggplot2::ggplot(winner_df,
-    ggplot2::aes(x = !!rlang::sym(p$sterm),
-                 y = 1,
-                 fill = winner)) +
-    ggplot2::geom_tile(colour = "white", linewidth = 0.5) +
-    ggplot2::geom_text(
-      ggplot2::aes(label = winner),
-      size   = 2.5,
-      angle  = 90,
-      colour = "white"
-    ) +
-    ggplot2::scale_fill_manual(
-      values = winner_pal,
-      name   = p$gterm,
-      guide  = ggplot2::guide_legend(ncol = 3L)
-    ) +
-    ggplot2::labs(
-      x     = p$sterm,
-      title = "Winning variety by environment"
-    ) +
-    theme +
-    ggplot2::theme(
-      axis.text.y  = ggplot2::element_blank(),
-      axis.ticks.y = ggplot2::element_blank(),
-      axis.title.y = ggplot2::element_blank(),
-      axis.text.x  = ggplot2::element_text(angle = 45, hjust = 1)
-    )
-
-  if (p$has_iclass && !all(is.na(winner_df$iclass))) {
-    winner_df$iclass <- factor(winner_df$iclass,
-                               levels = sort(unique(winner_df$iclass)))
-    plt <- plt +
-      ggplot2::facet_grid(
-        stats::as.formula(". ~ iclass"),
-        scales = "free_x",
-        space  = "free_x"
-      ) +
-      ggplot2::theme(
-        strip.background = ggplot2::element_rect(fill = "grey88",
-                                                  colour = "grey70"),
-        strip.text       = ggplot2::element_text(face = "bold")
-      )
-  }
-
-  # Drop internal helper columns from return data
-  winner_df$loads1 <- NULL
-  list(plot = plt, data = winner_df)
-}
-
-
 # ============================================================
 #  Public function
 # ============================================================
@@ -1221,40 +993,33 @@ NULL
 #' @details
 #' ## Plot types
 #' \describe{
+#'   \item{`"fast"`}{Scatter of global Overall Performance (`global_op`) vs
+#'     global stability (`global_stab`) with quadrant annotations.}
 #'   \item{`"biplot"`}{Factor-analysis biplot with genotype score points and
 #'     environment loading arrows (Factors 1 & 2).  Requires k \eqn{\geq} 2.}
-#'   \item{`"fast"`}{Scatter of Overall Performance (OP) vs stability (RMSD)
-#'     with quadrant annotations.  Requires FAST output.}
-#'   \item{`"loads"`}{Environment loading scatter (Factors 1 & 2) with
-#'     quadrant labels.  Requires k \eqn{\geq} 2.}
-#'   \item{`"cve"`}{Diverging-colour heatmap of the Common Variety Effect
-#'     (genotype \eqn{\times} environment).}
-#'   \item{`"dev"`}{As `"cve"` but for the residual deviation beyond Factor 1.
-#'     Requires k \eqn{>} 1 and FAST output.}
+#'   \item{`"CVE"`}{Diverging-colour heatmap of the Common Variety Effect
+#'     (genotype \eqn{\times} environment), ordered by iClass then
+#'     first-factor loading.}
+#'   \item{`"dev"`}{As `"CVE"` but shows the residual global deviation beyond
+#'     Factor 1.  Requires k \eqn{>} 1.}
 #'   \item{`"iclass"`}{Scatter of within-class OP vs within-class RMSD,
-#'     faceted by iClass.  Requires iClass output.}
-#'   \item{`"trajectory"`}{Line plot of iClassOP across interaction classes
-#'     for highlighted genotypes, with all others as grey background.  Requires
-#'     iClass output.}
-#'   \item{`"pairs"`}{Lower-triangular pairs plot of iClassOP values across
-#'     iClass levels.  Uses \pkg{patchwork} if available; falls back to
-#'     `facet_grid`.  Requires iClass output with \eqn{\geq} 2 classes.}
-#'   \item{`"specialist"`}{iClassOP vs global OP, faceted by iClass, with a
-#'     y = x reference line.  Requires FAST + iClass output.}
-#'   \item{`"winner"`}{Tile strip showing the winning variety (highest CVE)
-#'     for each environment.}
+#'     faceted by iClass.}
+#'   \item{`"OP.pairs"`}{Lower-triangular pairs plot of iClassOP values across
+#'     all iClass levels.  Uses \pkg{patchwork} if available; falls back to
+#'     `facet_grid`.  Requires \eqn{\geq} 2 iClass levels.}
+#'   \item{`"OP.variety"`}{Line plot of iClassOP across ordered interaction
+#'     classes for highlighted varieties, with all others as a grey background.}
 #' }
 #'
 #' ## Highlighting
 #' When `highlight = "default"` the function automatically selects genotypes
 #' to annotate based on the plot type:
 #' \itemize{
-#'   \item For `"fast"`, `"biplot"`, `"cve"`, `"dev"`, `"specialist"`: top
-#'     `n_highlight` by OP \emph{and} top `n_highlight` by instability (high
-#'     stab), deduplicated.
-#'   \item For `"iclass"`, `"pairs"`, `"trajectory"`: top `n_highlight` by
-#'     mean iClassOP across classes (or by OP as fallback).
-#'   \item For other types: top `n_highlight` by OP (or first n if OP absent).
+#'   \item For `"fast"`, `"biplot"`, `"CVE"`, `"dev"`: top `n_highlight` by
+#'     `global_op` \emph{and} top `n_highlight` by instability (`global_stab`),
+#'     deduplicated.
+#'   \item For `"iclass"`, `"OP.pairs"`, `"OP.variety"`: top `n_highlight` by
+#'     mean iClassOP across classes (or by `global_op` as fallback).
 #' }
 #' Supply `highlight = NULL` to suppress all annotation, or a character vector
 #' of variety names to annotate specific genotypes.
@@ -1267,9 +1032,8 @@ NULL
 #'
 #' @param res         A long-format data frame returned by [fastIC()].
 #' @param type        Character; the visualisation to produce. One of
-#'   `"biplot"` (default), `"fast"`, `"loads"`, `"cve"`, `"dev"`,
-#'   `"iclass"`, `"trajectory"`, `"pairs"`, `"specialist"`, `"winner"`.
-#'   May be abbreviated.
+#'   `"fast"` (default), `"biplot"`, `"CVE"`, `"dev"`, `"iclass"`,
+#'   `"OP.pairs"`, `"OP.variety"`.  May be abbreviated.
 #' @param highlight   Controls variety annotation. One of `"default"`
 #'   (automatic; see Details), a character vector of variety names, or `NULL`
 #'   (no annotation).  Default `"default"`.
@@ -1291,7 +1055,7 @@ NULL
 #'
 #' @examples
 #' \dontrun{
-#' res <- fastIC(model, type = c("FAST", "iClass"))
+#' res <- fastIC(model, ic.num = 2L)
 #'
 #' # FAST scatter
 #' plot_fastIC(res, type = "fast")
@@ -1300,18 +1064,20 @@ NULL
 #' plot_fastIC(res, type = "biplot", highlight = c("Var01", "Var22"))
 #'
 #' # CVE heatmap, retrieve data
-#' out <- plot_fastIC(res, type = "cve", return_data = TRUE)
+#' out <- plot_fastIC(res, type = "CVE", return_data = TRUE)
 #' head(out$data)
 #'
-#' # Trajectory of top 5 varieties across iClasses
-#' plot_fastIC(res, type = "trajectory", n_highlight = 5L)
+#' # iClassOP trajectory for top 5 varieties
+#' plot_fastIC(res, type = "OP.variety", n_highlight = 5L)
+#'
+#' # Lower-triangular iClassOP pairs plot
+#' plot_fastIC(res, type = "OP.pairs")
 #' }
 #'
 #' @export
 plot_fastIC <- function(res,
-                        type        = c("biplot", "fast", "loads", "cve",
-                                        "dev", "iclass", "trajectory",
-                                        "pairs", "specialist", "winner"),
+                        type        = c("fast", "biplot", "CVE", "dev",
+                                        "iclass", "OP.pairs", "OP.variety"),
                         highlight   = "default",
                         n_highlight = 3L,
                         theme       = ggplot2::theme_bw(),
@@ -1348,8 +1114,8 @@ plot_fastIC <- function(res,
            "re-run fastIC() with k > 1.")
   }
 
-  if (type %in% c("biplot", "loads") && p$k < 2L)
-    stop("plot_fastIC(): type = '", type, "' requires k >= 2 factors; ",
+  if (type == "biplot" && p$k < 2L)
+    stop("plot_fastIC(): type = 'biplot' requires k >= 2 factors; ",
          "only ", p$k, " factor(s) found.")
 
   if (type == "dev") {
@@ -1358,18 +1124,9 @@ plot_fastIC <- function(res,
            "re-run fastIC() with k > 1.")
   }
 
-  if (type %in% c("iclass", "trajectory", "pairs", "specialist")) {
+  if (type %in% c("iclass", "OP.variety", "OP.pairs")) {
     if (!p$has_iclass)
       stop("plot_fastIC(): 'iclass' column not found. ",
-           "Re-run fastIC() with type = 'iClass' or 'all'.")
-  }
-
-  if (type == "specialist") {
-    if (!p$has_fast)
-      stop("plot_fastIC(): type = 'specialist' requires 'global_op' column. ",
-           "Was 'res' produced by fastIC()?")
-    if (!"iClassOP" %in% names(res))
-      stop("plot_fastIC(): type = 'specialist' requires 'iClassOP' column. ",
            "Was 'res' produced by fastIC()?")
   }
 
@@ -1384,16 +1141,13 @@ plot_fastIC <- function(res,
   # ------------------------------------------------------------------ #
   result <- switch(type,
 
-    fast       = .pfi_plot_fast(       res, p, hl_names, theme),
-    biplot     = .pfi_plot_biplot(     res, p, hl_names, theme),
-    loads      = .pfi_plot_loads(      res, p,           theme),
-    cve        = .pfi_plot_cve(        res, p,           theme),
-    dev        = .pfi_plot_dev(        res, p,           theme),
-    iclass     = .pfi_plot_iclass(     res, p, hl_names, theme),
-    trajectory = .pfi_plot_trajectory( res, p, hl_names, theme),
-    pairs      = .pfi_plot_pairs(      res, p, hl_names, theme),
-    specialist = .pfi_plot_specialist( res, p, hl_names, theme),
-    winner     = .pfi_plot_winner(     res, p,           theme)
+    fast       = .pfi_plot_fast(      res, p, hl_names, theme),
+    biplot     = .pfi_plot_biplot(    res, p, hl_names, theme),
+    CVE        = .pfi_plot_CVE(       res, p,           theme),
+    dev        = .pfi_plot_dev(       res, p,           theme),
+    iclass     = .pfi_plot_iclass(    res, p, hl_names, theme),
+    OP.pairs   = .pfi_plot_op_pairs(  res, p, hl_names, theme),
+    OP.variety = .pfi_plot_op_variety(res, p, hl_names, theme)
   )
 
   # ------------------------------------------------------------------ #
