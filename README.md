@@ -13,7 +13,6 @@ biometricians with flexible functions for interpreting and further modelling of 
 from complex linear mixed models such **ASReml-R V4** mixed models. Watch this
 space, there are a lot more functions coming. 
 
----
 
 ## Vignettes
 
