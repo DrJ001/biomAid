@@ -6,10 +6,12 @@
 
 ---
 
-<img src="man/figures/biomAid_logo.png" align="right" height="110" alt="biomAid"/>
+<img src="man/figures/biomAid_logo.png" align="right" height="150" alt="biomAid"/>
 
-Biometric tools to support the analysis of comparative experiment data fitted
-with **ASReml-R V4** mixed models. Watch this space, there are a lot more functions coming.
+Welcome to bioMaid! This package has been specifically built to provide
+biometricians with flexible functions for intepreting and further modelling of results
+from complex linear mixed models such **ASReml-R V4** mixed models. Watch this
+space, there are a lot more functions coming. 
 
 ---
 
