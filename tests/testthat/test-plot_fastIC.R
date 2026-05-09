@@ -247,6 +247,56 @@ test_that("C: 'biplot' errors when k < 2", {
   expect_error(plot_fastIC(res_1f, type = "biplot"), "k >= 2")
 })
 
+test_that("C: biplot_factors wrong length errors", {
+  expect_error(
+    plot_fastIC(.pfi_res, type = "biplot", biplot_factors = c(1L, 2L, 3L)),
+    "length-2"
+  )
+})
+
+test_that("C: biplot_factors duplicate values errors", {
+  expect_error(
+    plot_fastIC(.pfi_res, type = "biplot", biplot_factors = c(2L, 2L)),
+    "distinct"
+  )
+})
+
+test_that("C: biplot_factors out-of-range errors", {
+  expect_error(
+    plot_fastIC(.pfi_res, type = "biplot", biplot_factors = c(1L, 5L)),
+    "k = 3"
+  )
+})
+
+test_that("C: biplot_factors = c(1,3) produces a ggplot (k=3 fixture)", {
+  p <- plot_fastIC(.pfi_res, type = "biplot", biplot_factors = c(1L, 3L))
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("C: biplot_factors axis labels reflect chosen factors", {
+  p <- plot_fastIC(.pfi_res, type = "biplot", biplot_factors = c(1L, 3L))
+  expect_match(p$labels$x, "Factor 1")
+  expect_match(p$labels$y, "Factor 3")
+})
+
+test_that("C: biplot_factors title notes non-default axes", {
+  p <- plot_fastIC(.pfi_res, type = "biplot", biplot_factors = c(2L, 3L))
+  expect_match(p$labels$title, "Factors 2 & 3")
+})
+
+test_that("C: biplot_factors default c(1,2) title has no factor annotation", {
+  p <- plot_fastIC(.pfi_res, type = "biplot", biplot_factors = c(1L, 2L))
+  expect_false(grepl("Factors [0-9]", p$labels$title))
+})
+
+test_that("C: biplot_factors ignored for non-biplot types", {
+  # Should not error even with an out-of-range value when type != biplot
+  expect_s3_class(
+    plot_fastIC(.pfi_res, type = "fast", biplot_factors = c(9L, 99L)),
+    "ggplot"
+  )
+})
+
 # ===========================================================================
 # SECTION D – Return value: ggplot object or list
 # ===========================================================================

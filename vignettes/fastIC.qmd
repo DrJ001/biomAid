@@ -585,7 +585,7 @@ The subtitle reports the overall proportion explained across all 25 sites.
 
 ```{r plot2_vaf}
 #| eval: !expr asreml_ok
-#| fig-height: 6.0
+#| fig-height: 4.5
 plot_fastIC(res2, type = "VAF")
 ```
 
@@ -599,14 +599,23 @@ plot_fastIC(res2, type = "fast", n_highlight = 6L)
 
 ### FA biplot
 
-The biplot for the larger 25-site dataset shows a richer loading structure,
-with environments spread more widely through the (factor 1, factor 2)
-loading space and clearly distinguished by iClass colour.
+With `ic.num = 3`, each iClass is defined by the sign pattern of the first
+**three** loadings — up to $2^3 = 8$ potential classes. The default biplot
+shows Factors 1 & 2 only, so environments whose iClass differs solely in
+the sign of Factor 3 will overlap in this view. A second biplot using
+`biplot_factors = c(1L, 3L)` reveals the Factor 3 separation.
 
 ```{r plot2_biplot}
 #| eval: !expr asreml_ok
 #| fig-height: 6.5
 plot_fastIC(res2, type = "biplot", n_highlight = 5L)
+```
+
+```{r plot2_biplot_f13}
+#| eval: !expr asreml_ok
+#| fig-height: 6.5
+plot_fastIC(res2, type = "biplot", n_highlight = 5L,
+            biplot_factors = c(1L, 3L))
 ```
 
 ### CVE heatmap
@@ -685,7 +694,7 @@ plot_fastIC(res2, type = "OP.variety", n_highlight = 8L)
 | Type | Description |
 |------|-------------|
 | `"fast"` | Global OP vs stability scatter with quadrant annotations. Auto-highlights top by `global_op` and top by `global_stab`. |
-| `"biplot"` | FA biplot — genotype score points and environment loading arrows (Factors 1 & 2), coloured by iClass. Requires k ≥ 2. |
+| `"biplot"` | FA biplot — genotype score points and environment loading arrows, coloured by iClass. Default axes are Factors 1 & 2; use `biplot_factors = c(i, j)` to display any two factor axes. Requires k ≥ 2. |
 | `"CVE"` | Common Variety Effect heatmap (genotype × environment); environments grouped by iClass, genotypes ordered by `global_op`. |
 | `"VAF"` | Stacked 100% bar chart of Variance Accounted For per environment: FA factors (sequential blues, bottom) plus specific variance (grey, top). Dashed line = overall mean explained. |
 | `"iclass"` | iClassOP vs iClassRMSD scatter, faceted by interaction class; per-class mean reference line. Auto-highlights top by mean iClassOP. |
@@ -694,6 +703,8 @@ plot_fastIC(res2, type = "OP.variety", n_highlight = 8L)
 
 All types support `highlight = "default" | character | NULL` and
 `return_data = TRUE` returning `list($plot, $data)`.
+The `biplot_factors` argument (default `c(1L, 2L)`) selects which two FA
+factor axes to display in the biplot.
 
 ---
 

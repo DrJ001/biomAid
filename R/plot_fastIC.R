@@ -5,7 +5,7 @@
 
 utils::globalVariables(c(
   "global_op", "global_stab", "global_dev",
-  "highlighted", "score1", "score2", "loads1", "loads2",
+  "highlighted", "score1", "score2", "score_x", "score_y", "loads1", "loads2",
   "iclass", "iClassOP", "iClassRMSD", "CVE",
   "x_val", "y_val", "x_class", "y_class", "winner", "winning_CVE",
   "env_ord", "geno_ord", "mean_op", "label_var", "arrow_x", "arrow_y",
@@ -446,7 +446,8 @@ NULL
 # ---- "biplot" ----------------------------------------------------------
 
 #' @noRd
-.pfi_plot_biplot <- function(res, p, hl_names, theme) {
+.pfi_plot_biplot <- function(res, p, hl_names, theme,
+                             biplot_factors = c(1L, 2L)) {
 
   gd <- .pfi_geno_data(res, p)
   ed <- .pfi_env_data(res, p)
@@ -454,14 +455,23 @@ NULL
   gd$highlighted <- gd[[p$gterm]] %in% hl_names
   n_hl           <- length(hl_names)
 
+  # Select the requested factor axes
+  fa <- biplot_factors
+  sc_x <- paste0("score", fa[1L]);  sc_y <- paste0("score", fa[2L])
+  ld_x <- paste0("loads", fa[1L]);  ld_y <- paste0("loads", fa[2L])
+
   # Scaling: fit arrows into score space
-  score_range <- max(abs(c(gd$score1, gd$score2)), na.rm = TRUE)
-  load_range  <- max(abs(c(ed$loads1, ed$loads2)), na.rm = TRUE)
+  score_range <- max(abs(c(gd[[sc_x]], gd[[sc_y]])), na.rm = TRUE)
+  load_range  <- max(abs(c(ed[[ld_x]], ed[[ld_y]])), na.rm = TRUE)
 
   arrow_scale  <- if (load_range > 0) 0.85 * score_range / load_range else 1
   ed_sc        <- ed
-  ed_sc$loads1 <- ed$loads1 * arrow_scale
-  ed_sc$loads2 <- ed$loads2 * arrow_scale
+  ed_sc$loads1 <- ed[[ld_x]] * arrow_scale
+  ed_sc$loads2 <- ed[[ld_y]] * arrow_scale
+
+  # Alias the chosen score axes so downstream aes() can use fixed names
+  gd$score_x <- gd[[sc_x]]
+  gd$score_y <- gd[[sc_y]]
 
   gd_hl  <- gd[gd$highlighted,  , drop = FALSE]
   gd_reg <- gd[!gd$highlighted, , drop = FALSE]
@@ -526,7 +536,7 @@ NULL
   plt <- plt +
     ggplot2::geom_point(
       data    = gd_reg,
-      mapping = ggplot2::aes(x = score1, y = score2),
+      mapping = ggplot2::aes(x = score_x, y = score_y),
       colour  = "grey70",
       size    = 2
     )
@@ -536,7 +546,7 @@ NULL
     plt <- plt +
       ggplot2::geom_point(
         data    = gd_hl,
-        mapping = ggplot2::aes(x = score1, y = score2,
+        mapping = ggplot2::aes(x = score_x, y = score_y,
                                fill = !!rlang::sym(p$gterm)),
         shape   = 21,
         colour  = "white",
@@ -549,16 +559,19 @@ NULL
       ) +
       .pfi_text_layer(
         data    = gd_hl,
-        mapping = ggplot2::aes(x = score1, y = score2,
+        mapping = ggplot2::aes(x = score_x, y = score_y,
                                label = !!rlang::sym(p$gterm))
       )
   }
 
   plt <- plt +
     ggplot2::labs(
-      x     = "Factor 1 score / loading",
-      y     = "Factor 2 score / loading",
-      title = "FA biplot: Genotypes (points) and Environments (arrows)"
+      x     = paste0("Factor ", fa[1L], " score / loading"),
+      y     = paste0("Factor ", fa[2L], " score / loading"),
+      title = paste0("FA biplot: Genotypes (points) and Environments (arrows)",
+                     if (!identical(fa, c(1L, 2L)))
+                       paste0(" \u2014 Factors ", fa[1L], " & ", fa[2L])
+                     else "")
     ) +
     theme
 
@@ -1145,7 +1158,9 @@ NULL
 #'   \item{`"fast"`}{Scatter of global Overall Performance (`global_op`) vs
 #'     global stability (`global_stab`) with quadrant annotations.}
 #'   \item{`"biplot"`}{Factor-analysis biplot with genotype score points and
-#'     environment loading arrows (Factors 1 & 2).  Requires k \eqn{\geq} 2.}
+#'     environment loading arrows.  Default axes are Factors 1 \& 2; use
+#'     `biplot_factors` to display any two factor axes.  Requires k
+#'     \eqn{\geq} 2.}
 #'   \item{`"CVE"`}{Diverging-colour heatmap of the Common Variety Effect
 #'     (genotype \eqn{\times} environment), ordered by iClass then
 #'     first-factor loading.}
@@ -1185,19 +1200,26 @@ NULL
 #' available for individual panel assembly.  Colour palettes come from
 #' \pkg{scales}.
 #'
-#' @param res         A long-format data frame returned by [fastIC()].
-#' @param type        Character; the visualisation to produce. One of
+#' @param res            A long-format data frame returned by [fastIC()].
+#' @param type           Character; the visualisation to produce. One of
 #'   `"fast"` (default), `"biplot"`, `"CVE"`, `"VAF"`, `"iclass"`,
 #'   `"OP.pairs"`, `"OP.variety"`.  May be abbreviated.
-#' @param highlight   Controls variety annotation. One of `"default"`
+#' @param highlight      Controls variety annotation. One of `"default"`
 #'   (automatic; see Details), a character vector of variety names, or `NULL`
 #'   (no annotation).  Default `"default"`.
-#' @param n_highlight Positive integer. Maximum number of genotypes to
+#' @param n_highlight    Positive integer. Maximum number of genotypes to
 #'   highlight automatically when `highlight = "default"`. Default `3L`.
-#' @param theme       A complete ggplot2 theme object. Default
+#' @param biplot_factors Integer vector of length 2 giving the FA factor
+#'   indices to use as the x- and y-axes of the biplot. Default `c(1L, 2L)`.
+#'   Both values must be distinct and within `1:k` where `k` is the number of
+#'   FA factors in `res`.  Useful when `ic.num >= 3` and iClass separation
+#'   involves a third factor that is invisible in the default Factor 1 vs
+#'   Factor 2 view — e.g. `biplot_factors = c(1L, 3L)` to reveal Factor 3
+#'   separation.  Ignored for all plot types other than `"biplot"`.
+#' @param theme          A complete ggplot2 theme object. Default
 #'   [ggplot2::theme_bw()].
-#' @param return_data Logical. If `TRUE`, returns a list with elements `plot`
-#'   (the ggplot object) and `data` (the underlying tidy data). Default
+#' @param return_data    Logical. If `TRUE`, returns a list with elements
+#'   `plot` (the ggplot object) and `data` (the underlying tidy data). Default
 #'   `FALSE`.
 #' @param ...         Reserved for future use; currently ignored.
 #'
@@ -1234,12 +1256,13 @@ NULL
 #'
 #' @export
 plot_fastIC <- function(res,
-                        type        = c("fast", "biplot", "CVE", "VAF",
-                                        "iclass", "OP.pairs", "OP.variety"),
-                        highlight   = "default",
-                        n_highlight = 3L,
-                        theme       = ggplot2::theme_bw(),
-                        return_data = FALSE,
+                        type           = c("fast", "biplot", "CVE", "VAF",
+                                           "iclass", "OP.pairs", "OP.variety"),
+                        highlight      = "default",
+                        n_highlight    = 3L,
+                        biplot_factors = c(1L, 2L),
+                        theme          = ggplot2::theme_bw(),
+                        return_data    = FALSE,
                         ...) {
 
   # ------------------------------------------------------------------ #
@@ -1251,6 +1274,12 @@ plot_fastIC <- function(res,
 
   type        <- match.arg(type)
   n_highlight <- max(1L, as.integer(n_highlight[1L]))
+
+  biplot_factors <- as.integer(biplot_factors)
+  if (length(biplot_factors) != 2L || anyNA(biplot_factors) ||
+      biplot_factors[1L] == biplot_factors[2L])
+    stop("plot_fastIC(): 'biplot_factors' must be a length-2 integer vector ",
+         "of distinct factor indices, e.g. c(1L, 2L).")
 
   if (!inherits(theme, "theme"))
     stop("plot_fastIC(): 'theme' must be a ggplot2 theme object, ",
@@ -1272,9 +1301,14 @@ plot_fastIC <- function(res,
            "re-run fastIC() with k > 1.")
   }
 
-  if (type == "biplot" && p$k < 2L)
-    stop("plot_fastIC(): type = 'biplot' requires k >= 2 factors; ",
-         "only ", p$k, " factor(s) found.")
+  if (type == "biplot") {
+    if (p$k < 2L)
+      stop("plot_fastIC(): type = 'biplot' requires k >= 2 factors; ",
+           "only ", p$k, " factor(s) found.")
+    if (any(biplot_factors < 1L) || any(biplot_factors > p$k))
+      stop("plot_fastIC(): 'biplot_factors' values must be between 1 and k = ",
+           p$k, "; got c(", biplot_factors[1L], ", ", biplot_factors[2L], ").")
+  }
 
   if (type %in% c("iclass", "OP.variety", "OP.pairs")) {
     if (!p$has_iclass)
@@ -1301,7 +1335,7 @@ plot_fastIC <- function(res,
   result <- switch(type,
 
     fast       = .pfi_plot_fast(      res, p, hl_names, theme),
-    biplot     = .pfi_plot_biplot(    res, p, hl_names, theme),
+    biplot     = .pfi_plot_biplot(    res, p, hl_names, theme, biplot_factors),
     CVE        = .pfi_plot_CVE(       res, p,           theme),
     VAF        = .pfi_plot_VAF(       res, p,           theme),
     iclass     = .pfi_plot_iclass(    res, p, hl_names, theme),
