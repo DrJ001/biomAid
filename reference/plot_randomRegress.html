@@ -29,6 +29,7 @@ customised with the standard + operator."></head><body>
     <li><a class="dropdown-item" href="../padTrial.html">Extracting and Padding Field Trial Layouts</a></li>
     <li><a class="dropdown-item" href="../accuracy.html">BLUP Accuracy in Multi-Environment Trials</a></li>
     <li><a class="dropdown-item" href="../simTrialData.html">Simulating Multi-Environment Trials</a></li>
+    <li><a class="dropdown-item" href="../fastIC.html">Factor Analytic Selection Tools: FAST and iClass</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"></ul></div>
 
@@ -78,9 +79,11 @@ customised with the standard <code>+</code> operator.</p>
 
 
 <dt id="arg-treatments">treatments<a class="anchor" aria-label="anchor" href="#arg-treatments"></a></dt>
-<dd><p>Character vector restricting which conditioned treatments
+<dd><p>Character vector restricting which conditioned levels
 are included in the plot.  <code>NULL</code> (default) includes all conditioned
-treatments.  Ignored for <code>type = "gmat"</code>.</p></dd>
+levels.  Named for the commonest case, but accepts trait names equally
+where the decomposed dimension is a set of traits.
+Ignored for <code>type = "gmat"</code>.</p></dd>
 
 
 <dt id="arg-highlight">highlight<a class="anchor" aria-label="anchor" href="#arg-highlight"></a></dt>
@@ -102,21 +105,21 @@ treatments.  Ignored for <code>type = "gmat"</code>.</p></dd>
 <dt id="arg-centre">centre<a class="anchor" aria-label="anchor" href="#arg-centre"></a></dt>
 <dd><p>Logical.  If <code>FALSE</code> (default), BLUPs are plotted on
 their natural scale (already centred near zero by the mixed model).
-If <code>TRUE</code>, the within-site mean of the unconditional treatment is added
+If <code>TRUE</code>, the within-stratum mean of the unconditional level is added
 back to the x-axis values, placing BLUPs on an approximate absolute
-yield scale.  For true ASReml BLUPs the site mean is effectively zero
+scale.  For true ASReml BLUPs the stratum mean is effectively zero
 so the change is minimal; this option is mainly useful when BLUPs have
-been computed from treatment means (e.g. in the demo).
+been computed from means (e.g. in the demo).
 Ignored for <code>type = "gmat"</code>.</p></dd>
 
 
 <dt id="arg-cond-x">cond_x<a class="anchor" aria-label="anchor" href="#arg-cond-x"></a></dt>
 <dd><p>Positive integer or integer vector (default <code>1L</code>).
 Selects which member of the conditioning set \(A_j\) is placed on
-the x-axis of the <code>"regress"</code> plot for each conditioned-treatment
+the x-axis of the <code>"regress"</code> plot for each conditioned-level
 panel.  A scalar is recycled across all panels; a vector of the same
-length as the number of conditioned treatments plotted sets each panel
-independently.  For example, with three conditioned treatments under
+length as the number of conditioned levels plotted sets each panel
+independently.  For example, with three conditioned levels under
 partial conditioning:</p><ul><li><p><code>cond_x = 1L</code> (default) — first member of \(A_j\) for every
 panel, e.g. <code>c(1, 1, 1)</code>.</p></li>
 <li><p><code>cond_x = 2L</code> — second member for every panel.</p></li>
@@ -149,19 +152,24 @@ build the plot rather than the plot itself. Default <code>FALSE</code>.</p></dd>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The three <code>type</code> options are:</p><dl><dt><code>"regress"</code></dt>
+    <p>Following <code><a href="randomRegress.html">randomRegress()</a></code>, <em>level</em> refers to a level of the decomposed
+dimension (a member of <code>levs</code> — a treatment or a trait) and <em>stratum</em> to a
+level of the dimension the decomposition is repeated within, ordinarily a
+site.  Facet columns are strata, and carry the single label <code>"Single"</code> when
+the grouping factor of the model term was not composite.</p>
+<p>The three <code>type</code> options are:</p><dl><dt><code>"regress"</code></dt>
 <dd><p>Grid of scatter plots faceted by BLUP pair (rows) and
-site (columns).  Each panel plots the raw conditioned-treatment BLUPs
-(y) against the conditioning-treatment BLUPs (x) for one site x one
-treatment pair.  A dotted random regression line with the site-specific
-beta slope passes through the origin.  The site-specific
+stratum (columns).  Each panel plots the raw conditioned-level BLUPs
+(y) against the conditioning-level BLUPs (x) for one stratum x one
+level pair.  A dotted random regression line with the per-stratum
+beta slope passes through the origin.  The per-stratum
 \(\hat{\beta}\) is annotated in the top-left corner of each panel.</p></dd>
 
 <dt><code>"quadrant"</code></dt>
 <dd><p>Grid of scatter plots faceted by BLUP pair (rows) and
-site (columns).  Each panel plots responsiveness BLUPs (y) against the
-conditioning treatment BLUPs (x = efficiency) for one site x one
-treatment pair.  Dotted zero reference lines on both axes divide each
+stratum (columns).  Each panel plots responsiveness BLUPs (y) against
+the conditioning-level BLUPs (x = efficiency) for one stratum x one
+level pair.  Dotted zero reference lines on both axes divide each
 panel into four quadrants.</p></dd>
 
 <dt><code>"gmat"</code></dt>
@@ -178,8 +186,8 @@ to three from the bottom-left quadrant (below average on both axes, shown
 in blue).  Within each quadrant only varieties whose distance from the
 origin exceeds the within-quadrant median are considered, and the final
 selection is the most extreme of those candidates ordered by decreasing
-distance.  The same varieties are consistently annotated across all site
-and treatment-pair panels.</p>
+distance.  The same varieties are consistently annotated across all
+stratum and level-pair panels.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -207,16 +215,21 @@ and treatment-pair panels.</p>
 <span class="r-in"><span><span class="co"># Retrieve the tidy data frame</span></span></span>
 <span class="r-in"><span><span class="va">df</span> <span class="op">&lt;-</span> <span class="fu">plot_randomRegress</span><span class="op">(</span><span class="va">res</span>, type <span class="op">=</span> <span class="st">"quadrant"</span>, return_data <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Partial conditioning — default (first conditioning treatment on x)</span></span></span>
+<span class="r-in"><span><span class="co"># Partial conditioning — default (first conditioning level on x)</span></span></span>
 <span class="r-in"><span><span class="va">res_part</span> <span class="op">&lt;-</span> <span class="fu"><a href="randomRegress.html">randomRegress</a></span><span class="op">(</span><span class="va">model</span>, term <span class="op">=</span> <span class="st">"us(TSite):Variety"</span>,</span></span>
 <span class="r-in"><span>                          levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span>,<span class="st">"N2"</span><span class="op">)</span>, type <span class="op">=</span> <span class="st">"partial"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">plot_randomRegress</span><span class="op">(</span><span class="va">res_part</span>, type <span class="op">=</span> <span class="st">"regress"</span><span class="op">)</span>              <span class="co"># cond_x = 1L</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Show the second conditioning treatment on the x-axis for all panels</span></span></span>
+<span class="r-in"><span><span class="co"># Show the second conditioning level on the x-axis for all panels</span></span></span>
 <span class="r-in"><span><span class="fu">plot_randomRegress</span><span class="op">(</span><span class="va">res_part</span>, type <span class="op">=</span> <span class="st">"regress"</span>, cond_x <span class="op">=</span> <span class="fl">2L</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Mixed: second for panels 1 &amp; 3, first for panel 2</span></span></span>
 <span class="r-in"><span><span class="fu">plot_randomRegress</span><span class="op">(</span><span class="va">res_part</span>, type <span class="op">=</span> <span class="st">"regress"</span>, cond_x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2L</span>, <span class="fl">1L</span>, <span class="fl">2L</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Traits at a single site: one facet column, labelled "Single"</span></span></span>
+<span class="r-in"><span><span class="va">res_mv</span> <span class="op">&lt;-</span> <span class="fu"><a href="randomRegress.html">randomRegress</a></span><span class="op">(</span><span class="va">model</span>, term <span class="op">=</span> <span class="st">"us(Trait):Variety"</span>,</span></span>
+<span class="r-in"><span>                        levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Yield"</span>,<span class="st">"Protein"</span>,<span class="st">"Height"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">plot_randomRegress</span><span class="op">(</span><span class="va">res_mv</span>, type <span class="op">=</span> <span class="st">"regress"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
