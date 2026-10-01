@@ -5,7 +5,7 @@ supporting four conditioning schemes via the type argument.
 The decomposed dimension holds multiple treatments or multiple
 traits — levels applied to, or measured on, the same plants within one
 experiment — nominated in levs.  The decomposition is repeated
-independently within each stratum, ordinarily a site, of which there may
+independently within each section, ordinarily a site, of which there may
 be one or many.  Multi-treatment multi-environment data is the most complex
 case, not the only one; see Usage regimes below.
 For any level \(j\) with conditioning set \(A_j\), the multivariate
@@ -49,7 +49,7 @@ supporting four conditioning schemes via the type argument.
 The decomposed dimension holds multiple treatments or multiple
 traits — levels applied to, or measured on, the same plants within one
 experiment — nominated in levs.  The decomposition is repeated
-independently within each stratum, ordinarily a site, of which there may
+independently within each section, ordinarily a site, of which there may
 be one or many.  Multi-treatment multi-environment data is the most complex
 case, not the only one; see Usage regimes below.
 For any level \(j\) with conditioning set \(A_j\), the multivariate
@@ -135,7 +135,7 @@ supporting four conditioning schemes via the <code>type</code> argument.</p>
 <p>The decomposed dimension holds multiple <strong>treatments</strong> or multiple
 <strong>traits</strong> — levels applied to, or measured on, the same plants within one
 experiment — nominated in <code>levs</code>.  The decomposition is repeated
-independently within each <strong>stratum</strong>, ordinarily a site, of which there may
+independently within each <strong>section</strong>, ordinarily a site, of which there may
 be one or many.  Multi-treatment multi-environment data is the most complex
 case, not the only one; see <strong>Usage regimes</strong> below.</p>
 <p>For any level \(j\) with conditioning set \(A_j\), the multivariate
@@ -279,7 +279,7 @@ custom scheme:</p><div class="sourceCode"><pre><code><span></span>
 <dt id="arg-sep">sep<a class="anchor" aria-label="anchor" href="#arg-sep"></a></dt>
 <dd><p>Character separator used inside the labels of a composite
 grouping factor, e.g. <code>"-"</code> in <code>"N0-Env1"</code>.  Ignored when the grouping
-factor's labels contain no separator, in which case a single stratum
+factor's labels contain no separator, in which case a single section
 named <code>"Single"</code> is reported.  Defaults to <code>"-"</code>.</p></dd>
 
 
@@ -303,7 +303,7 @@ BLUP.  If <code>FALSE</code> it is the posterior variance
 column per level in <code>levs</code>, one <code>resp.&lt;lev&gt;</code> column per conditioned
 level, and one <code>HSD.&lt;lev&gt;</code> column per conditioned level (Tukey's HSD on
 the responsiveness scale; <code>NA</code> for FA models or absent combinations).
-The <code>Site</code> column holds the <strong>stratum</strong> label whatever the stratifying
+The <code>Site</code> column holds the <strong>section</strong> label whatever the stratifying
 dimension represents, and is <code>"Single"</code> throughout when the grouping
 factor is not composite.  The <code>Variety</code> column holds the levels of the
 variety factor named in <code>term</code>, whatever that factor is called in the
@@ -321,20 +321,20 @@ conditioned levels are labelled <code>resp.&lt;lev&gt;</code>.  Diagonal for
 <dt><code>beta</code></dt>
 <dd><p>Named list of length equal to the number of conditioned
 levels.  Each element <code>beta[["&lt;lev&gt;"]]</code> is an
-\(n_s \times |A_j|\) matrix of per-stratum regression coefficients,
+\(n_s \times |A_j|\) matrix of per-section regression coefficients,
 with column names equal to the conditioning levels.  <code>NA</code> where a
-combination is absent from a stratum.</p></dd>
+combination is absent from a section.</p></dd>
 
 <dt><code>sigmat</code></dt>
 <dd><p>Numeric matrix of dimensions \(n_s \times n_{\text{cond}}\)
 containing the scalar conditional genetic variances
-\(\sigma_{j|A_j}^2\) for each conditioned level in each stratum.
+\(\sigma_{j|A_j}^2\) for each conditioned level in each section.
 <code>NA</code> where absent.</p></dd>
 
 <dt><code>tmat</code></dt>
 <dd><p>Full transformation matrix \(\boldsymbol{T}\).
 Lower-triangular for <code>type = "sequential"</code>; sparse (one non-trivial
-column per stratum) for <code>type = "baseline"</code>; dense for
+column per section) for <code>type = "baseline"</code>; dense for
 <code>type = "partial"</code>.</p></dd>
 
 <dt><code>cond_list</code></dt>
@@ -350,7 +350,7 @@ one element per level in <code>levs</code>.</p></dd>
 <dt><code>label_map</code></dt>
 <dd><p>Data frame with one row per G-matrix column —
 <code>label</code> (the grouping-factor level as ASReml-R stores it), <code>level</code> (the
-decomposed level) and <code>stratum</code>.  Composite labels are resolved once
+decomposed level) and <code>section</code>.  Composite labels are resolved once
 here and this mapping is the authority downstream, so
 <code><a href="plot_randomRegress.html">plot_randomRegress()</a></code> never re-splits label strings.</p></dd>
 
@@ -361,22 +361,22 @@ here and this mapping is the authority downstream, so
 
 
 <p>Two dimensions are involved, playing different roles.  The <strong>decomposed</strong>
-dimension holds the treatments or traits named in <code>levs</code>; the <strong>stratum</strong>
+dimension holds the treatments or traits named in <code>levs</code>; the <strong>section</strong>
 dimension is the site or environment the decomposition is repeated within.
 Which regime applies is determined automatically from the G-matrix column
 labels.</p>
-<dl><dt>Plain grouping factor — one stratum</dt>
+<dl><dt>Plain grouping factor — one section</dt>
 <dd><p>When the labels contain no
 <code>sep</code> the labels themselves are the decomposed dimension, and a single
-stratum is reported as <code>"Single"</code>.  This covers a single-site
+section is reported as <code>"Single"</code>.  This covers a single-site
 multi-treatment model, <code>us(Treatment):Variety</code>, and a single-site
 multi-trait model, <code>us(Trait):Variety</code>.</p></dd>
 
-<dt>Composite grouping factor — several strata</dt>
+<dt>Composite grouping factor — several sections</dt>
 <dd><p>When the labels contain
 <code>sep</code> — e.g. a Treatment-by-Site factor <code>TSite</code> with levels
 <code>"N0-Env1"</code> — they are split in two.  The component holding the <code>levs</code>
-values is the decomposed dimension; the other becomes the stratum, and
+values is the decomposed dimension; the other becomes the section, and
 the decomposition is carried out independently within each.  The two
 components may appear in either order: both <code>"N0-Env1"</code> and <code>"Env1-N0"</code>
 are recognised.</p></dd>
@@ -387,12 +387,20 @@ observed on common material within one experiment, so the conditional
 distribution of one given another is biologically interpretable.
 <strong>Environments are not.</strong>  Regressing one site's BLUPs on another's would
 not give an efficiency-responsiveness decomposition, because separate sites
-are separate experiments; environments belong in the stratum role.  Where
+are separate experiments; environments belong in the section role.  Where
 the genetic covariance <em>between</em> environments is the question of interest,
 use <code><a href="faSummary.html">faSummary()</a></code> or <code><a href="fastIC.html">fastIC()</a></code> instead.</p>
 <p>Throughout the documentation and output, <em>level</em> refers to a level of the
-decomposed dimension (a member of <code>levs</code>) and <em>stratum</em> refers to a level
+decomposed dimension (a member of <code>levs</code>) and <em>section</em> refers to a level
 of the second, repeated-over dimension.</p>
+<p>The word <em>section</em> is borrowed from ASReml-R, which uses it for a factor
+across which a structure is replicated independently — as in
+<code>residual = ~ dsum(~ ar1(Row):ar1(Column) | Site)</code>.  Strictly, ASReml-R's
+sections partition the <strong>residual</strong> structure whereas these partition the
+second dimension of the <strong>G</strong> structure; in a typical MET both are <code>Site</code>
+and they coincide, but they are not the same thing by definition.
+<em>Stratum</em> is deliberately avoided, since in experimental design it already
+denotes an error stratum of the blocking structure.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -428,7 +436,7 @@ of the second, repeated-over dimension.</p>
 <span class="r-in"><span>                                      N1 <span class="op">=</span> <span class="st">"N0"</span>,</span></span>
 <span class="r-in"><span>                                      N2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co">## ---- Single site (plain grouping factor; one stratum, "Single") -------</span></span></span>
+<span class="r-in"><span><span class="co">## ---- Single site (plain grouping factor; one section, "Single") -------</span></span></span>
 <span class="r-in"><span><span class="co">## Treatments</span></span></span>
 <span class="r-in"><span><span class="va">res_1s</span>   <span class="op">&lt;-</span> <span class="fu">randomRegress</span><span class="op">(</span><span class="va">model</span>, term <span class="op">=</span> <span class="st">"us(Treatment):Variety"</span>,</span></span>
 <span class="r-in"><span>                          levs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"N0"</span>,<span class="st">"N1"</span>,<span class="st">"N2"</span><span class="op">)</span><span class="op">)</span></span></span>
