@@ -177,10 +177,10 @@ conditioning schemes.
 The **decomposed** dimension holds multiple treatments or multiple traits —
 levels applied to, or measured on, the same plants within one experiment, so
 that a genetic regression between them is meaningful — nominated in `levs`. The
-decomposition is then repeated independently within each **stratum**, ordinarily
+decomposition is then repeated independently within each **section**, ordinarily
 a site, of which there may be one or many:
 
-| Grouping factor | Decomposed (`levs`) | Strata | Use case |
+| Grouping factor | Decomposed (`levs`) | Sections | Use case |
 |-----------------|---------------------|--------|----------|
 | `us(Treatment)` — plain | treatments | one, `"Single"` | Multi-treatment, single site |
 | `us(Trait)` — plain | traits | one, `"Single"` | Multi-trait, single site |
@@ -189,12 +189,12 @@ a site, of which there may be one or many:
 
 Where the grouping factor is a composite of two factors, the two components may
 appear in either order (`"N0-Env1"` and `"Env1-N0"` are both recognised). Where
-it is a plain factor, there is a single stratum reported as `"Single"`.
+it is a plain factor, there is a single section reported as `"Single"`.
 
 > **Note:** environments are not a decomposable dimension. Regressing one site's
 > BLUPs on another's would not give an efficiency–responsiveness decomposition,
 > since separate sites are separate experiments; environments belong in the
-> stratum role. For genetic covariance *between* environments use `faSummary()`
+> section role. For genetic covariance *between* environments use `faSummary()`
 > or `fastIC()`.
 
 ```r
@@ -214,9 +214,9 @@ randomRegress(model, term = "us(TSite):Variety", levs = NULL,
 | `pev` | `TRUE` (default) uses PEV; `FALSE` uses posterior variance |
 
 Returns `blups`, `TGmat`, `Gmat`, `beta`, `sigmat`, `tmat`, `cond_list`, `type`,
-`sep` and `label_map`. In `$blups` the `Site` column carries the stratum label
+`sep` and `label_map`. In `$blups` the `Site` column carries the section label
 whatever the stratifying dimension represents. `$label_map` records how each
-G-matrix column label was resolved into `level` and `stratum`; composite labels
+G-matrix column label was resolved into `level` and `section`; composite labels
 are resolved once there and that mapping is the authority downstream, so
 `plot_randomRegress()` never re-splits label strings.
 
@@ -227,7 +227,7 @@ are resolved once there and that mapping is the authority downstream, so
 Generates ggplot2 visualisations from `randomRegress()` output. Three plot
 types are available, each returned as a ggplot object that can be further
 customised with `+`. The `"regress"` and `"quadrant"` grids facet by BLUP pair
-(rows) and stratum (columns) — a single column labelled `"Single"` when the
+(rows) and section (columns) — a single column labelled `"Single"` when the
 grouping factor is not composite.
 
 ```r
@@ -248,7 +248,7 @@ plot_randomRegress(res,
 | `type` | `"regress"`, `"quadrant"`, or `"gmat"` |
 | `treatments` | Character vector to restrict conditioning pairs plotted. `NULL` = all. Named for the commonest case, but accepts trait names equally |
 | `highlight` | `"default"` auto-selects archetypes by distance from origin; character vector of variety names for custom highlights; `NULL` = no highlighting |
-| `centre` | `TRUE` adds back within-stratum means (useful for demo data). Default `FALSE` |
+| `centre` | `TRUE` adds back within-section means (useful for demo data). Default `FALSE` |
 | `cond_x` | `"regress"` only. Positive integer selecting which member of the conditioning set $A_j$ appears on the x-axis (added variable plot). Default `1L` |
 | `theme` | A ggplot2 theme object. Default `theme_bw()` |
 | `return_data` | `TRUE` returns the tidy data frame instead of the plot |

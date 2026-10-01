@@ -15,21 +15,21 @@ NULL
 
 # ---- AVP helpers ---------------------------------------------------------
 
-#' Extract the T x T within-stratum G-matrix block from the full Gmat
+#' Extract the T x T within-section G-matrix block from the full Gmat
 #'
-#' "Site" here means a stratum in the general sense of randomRegress(): the
-#' second component of a composite group label, or the sole pseudo-stratum
+#' "Site" here means a section in the general sense of randomRegress(): the
+#' second component of a composite group label, or the sole pseudo-section
 #' "Single" when the group labels carry no separator.
 #'
 #' Label resolution is **not** repeated here.  `map` is the `label_map`
 #' resolved once by randomRegress(); re-splitting the strings independently is
 #' what previously let this function and randomRegress() disagree about which
-#' half of a composite label was the stratum.
+#' half of a composite label was the section.
 #'
 #' @param Gmat       Full Gmat, columns named by grouping-factor level
-#' @param site       Stratum label (e.g. "Env1", or "Single")
+#' @param site       Section label (e.g. "Env1", or "Single")
 #' @param treatments Character vector of conditioned-dimension levels needed
-#' @param map        `label_map` data frame: `label`, `level`, `stratum`
+#' @param map        `label_map` data frame: `label`, `level`, `section`
 #' @return T x T matrix with rownames/colnames = levels, or NULL on failure
 #' @noRd
 .rreg_site_Gmat <- function(Gmat, site, treatments, map) {
@@ -39,7 +39,7 @@ NULL
   if (anyNA(idx)) return(NULL)
 
   tnam <- map$level[idx]
-  snam <- map$stratum[idx]
+  snam <- map$section[idx]
 
   site_cols <- which(snam == site & tnam %in% treatments)
   if (length(site_cols) == 0L) return(NULL)
@@ -59,7 +59,7 @@ NULL
 #' @param blups_j    Numeric vector — raw BLUPs for conditioned level j
 #' @param blups_k    Numeric vector — raw BLUPs for x-axis level k
 #' @param blups_rest Data frame or matrix — raw BLUPs for A_rest levels
-#' @param G_ss       T x T within-stratum G-matrix (rownames = level labels)
+#' @param G_ss       T x T within-section G-matrix (rownames = level labels)
 #' @param j,k        Level label strings
 #' @param A_rest     Character vector of remaining conditioning levels
 #' @return List with elements x and y (partial residuals)
@@ -69,7 +69,7 @@ NULL
   if (length(A_rest) == 0L)
     return(list(x = blups_k, y = blups_j))
 
-  # No usable within-stratum G block (absent stratum, or labels that could not
+  # No usable within-section G block (absent section, or labels that could not
   # be resolved): fall back to raw BLUPs, as for a singular G below.
   if (is.null(G_ss) || !all(c(A_rest, j, k) %in% rownames(G_ss)))
     return(list(x = blups_k, y = blups_j))
@@ -119,7 +119,7 @@ NULL
       lb <- .rreg_labels(colnames(Gmat), names(cond_list), sep)
       data.frame(label   = colnames(Gmat),
                  level   = lb$level,
-                 stratum = lb$stratum,
+                 section = lb$section,
                  stringsAsFactors = FALSE)
     }, error = function(e) NULL)
 
@@ -507,22 +507,22 @@ NULL
 #'
 #' @details
 #' Following [randomRegress()], *level* refers to a level of the decomposed
-#' dimension (a member of `levs` — a treatment or a trait) and *stratum* to a
+#' dimension (a member of `levs` — a treatment or a trait) and *section* to a
 #' level of the dimension the decomposition is repeated within, ordinarily a
-#' site.  Facet columns are strata, and carry the single label `"Single"` when
+#' site.  Facet columns are sections, and carry the single label `"Single"` when
 #' the grouping factor of the model term was not composite.
 #'
 #' The three `type` options are:
 #' \describe{
 #'   \item{`"regress"`}{Grid of scatter plots faceted by BLUP pair (rows) and
-#'     stratum (columns).  Each panel plots the raw conditioned-level BLUPs
-#'     (y) against the conditioning-level BLUPs (x) for one stratum x one
-#'     level pair.  A dotted random regression line with the per-stratum
-#'     beta slope passes through the origin.  The per-stratum
+#'     section (columns).  Each panel plots the raw conditioned-level BLUPs
+#'     (y) against the conditioning-level BLUPs (x) for one section x one
+#'     level pair.  A dotted random regression line with the per-section
+#'     beta slope passes through the origin.  The per-section
 #'     \eqn{\hat{\beta}} is annotated in the top-left corner of each panel.}
 #'   \item{`"quadrant"`}{Grid of scatter plots faceted by BLUP pair (rows) and
-#'     stratum (columns).  Each panel plots responsiveness BLUPs (y) against
-#'     the conditioning-level BLUPs (x = efficiency) for one stratum x one
+#'     section (columns).  Each panel plots responsiveness BLUPs (y) against
+#'     the conditioning-level BLUPs (x = efficiency) for one section x one
 #'     level pair.  Dotted zero reference lines on both axes divide each
 #'     panel into four quadrants.}
 #'   \item{`"gmat"`}{Heatmap of the G-matrix converted to a correlation
@@ -539,7 +539,7 @@ NULL
 #' origin exceeds the within-quadrant median are considered, and the final
 #' selection is the most extreme of those candidates ordered by decreasing
 #' distance.  The same varieties are consistently annotated across all
-#' stratum and level-pair panels.
+#' section and level-pair panels.
 #'
 #' @param res         A list returned by [randomRegress()].
 #' @param type        Character string selecting the plot type. One of
@@ -551,9 +551,9 @@ NULL
 #'   Ignored for `type = "gmat"`.
 #' @param centre      Logical.  If `FALSE` (default), BLUPs are plotted on
 #'   their natural scale (already centred near zero by the mixed model).
-#'   If `TRUE`, the within-stratum mean of the unconditional level is added
+#'   If `TRUE`, the within-section mean of the unconditional level is added
 #'   back to the x-axis values, placing BLUPs on an approximate absolute
-#'   scale.  For true ASReml BLUPs the stratum mean is effectively zero
+#'   scale.  For true ASReml BLUPs the section mean is effectively zero
 #'   so the change is minimal; this option is mainly useful when BLUPs have
 #'   been computed from means (e.g. in the demo).
 #'   Ignored for `type = "gmat"`.

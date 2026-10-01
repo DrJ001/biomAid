@@ -67,11 +67,11 @@ one given another has a genuine biological interpretation. For treatments that
 interpretation is efficiency and responsiveness; for traits it is the part of
 one trait that is not genetically predictable from another.
 
-The second dimension is the **stratum** — ordinarily the site or environment.
-The decomposition is simply repeated, independently, within each stratum. There
-may be one stratum or many:
+The second dimension is the **section** — ordinarily the site or environment.
+The decomposition is simply repeated, independently, within each section. There
+may be one section or many:
 
-| Grouping factor | Decomposed (`levs`) | Strata | Use case |
+| Grouping factor | Decomposed (`levs`) | Sections | Use case |
 |-----------------|---------------------|--------|----------|
 | `us(Treatment)` — plain | treatments | one, `"Single"` | Multi-treatment, single site |
 | `us(Trait)` — plain | traits | one, `"Single"` | Multivariate (multi-trait), single site |
@@ -81,11 +81,11 @@ may be one stratum or many:
 Where the grouping factor is a composite of two factors — such as the
 Treatment-by-Site factor `TSite` used throughout this vignette — the
 decomposition is carried out independently within each level of the second
-factor. Where it is a plain factor there is a single stratum, reported as
+factor. Where it is a plain factor there is a single section, reported as
 `"Single"`, and plots show one facet column.
 
 Multi-treatment MET data is used as the worked example here because it is the
-most complex case, exercising both dimensions at once; the single-stratum cases
+most complex case, exercising both dimensions at once; the single-section cases
 follow by simply supplying a plain grouping factor.
 
 `plot_randomRegress()` visualises the result as a regression scatter plot,

@@ -86,7 +86,7 @@ custom scheme:
 
 \item{sep}{Character separator used inside the labels of a composite
 grouping factor, e.g. \code{"-"} in \code{"N0-Env1"}.  Ignored when the grouping
-factor's labels contain no separator, in which case a single stratum
+factor's labels contain no separator, in which case a single section
 named \code{"Single"} is reported.  Defaults to \code{"-"}.}
 
 \item{pev}{Logical.  If \code{TRUE} (default) the variance used for HSD
@@ -105,7 +105,7 @@ A named list:
 column per level in \code{levs}, one \verb{resp.<lev>} column per conditioned
 level, and one \verb{HSD.<lev>} column per conditioned level (Tukey's HSD on
 the responsiveness scale; \code{NA} for FA models or absent combinations).
-The \code{Site} column holds the \strong{stratum} label whatever the stratifying
+The \code{Site} column holds the \strong{section} label whatever the stratifying
 dimension represents, and is \code{"Single"} throughout when the grouping
 factor is not composite.  The \code{Variety} column holds the levels of the
 variety factor named in \code{term}, whatever that factor is called in the
@@ -117,16 +117,16 @@ conditioned levels are labelled \verb{resp.<lev>}.  Diagonal for
 \item{\code{Gmat}}{Original G-matrix.}
 \item{\code{beta}}{Named list of length equal to the number of conditioned
 levels.  Each element \code{beta[["<lev>"]]} is an
-\eqn{n_s \times |A_j|} matrix of per-stratum regression coefficients,
+\eqn{n_s \times |A_j|} matrix of per-section regression coefficients,
 with column names equal to the conditioning levels.  \code{NA} where a
-combination is absent from a stratum.}
+combination is absent from a section.}
 \item{\code{sigmat}}{Numeric matrix of dimensions \eqn{n_s \times n_{\text{cond}}}
 containing the scalar conditional genetic variances
-\eqn{\sigma_{j|A_j}^2} for each conditioned level in each stratum.
+\eqn{\sigma_{j|A_j}^2} for each conditioned level in each section.
 \code{NA} where absent.}
 \item{\code{tmat}}{Full transformation matrix \eqn{\boldsymbol{T}}.
 Lower-triangular for \code{type = "sequential"}; sparse (one non-trivial
-column per stratum) for \code{type = "baseline"}; dense for
+column per section) for \code{type = "baseline"}; dense for
 \code{type = "partial"}.}
 \item{\code{cond_list}}{The resolved conditioning structure as a named list,
 one element per level in \code{levs}.}
@@ -134,7 +134,7 @@ one element per level in \code{levs}.}
 \item{\code{sep}}{The \code{sep} argument used.}
 \item{\code{label_map}}{Data frame with one row per G-matrix column —
 \code{label} (the grouping-factor level as ASReml-R stores it), \code{level} (the
-decomposed level) and \code{stratum}.  Composite labels are resolved once
+decomposed level) and \code{section}.  Composite labels are resolved once
 here and this mapping is the authority downstream, so
 \code{\link[=plot_randomRegress]{plot_randomRegress()}} never re-splits label strings.}
 }
@@ -147,7 +147,7 @@ supporting four conditioning schemes via the \code{type} argument.
 The decomposed dimension holds multiple \strong{treatments} or multiple
 \strong{traits} — levels applied to, or measured on, the same plants within one
 experiment — nominated in \code{levs}.  The decomposition is repeated
-independently within each \strong{stratum}, ordinarily a site, of which there may
+independently within each \strong{section}, ordinarily a site, of which there may
 be one or many.  Multi-treatment multi-environment data is the most complex
 case, not the only one; see \strong{Usage regimes} below.
 
@@ -184,21 +184,21 @@ explicitly via the \code{cond} argument.}
 \section{Usage regimes}{
 
 Two dimensions are involved, playing different roles.  The \strong{decomposed}
-dimension holds the treatments or traits named in \code{levs}; the \strong{stratum}
+dimension holds the treatments or traits named in \code{levs}; the \strong{section}
 dimension is the site or environment the decomposition is repeated within.
 Which regime applies is determined automatically from the G-matrix column
 labels.
 
 \describe{
-\item{Plain grouping factor — one stratum}{When the labels contain no
+\item{Plain grouping factor — one section}{When the labels contain no
 \code{sep} the labels themselves are the decomposed dimension, and a single
-stratum is reported as \code{"Single"}.  This covers a single-site
+section is reported as \code{"Single"}.  This covers a single-site
 multi-treatment model, \code{us(Treatment):Variety}, and a single-site
 multi-trait model, \code{us(Trait):Variety}.}
-\item{Composite grouping factor — several strata}{When the labels contain
+\item{Composite grouping factor — several sections}{When the labels contain
 \code{sep} — e.g. a Treatment-by-Site factor \code{TSite} with levels
 \code{"N0-Env1"} — they are split in two.  The component holding the \code{levs}
-values is the decomposed dimension; the other becomes the stratum, and
+values is the decomposed dimension; the other becomes the section, and
 the decomposition is carried out independently within each.  The two
 components may appear in either order: both \code{"N0-Env1"} and \code{"Env1-N0"}
 are recognised.}
@@ -209,13 +209,22 @@ observed on common material within one experiment, so the conditional
 distribution of one given another is biologically interpretable.
 \strong{Environments are not.}  Regressing one site's BLUPs on another's would
 not give an efficiency-responsiveness decomposition, because separate sites
-are separate experiments; environments belong in the stratum role.  Where
+are separate experiments; environments belong in the section role.  Where
 the genetic covariance \emph{between} environments is the question of interest,
 use \code{\link[=faSummary]{faSummary()}} or \code{\link[=fastIC]{fastIC()}} instead.
 
 Throughout the documentation and output, \emph{level} refers to a level of the
-decomposed dimension (a member of \code{levs}) and \emph{stratum} refers to a level
+decomposed dimension (a member of \code{levs}) and \emph{section} refers to a level
 of the second, repeated-over dimension.
+
+The word \emph{section} is borrowed from ASReml-R, which uses it for a factor
+across which a structure is replicated independently — as in
+\code{residual = ~ dsum(~ ar1(Row):ar1(Column) | Site)}.  Strictly, ASReml-R's
+sections partition the \strong{residual} structure whereas these partition the
+second dimension of the \strong{G} structure; in a typical MET both are \code{Site}
+and they coincide, but they are not the same thing by definition.
+\emph{Stratum} is deliberately avoided, since in experimental design it already
+denotes an error stratum of the blocking structure.
 }
 
 \examples{
@@ -245,7 +254,7 @@ res_cust <- randomRegress(model, term = "us(TSite):Variety",
                                       N1 = "N0",
                                       N2 = c("N0","N1")))
 
-## ---- Single site (plain grouping factor; one stratum, "Single") -------
+## ---- Single site (plain grouping factor; one section, "Single") -------
 ## Treatments
 res_1s   <- randomRegress(model, term = "us(Treatment):Variety",
                           levs = c("N0","N1","N2"))

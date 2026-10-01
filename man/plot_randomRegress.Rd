@@ -40,9 +40,9 @@ Default is \code{"default"}.  Ignored for \code{type = "gmat"}.}
 
 \item{centre}{Logical.  If \code{FALSE} (default), BLUPs are plotted on
 their natural scale (already centred near zero by the mixed model).
-If \code{TRUE}, the within-stratum mean of the unconditional level is added
+If \code{TRUE}, the within-section mean of the unconditional level is added
 back to the x-axis values, placing BLUPs on an approximate absolute
-scale.  For true ASReml BLUPs the stratum mean is effectively zero
+scale.  For true ASReml BLUPs the section mean is effectively zero
 so the change is minimal; this option is mainly useful when BLUPs have
 been computed from means (e.g. in the demo).
 Ignored for \code{type = "gmat"}.}
@@ -85,22 +85,22 @@ customised with the standard \code{+} operator.
 }
 \details{
 Following \code{\link[=randomRegress]{randomRegress()}}, \emph{level} refers to a level of the decomposed
-dimension (a member of \code{levs} — a treatment or a trait) and \emph{stratum} to a
+dimension (a member of \code{levs} — a treatment or a trait) and \emph{section} to a
 level of the dimension the decomposition is repeated within, ordinarily a
-site.  Facet columns are strata, and carry the single label \code{"Single"} when
+site.  Facet columns are sections, and carry the single label \code{"Single"} when
 the grouping factor of the model term was not composite.
 
 The three \code{type} options are:
 \describe{
 \item{\code{"regress"}}{Grid of scatter plots faceted by BLUP pair (rows) and
-stratum (columns).  Each panel plots the raw conditioned-level BLUPs
-(y) against the conditioning-level BLUPs (x) for one stratum x one
-level pair.  A dotted random regression line with the per-stratum
-beta slope passes through the origin.  The per-stratum
+section (columns).  Each panel plots the raw conditioned-level BLUPs
+(y) against the conditioning-level BLUPs (x) for one section x one
+level pair.  A dotted random regression line with the per-section
+beta slope passes through the origin.  The per-section
 \eqn{\hat{\beta}} is annotated in the top-left corner of each panel.}
 \item{\code{"quadrant"}}{Grid of scatter plots faceted by BLUP pair (rows) and
-stratum (columns).  Each panel plots responsiveness BLUPs (y) against
-the conditioning-level BLUPs (x = efficiency) for one stratum x one
+section (columns).  Each panel plots responsiveness BLUPs (y) against
+the conditioning-level BLUPs (x = efficiency) for one section x one
 level pair.  Dotted zero reference lines on both axes divide each
 panel into four quadrants.}
 \item{\code{"gmat"}}{Heatmap of the G-matrix converted to a correlation
@@ -117,7 +117,7 @@ in blue).  Within each quadrant only varieties whose distance from the
 origin exceeds the within-quadrant median are considered, and the final
 selection is the most extreme of those candidates ordered by decreasing
 distance.  The same varieties are consistently annotated across all
-stratum and level-pair panels.
+section and level-pair panels.
 }
 \examples{
 \dontrun{

@@ -152,9 +152,9 @@
 }
 
 
-# ---- Private helper: resolve composite group labels into level + stratum -
+# ---- Private helper: resolve composite group labels into level + section -
 
-#' Resolve G-matrix column labels into decomposed level and stratum
+#' Resolve G-matrix column labels into decomposed level and section
 #'
 #' The G-matrix of a term such as `us(TSite):Variety` is indexed by the levels
 #' of the grouping factor, and when that factor is a composite the two-way
@@ -164,7 +164,7 @@
 #'
 #' Splitting is attempted at the **first** and at the **last** separator, and
 #' the candidate retained is the one whose level part contains every member of
-#' `levs`.  This is what makes separator-bearing stratum names such as
+#' `levs`.  This is what makes separator-bearing section names such as
 #' `"N0-North-West"` safe, in either label order.  If both candidates qualify
 #' the labels are genuinely ambiguous and an error is raised rather than a
 #' silent choice being made.
@@ -173,20 +173,20 @@
 #' @param levs   Character vector of levels to decompose.
 #' @param sep    Separator for composite labels.
 #' @param enam   Grouping factor name, used only in error messages.
-#' @return List with `level`, `stratum` (both parallel to `tsnams`),
+#' @return List with `level`, `section` (both parallel to `tsnams`),
 #'   `composite` (logical) and `level_side` (1 or 2; `NA` when not composite).
 #' @noRd
 .rreg_labels <- function(tsnams, levs, sep, enam = "the grouping factor") {
 
   has_sep <- grepl(sep, tsnams, fixed = TRUE)
 
-  # ---- Plain grouping factor: labels are the levels, one stratum ---------
+  # ---- Plain grouping factor: labels are the levels, one section ---------
   if (!any(has_sep)) {
     if (!all(levs %in% tsnams))
       stop("Levels supplied in 'levs' do not exist in ", enam, ": ",
            paste(setdiff(levs, tsnams), collapse = ", "), ".")
     return(list(level      = tsnams,
-                stratum    = rep("Single", length(tsnams)),
+                section    = rep("Single", length(tsnams)),
                 composite  = FALSE,
                 level_side = NA_integer_))
   }
@@ -214,8 +214,8 @@
   # A: level on the left  (level itself free of sep)
   # B: level on the right (level itself free of sep)
   cand <- list(
-    list(level = pre1,  stratum = post1, side = 1L),
-    list(level = postL, stratum = preL,  side = 2L)
+    list(level = pre1,  section = post1, side = 1L),
+    list(level = postL, section = preL,  side = 2L)
   )
   ok <- vapply(cand, function(cd) all(levs %in% unique(cd$level)), logical(1L))
 
@@ -232,19 +232,19 @@
 
   res <- cand[[which(ok)[1L]]]
 
-  # Each level x stratum combination must be unique, or downstream lookups
-  # silently resolve to the first match and whole strata disappear.
-  key <- paste(res$level, res$stratum, sep = "\r")
+  # Each level x section combination must be unique, or downstream lookups
+  # silently resolve to the first match and whole sections disappear.
+  key <- paste(res$level, res$section, sep = "\r")
   if (anyDuplicated(key)) {
     dup <- unique(key[duplicated(key)])
-    stop("The labels of ", enam, " do not form a unique level-by-stratum ",
+    stop("The labels of ", enam, " do not form a unique level-by-section ",
          "crossing after splitting on '", sep, "'. Duplicated: ",
          paste(sub("\r", " / ", utils::head(dup, 3L)), collapse = "; "),
          ". Check the 'sep' argument.")
   }
 
   list(level      = res$level,
-       stratum    = res$stratum,
+       section    = res$section,
        composite  = TRUE,
        level_side = res$side)
 }
@@ -291,7 +291,7 @@
 #' The decomposed dimension holds multiple **treatments** or multiple
 #' **traits** — levels applied to, or measured on, the same plants within one
 #' experiment — nominated in `levs`.  The decomposition is repeated
-#' independently within each **stratum**, ordinarily a site, of which there may
+#' independently within each **section**, ordinarily a site, of which there may
 #' be one or many.  Multi-treatment multi-environment data is the most complex
 #' case, not the only one; see **Usage regimes** below.
 #'
@@ -327,21 +327,21 @@
 #'
 #' @section Usage regimes:
 #' Two dimensions are involved, playing different roles.  The **decomposed**
-#' dimension holds the treatments or traits named in `levs`; the **stratum**
+#' dimension holds the treatments or traits named in `levs`; the **section**
 #' dimension is the site or environment the decomposition is repeated within.
 #' Which regime applies is determined automatically from the G-matrix column
 #' labels.
 #'
 #' \describe{
-#'   \item{Plain grouping factor — one stratum}{When the labels contain no
+#'   \item{Plain grouping factor — one section}{When the labels contain no
 #'     `sep` the labels themselves are the decomposed dimension, and a single
-#'     stratum is reported as `"Single"`.  This covers a single-site
+#'     section is reported as `"Single"`.  This covers a single-site
 #'     multi-treatment model, `us(Treatment):Variety`, and a single-site
 #'     multi-trait model, `us(Trait):Variety`.}
-#'   \item{Composite grouping factor — several strata}{When the labels contain
+#'   \item{Composite grouping factor — several sections}{When the labels contain
 #'     `sep` — e.g. a Treatment-by-Site factor `TSite` with levels
 #'     `"N0-Env1"` — they are split in two.  The component holding the `levs`
-#'     values is the decomposed dimension; the other becomes the stratum, and
+#'     values is the decomposed dimension; the other becomes the section, and
 #'     the decomposition is carried out independently within each.  The two
 #'     components may appear in either order: both `"N0-Env1"` and `"Env1-N0"`
 #'     are recognised.}
@@ -352,13 +352,22 @@
 #' distribution of one given another is biologically interpretable.
 #' **Environments are not.**  Regressing one site's BLUPs on another's would
 #' not give an efficiency-responsiveness decomposition, because separate sites
-#' are separate experiments; environments belong in the stratum role.  Where
+#' are separate experiments; environments belong in the section role.  Where
 #' the genetic covariance *between* environments is the question of interest,
 #' use [faSummary()] or [fastIC()] instead.
 #'
 #' Throughout the documentation and output, *level* refers to a level of the
-#' decomposed dimension (a member of `levs`) and *stratum* refers to a level
+#' decomposed dimension (a member of `levs`) and *section* refers to a level
 #' of the second, repeated-over dimension.
+#'
+#' The word *section* is borrowed from ASReml-R, which uses it for a factor
+#' across which a structure is replicated independently — as in
+#' `residual = ~ dsum(~ ar1(Row):ar1(Column) | Site)`.  Strictly, ASReml-R's
+#' sections partition the **residual** structure whereas these partition the
+#' second dimension of the **G** structure; in a typical MET both are `Site`
+#' and they coincide, but they are not the same thing by definition.
+#' *Stratum* is deliberately avoided, since in experimental design it already
+#' denotes an error stratum of the blocking structure.
 #'
 #' @param model An ASReml-R V4 model object containing a random term that
 #'   crosses a grouping factor with the variety factor.  The grouping factor
@@ -425,7 +434,7 @@
 #'   }
 #' @param sep Character separator used inside the labels of a composite
 #'   grouping factor, e.g. `"-"` in `"N0-Env1"`.  Ignored when the grouping
-#'   factor's labels contain no separator, in which case a single stratum
+#'   factor's labels contain no separator, in which case a single section
 #'   named `"Single"` is reported.  Defaults to `"-"`.
 #' @param pev Logical.  If `TRUE` (default) the variance used for HSD
 #'   computation is the prediction error variance (PEV) of each responsiveness
@@ -441,7 +450,7 @@
 #'     column per level in `levs`, one `resp.<lev>` column per conditioned
 #'     level, and one `HSD.<lev>` column per conditioned level (Tukey's HSD on
 #'     the responsiveness scale; `NA` for FA models or absent combinations).
-#'     The `Site` column holds the **stratum** label whatever the stratifying
+#'     The `Site` column holds the **section** label whatever the stratifying
 #'     dimension represents, and is `"Single"` throughout when the grouping
 #'     factor is not composite.  The `Variety` column holds the levels of the
 #'     variety factor named in `term`, whatever that factor is called in the
@@ -453,16 +462,16 @@
 #'   \item{`Gmat`}{Original G-matrix.}
 #'   \item{`beta`}{Named list of length equal to the number of conditioned
 #'     levels.  Each element `beta[["<lev>"]]` is an
-#'     \eqn{n_s \times |A_j|} matrix of per-stratum regression coefficients,
+#'     \eqn{n_s \times |A_j|} matrix of per-section regression coefficients,
 #'     with column names equal to the conditioning levels.  `NA` where a
-#'     combination is absent from a stratum.}
+#'     combination is absent from a section.}
 #'   \item{`sigmat`}{Numeric matrix of dimensions \eqn{n_s \times n_{\text{cond}}}
 #'     containing the scalar conditional genetic variances
-#'     \eqn{\sigma_{j|A_j}^2} for each conditioned level in each stratum.
+#'     \eqn{\sigma_{j|A_j}^2} for each conditioned level in each section.
 #'     `NA` where absent.}
 #'   \item{`tmat`}{Full transformation matrix \eqn{\boldsymbol{T}}.
 #'     Lower-triangular for `type = "sequential"`; sparse (one non-trivial
-#'     column per stratum) for `type = "baseline"`; dense for
+#'     column per section) for `type = "baseline"`; dense for
 #'     `type = "partial"`.}
 #'   \item{`cond_list`}{The resolved conditioning structure as a named list,
 #'     one element per level in `levs`.}
@@ -470,7 +479,7 @@
 #'   \item{`sep`}{The `sep` argument used.}
 #'   \item{`label_map`}{Data frame with one row per G-matrix column —
 #'     `label` (the grouping-factor level as ASReml-R stores it), `level` (the
-#'     decomposed level) and `stratum`.  Composite labels are resolved once
+#'     decomposed level) and `section`.  Composite labels are resolved once
 #'     here and this mapping is the authority downstream, so
 #'     [plot_randomRegress()] never re-splits label strings.}
 #' }
@@ -505,7 +514,7 @@
 #'                                       N1 = "N0",
 #'                                       N2 = c("N0","N1")))
 #'
-#' ## ---- Single site (plain grouping factor; one stratum, "Single") -------
+#' ## ---- Single site (plain grouping factor; one section, "Single") -------
 #' ## Treatments
 #' res_1s   <- randomRegress(model, term = "us(Treatment):Variety",
 #'                           levs = c("N0","N1","N2"))
@@ -602,10 +611,10 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
 
   tsnams <- dimnames(Gmat)[[2L]]
 
-  # ---- Resolve level / stratum from the G-matrix column labels -----------
+  # ---- Resolve level / section from the G-matrix column labels -----------
   lab  <- .rreg_labels(tsnams, levs, sep, enam)
   tnam <- lab$level
-  snam <- lab$stratum
+  snam <- lab$section
 
   usnams <- unique(snam)
   ns     <- length(usnams)
@@ -669,7 +678,7 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
         tryCatch(
           drop(solve(G_AA, G_Aj)),
           error = function(e) {
-            warning("G sub-matrix for level '", lv_j, "' in stratum '",
+            warning("G sub-matrix for level '", lv_j, "' in section '",
                     usnams[i], "' is singular. Skipping.")
             NULL
           }
@@ -688,7 +697,7 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
       # Skip this treatment-site combination and warn the user.
       if (is.na(sig_j) || sig_j <= 0) {
         warning("Non-positive conditional variance (", round(sig_j, 5L),
-                ") for level '", lv_j, "' in stratum '", usnams[i], "'. ",
+                ") for level '", lv_j, "' in section '", usnams[i], "'. ",
                 "The estimated G-matrix may be indefinite (boundary correlation). ",
                 "Check model convergence and varcomp estimates.")
         next
@@ -749,9 +758,9 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
   }
 
   # ---- Transformed G-matrix ----------------------------------------------
-  # Labels are rebuilt positionally from the resolved level / stratum pair.
+  # Labels are rebuilt positionally from the resolved level / section pair.
   # Rewriting the composite string with gsub() instead corrupts any label
-  # whose stratum portion contains a level name, and mangles levels that are
+  # whose section portion contains a level name, and mangles levels that are
   # substrings of one another (e.g. "N1" inside "N10").
   TGmat  <- tmat %*% Gmat %*% t(tmat)
   uncond <- levs[vapply(cond_list, is.null, logical(1L))]
@@ -788,6 +797,6 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
        sep       = sep,
        label_map = data.frame(label   = tsnams,
                               level   = tnam,
-                              stratum = snam,
+                              section = snam,
                               stringsAsFactors = FALSE))
 }
