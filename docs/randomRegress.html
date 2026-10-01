@@ -7,9 +7,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Julian Taylor">
-<meta name="dcterms.date" content="2026-08-18">
+<meta name="dcterms.date" content="2026-10-01">
 
-<title>biomAid - Random Regression of Treatment BLUPs from Multi-Treatment MET Analyses</title>
+<title>biomAid - Multivariate Random Regression</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -4726,6 +4726,10 @@ opacity: 0.92;
  <span class="dropdown-text">BLUP Accuracy in Multi-Environment Trials</span></a>
   </li>  
         <li>
+    <a class="dropdown-item" href="./simTrialData.html" rel target>
+ <span class="dropdown-text">Simulating Multi-Environment Trials</span></a>
+  </li>  
+        <li>
     <a class="dropdown-item" href="./fastIC.html" rel target>
  <span class="dropdown-text">Factor Analytic Selection Tools: FAST and iClass</span></a>
   </li>  
@@ -4746,7 +4750,10 @@ opacity: 0.92;
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a>
+  <ul class="collapse">
+  <li><a href="#scope" id="toc-scope" class="nav-link" data-scroll-target="#scope">Scope</a></li>
+  </ul></li>
   <li><a href="#mathematical-framework" id="toc-mathematical-framework" class="nav-link" data-scroll-target="#mathematical-framework">Mathematical Framework</a>
   <ul class="collapse">
   <li><a href="#the-g-matrix" id="toc-the-g-matrix" class="nav-link" data-scroll-target="#the-g-matrix">The G-matrix</a></li>
@@ -4794,7 +4801,7 @@ opacity: 0.92;
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Random Regression of Treatment BLUPs from Multi-Treatment MET Analyses</h1>
+<h1 class="title">Multivariate Random Regression</h1>
 <p class="subtitle lead"><code>randomRegress()</code> and <code>plot_randomRegress()</code></p>
 </div>
 
@@ -4812,7 +4819,7 @@ opacity: 0.92;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">August 18, 2026</p>
+      <p class="date">October 1, 2026</p>
     </div>
   </div>
   
@@ -4827,14 +4834,64 @@ opacity: 0.92;
 <hr>
 <section id="overview" class="level2">
 <h2 class="anchored" data-anchor-id="overview">Overview</h2>
-<p><code>randomRegress()</code> decomposes variety BLUPs from a multi-treatment, multi-environment trial into two biologically interpretable components:</p>
+<p><code>randomRegress()</code> decomposes a multivariate set of variety BLUPs into two biologically interpretable components:</p>
 <ul>
-<li><strong>Efficiency</strong> — a variety’s genetic value under the baseline (typically low-input or control) treatment.</li>
-<li><strong>Responsiveness (or Tolerance)</strong> — a variety’s capacity to respond genetically to the application of a treatment.</li>
+<li><strong>Efficiency</strong> — a variety’s genetic value at the baseline level (typically a low-input or control treatment).</li>
+<li><strong>Responsiveness (or Tolerance)</strong> — a variety’s capacity to respond genetically as that level changes.</li>
 </ul>
-<p>The decomposition is derived from the <strong>G-matrix</strong> (genetic variance–covariance matrix across Treatment × Site combinations) using Gaussian conditional distribution theory. It generalises naturally from two treatments to any number, with four built-in conditioning schemes used in this function.</p>
+<p>The decomposition is derived from the <strong>G-matrix</strong> (the genetic variance–covariance matrix across the levels being decomposed) using Gaussian conditional distribution theory. It generalises naturally from two levels to any number, with four built-in conditioning schemes.</p>
+<section id="scope" class="level3">
+<h3 class="anchored" data-anchor-id="scope">Scope</h3>
+<p>Two distinct dimensions are involved, and they play quite different roles.</p>
+<p>The dimension that is <strong>decomposed</strong> holds multiple <strong>treatments</strong> or multiple <strong>traits</strong> — levels that are applied to, or measured on, the same plants within the one experiment. This is what makes a genetic regression between them meaningful: the levels are commensurable, so the conditional distribution of one given another has a genuine biological interpretation. For treatments that interpretation is efficiency and responsiveness; for traits it is the part of one trait that is not genetically predictable from another.</p>
+<p>The second dimension is the <strong>stratum</strong> — ordinarily the site or environment. The decomposition is simply repeated, independently, within each stratum. There may be one stratum or many:</p>
+<table class="table">
+<colgroup>
+<col style="width: 30%">
+<col style="width: 37%">
+<col style="width: 14%">
+<col style="width: 17%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Grouping factor</th>
+<th>Decomposed (<code>levs</code>)</th>
+<th>Strata</th>
+<th>Use case</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>us(Treatment)</code> — plain</td>
+<td>treatments</td>
+<td>one, <code>&quot;Single&quot;</code></td>
+<td>Multi-treatment, single site</td>
+</tr>
+<tr class="even">
+<td><code>us(Trait)</code> — plain</td>
+<td>traits</td>
+<td>one, <code>&quot;Single&quot;</code></td>
+<td>Multivariate (multi-trait), single site</td>
+</tr>
+<tr class="odd">
+<td><code>us(TSite)</code> — composite</td>
+<td>treatments</td>
+<td>sites</td>
+<td>Multi-treatment MET</td>
+</tr>
+<tr class="even">
+<td><code>us(TraitSite)</code> — composite</td>
+<td>traits</td>
+<td>sites</td>
+<td>Multi-trait MET</td>
+</tr>
+</tbody>
+</table>
+<p>Where the grouping factor is a composite of two factors — such as the Treatment-by-Site factor <code>TSite</code> used throughout this vignette — the decomposition is carried out independently within each level of the second factor. Where it is a plain factor there is a single stratum, reported as <code>&quot;Single&quot;</code>, and plots show one facet column.</p>
+<p>Multi-treatment MET data is used as the worked example here because it is the most complex case, exercising both dimensions at once; the single-stratum cases follow by simply supplying a plain grouping factor.</p>
 <p><code>plot_randomRegress()</code> visualises the result as a regression scatter plot, an efficiency–responsiveness quadrant plot, or a G-matrix heatmap.</p>
 <hr>
+</section>
 </section>
 <section id="mathematical-framework" class="level2">
 <h2 class="anchored" data-anchor-id="mathematical-framework">Mathematical Framework</h2>
@@ -5091,13 +5148,13 @@ r_{j,v} = u_{j,v} - \boldsymbol{\beta}_j^\top \mathbf{u}_{A_j,v}.
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>vc1 <span class="ot">&lt;-</span> <span class="fu">summary</span>(model1)<span class="sc">$</span>varcomp</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>vc1[<span class="fu">grepl</span>(<span class="st">&quot;TSite&quot;</span>, <span class="fu">rownames</span>(vc1)), <span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>                                                  component    std.error
-TSite:Variety!TSite!T1-Env1:!TSite!T0-Env1.cor 8.266140e-01 2.075354e-01
-TSite:Variety!TSite!T2-Env1:!TSite!T0-Env1.cor 6.284402e-01 3.756896e-01
-TSite:Variety!TSite!T2-Env1:!TSite!T1-Env1.cor 6.492141e-01 3.901779e-01
-TSite:Variety!TSite_T0-Env1                    5.714666e+04 2.127251e+04
-TSite:Variety!TSite_T1-Env1                    4.931515e+04 1.969887e+04
-TSite:Variety!TSite_T2-Env1                    1.651471e+04 1.323835e+04</code></pre>
+<pre><code>                                               component  std.error
+TSite:Variety!TSite!T1-Env1:!TSite!T0-Env1.cor 0.8266140 0.20753541
+TSite:Variety!TSite!T2-Env1:!TSite!T0-Env1.cor 0.6284402 0.37568960
+TSite:Variety!TSite!T2-Env1:!TSite!T1-Env1.cor 0.6492141 0.39017788
+TSite:Variety!TSite_T0-Env1                    0.4076881 0.16126509
+TSite:Variety!TSite_T1-Env1                    0.3518176 0.14871114
+TSite:Variety!TSite_T2-Env1                    0.1178170 0.09759765</code></pre>
 </div>
 </div>
 <p>The <code>corgh</code> varcomp rows give the genetic variance for each <code>TSite</code> level (diagonal of the G-matrix) and the estimated genetic correlation between each pair. With true correlations in the range 0.55–0.70 and 50 varieties across 3 replicates, the estimates should be well away from the boundary (<span class="math inline">|r| \ll 1</span>), ensuring the reconstructed G-matrix is positive definite and all conditional variances are positive.</p>
@@ -5247,43 +5304,80 @@ y_v = \hat{u}_{j,v} - \tfrac{G_{rj}}{G_{rr}}\,\hat{u}_{r,v}.
 <div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>vc2 <span class="ot">&lt;-</span> <span class="fu">summary</span>(model2)<span class="sc">$</span>varcomp</span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>vc2[<span class="fu">grepl</span>(<span class="st">&quot;TSite&quot;</span>, <span class="fu">rownames</span>(vc2)), ]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>                                   component   std.error    z.ratio bound %ch
-fa(TSite, 2):Variety!T0-Env1!var     0.00000          NA         NA     F  NA
-fa(TSite, 2):Variety!T1-Env1!var 31170.65528 18120.99293  1.7201406     P 0.0
-fa(TSite, 2):Variety!T2-Env1!var     0.00000          NA         NA     F  NA
-fa(TSite, 2):Variety!T0-Env2!var 54919.72761 24527.38851  2.2391184     P 0.0
-fa(TSite, 2):Variety!T1-Env2!var 22880.46106 17110.94599  1.3371827     P 0.1
-fa(TSite, 2):Variety!T2-Env2!var 16079.46438 15472.45593  1.0392316     P 0.1
-fa(TSite, 2):Variety!T0-Env3!var  3029.38081 15818.20881  0.1915123     P 1.2
-fa(TSite, 2):Variety!T1-Env3!var     0.00000          NA         NA     F  NA
-fa(TSite, 2):Variety!T2-Env3!var 13990.36450 15186.29669  0.9212493     P 0.2
-fa(TSite, 2):Variety!T0-Env4!var 15399.67049 15740.09710  0.9783720     P 0.1
-fa(TSite, 2):Variety!T1-Env4!var 52735.62150 24333.00831  2.1672463     P 0.0
-fa(TSite, 2):Variety!T2-Env4!var 14054.12323 16686.09239  0.8422657     P 0.4
-fa(TSite, 2):Variety!T0-Env1!fa1   296.57418    48.51737  6.1127422     P 0.0
-fa(TSite, 2):Variety!T1-Env1!fa1   157.92909    51.57597  3.0620673     P 0.1
-fa(TSite, 2):Variety!T2-Env1!fa1   130.69065    54.14897  2.4135388     P 0.0
-fa(TSite, 2):Variety!T0-Env2!fa1   230.81038    62.90194  3.6693680     P 0.0
-fa(TSite, 2):Variety!T1-Env2!fa1   219.42927    50.74392  4.3242475     P 0.0
-fa(TSite, 2):Variety!T2-Env2!fa1   205.61597    48.34129  4.2534235     P 0.0
-fa(TSite, 2):Variety!T0-Env3!fa1   275.90911    48.09771  5.7364288     P 0.0
-fa(TSite, 2):Variety!T1-Env3!fa1   116.76063    60.85115  1.9187907     P 0.1
-fa(TSite, 2):Variety!T2-Env3!fa1   257.16889    49.02995  5.2451391     P 0.0
-fa(TSite, 2):Variety!T0-Env4!fa1   143.87189    49.51114  2.9058488     P 0.0
-fa(TSite, 2):Variety!T1-Env4!fa1   206.09465    61.50535  3.3508409     P 0.0
-fa(TSite, 2):Variety!T2-Env4!fa1   119.41365    54.91899  2.1743599     P 0.1
-fa(TSite, 2):Variety!T0-Env1!fa2     0.00000          NA         NA     F  NA
-fa(TSite, 2):Variety!T1-Env1!fa2   -59.74533    57.44779 -1.0399935     P 0.3
-fa(TSite, 2):Variety!T2-Env1!fa2  -190.85185    49.57640 -3.8496516     P 0.1
-fa(TSite, 2):Variety!T0-Env2!fa2  -121.05435    65.76636 -1.8406728     P 0.3
-fa(TSite, 2):Variety!T1-Env2!fa2   -53.32607    55.72052 -0.9570274     P 0.4
-fa(TSite, 2):Variety!T2-Env2!fa2   -57.10362    53.42620 -1.0688317     P 0.2
-fa(TSite, 2):Variety!T0-Env3!fa2    48.72724    54.13545  0.9000987     P 0.3
-fa(TSite, 2):Variety!T1-Env3!fa2  -262.49742    49.07711 -5.3486735     P 0.0
-fa(TSite, 2):Variety!T2-Env3!fa2   -33.78441    56.15143 -0.6016661     P 0.1
-fa(TSite, 2):Variety!T0-Env4!fa2  -101.02471    50.52365 -1.9995529     P 0.2
-fa(TSite, 2):Variety!T1-Env4!fa2  -114.49195    65.28623 -1.7536921     P 0.0
-fa(TSite, 2):Variety!T2-Env4!fa2  -173.67649    53.08688 -3.2715521     P 0.2</code></pre>
+<pre><code>                                   component   std.error    z.ratio bound
+fa(TSite, 2):Variety!T0-Env1!var     0.00000          NA         NA     4
+fa(TSite, 2):Variety!T1-Env1!var 31170.65528 18120.99293  1.7201406     1
+fa(TSite, 2):Variety!T2-Env1!var     0.00000          NA         NA     4
+fa(TSite, 2):Variety!T0-Env2!var 54919.72761 24527.38851  2.2391184     1
+fa(TSite, 2):Variety!T1-Env2!var 22880.46106 17110.94599  1.3371827     1
+fa(TSite, 2):Variety!T2-Env2!var 16079.46438 15472.45593  1.0392316     1
+fa(TSite, 2):Variety!T0-Env3!var  3029.38081 15818.20881  0.1915123     1
+fa(TSite, 2):Variety!T1-Env3!var     0.00000          NA         NA     4
+fa(TSite, 2):Variety!T2-Env3!var 13990.36450 15186.29669  0.9212493     1
+fa(TSite, 2):Variety!T0-Env4!var 15399.67049 15740.09710  0.9783720     1
+fa(TSite, 2):Variety!T1-Env4!var 52735.62150 24333.00831  2.1672463     1
+fa(TSite, 2):Variety!T2-Env4!var 14054.12323 16686.09239  0.8422657     1
+fa(TSite, 2):Variety!T0-Env1!fa1   296.57418    48.51737  6.1127422     1
+fa(TSite, 2):Variety!T1-Env1!fa1   157.92909    51.57597  3.0620673     1
+fa(TSite, 2):Variety!T2-Env1!fa1   130.69065    54.14897  2.4135388     1
+fa(TSite, 2):Variety!T0-Env2!fa1   230.81038    62.90194  3.6693680     1
+fa(TSite, 2):Variety!T1-Env2!fa1   219.42927    50.74392  4.3242475     1
+fa(TSite, 2):Variety!T2-Env2!fa1   205.61597    48.34129  4.2534235     1
+fa(TSite, 2):Variety!T0-Env3!fa1   275.90911    48.09771  5.7364288     1
+fa(TSite, 2):Variety!T1-Env3!fa1   116.76063    60.85115  1.9187907     1
+fa(TSite, 2):Variety!T2-Env3!fa1   257.16889    49.02995  5.2451391     1
+fa(TSite, 2):Variety!T0-Env4!fa1   143.87189    49.51114  2.9058488     1
+fa(TSite, 2):Variety!T1-Env4!fa1   206.09465    61.50535  3.3508409     1
+fa(TSite, 2):Variety!T2-Env4!fa1   119.41365    54.91899  2.1743599     1
+fa(TSite, 2):Variety!T0-Env1!fa2     0.00000          NA         NA     4
+fa(TSite, 2):Variety!T1-Env1!fa2   -59.74533    57.44779 -1.0399935     1
+fa(TSite, 2):Variety!T2-Env1!fa2  -190.85185    49.57640 -3.8496516     1
+fa(TSite, 2):Variety!T0-Env2!fa2  -121.05435    65.76636 -1.8406728     1
+fa(TSite, 2):Variety!T1-Env2!fa2   -53.32607    55.72052 -0.9570274     1
+fa(TSite, 2):Variety!T2-Env2!fa2   -57.10362    53.42620 -1.0688317     1
+fa(TSite, 2):Variety!T0-Env3!fa2    48.72724    54.13545  0.9000987     1
+fa(TSite, 2):Variety!T1-Env3!fa2  -262.49742    49.07711 -5.3486735     1
+fa(TSite, 2):Variety!T2-Env3!fa2   -33.78441    56.15143 -0.6016661     1
+fa(TSite, 2):Variety!T0-Env4!fa2  -101.02471    50.52365 -1.9995529     1
+fa(TSite, 2):Variety!T1-Env4!fa2  -114.49195    65.28623 -1.7536921     1
+fa(TSite, 2):Variety!T2-Env4!fa2  -173.67649    53.08688 -3.2715521     1
+                                         %ch
+fa(TSite, 2):Variety!T0-Env1!var          NA
+fa(TSite, 2):Variety!T1-Env1!var 0.003838251
+fa(TSite, 2):Variety!T2-Env1!var          NA
+fa(TSite, 2):Variety!T0-Env2!var 0.027331069
+fa(TSite, 2):Variety!T1-Env2!var 0.054407907
+fa(TSite, 2):Variety!T2-Env2!var 0.071457745
+fa(TSite, 2):Variety!T0-Env3!var 1.199808359
+fa(TSite, 2):Variety!T1-Env3!var          NA
+fa(TSite, 2):Variety!T2-Env3!var 0.218984401
+fa(TSite, 2):Variety!T0-Env4!var 0.104827315
+fa(TSite, 2):Variety!T1-Env4!var 0.013632674
+fa(TSite, 2):Variety!T2-Env4!var 0.362701900
+fa(TSite, 2):Variety!T0-Env1!fa1 0.008543383
+fa(TSite, 2):Variety!T1-Env1!fa1 0.059294309
+fa(TSite, 2):Variety!T2-Env1!fa1 0.009897426
+fa(TSite, 2):Variety!T0-Env2!fa1 0.049616622
+fa(TSite, 2):Variety!T1-Env2!fa1 0.033503276
+fa(TSite, 2):Variety!T2-Env2!fa1 0.031391275
+fa(TSite, 2):Variety!T0-Env3!fa1 0.014288936
+fa(TSite, 2):Variety!T1-Env3!fa1 0.051179601
+fa(TSite, 2):Variety!T2-Env3!fa1 0.036038453
+fa(TSite, 2):Variety!T0-Env4!fa1 0.036974928
+fa(TSite, 2):Variety!T1-Env4!fa1 0.010099954
+fa(TSite, 2):Variety!T2-Env4!fa1 0.105478903
+fa(TSite, 2):Variety!T0-Env1!fa2          NA
+fa(TSite, 2):Variety!T1-Env1!fa2 0.276556786
+fa(TSite, 2):Variety!T2-Env1!fa2 0.062740379
+fa(TSite, 2):Variety!T0-Env2!fa2 0.253517712
+fa(TSite, 2):Variety!T1-Env2!fa2 0.403791803
+fa(TSite, 2):Variety!T2-Env2!fa2 0.154561748
+fa(TSite, 2):Variety!T0-Env3!fa2 0.331638189
+fa(TSite, 2):Variety!T1-Env3!fa2 0.014761595
+fa(TSite, 2):Variety!T2-Env3!fa2 0.145412563
+fa(TSite, 2):Variety!T0-Env4!fa2 0.202646578
+fa(TSite, 2):Variety!T1-Env4!fa2 0.042595597
+fa(TSite, 2):Variety!T2-Env4!fa2 0.163946758</code></pre>
 </div>
 </div>
 <p>The varcomp rows show the factor loadings (<code>!fa1</code>, <code>!fa2</code>) and specific variances (<code>!var</code>) for each <code>TSite</code> level. The G-matrix reconstructed from these is <span class="math inline">\hat{\mathbf{G}} = \hat{\boldsymbol{\Lambda}}\hat{\boldsymbol{\Lambda}}^\top + \hat{\boldsymbol{\Psi}}</span>.</p>

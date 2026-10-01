@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Julian Taylor">
-<meta name="dcterms.date" content="2026-08-18">
+<meta name="dcterms.date" content="2026-10-01">
 
 <title>biomAid - Factor Analytic Selection Tools: FAST and iClass</title>
 <style>
@@ -4726,6 +4726,10 @@ opacity: 0.92;
  <span class="dropdown-text">BLUP Accuracy in Multi-Environment Trials</span></a>
   </li>  
         <li>
+    <a class="dropdown-item" href="./simTrialData.html" rel target>
+ <span class="dropdown-text">Simulating Multi-Environment Trials</span></a>
+  </li>  
+        <li>
     <a class="dropdown-item" href="./fastIC.html" rel target>
  <span class="dropdown-text">Factor Analytic Selection Tools: FAST and iClass</span></a>
   </li>  
@@ -4816,7 +4820,7 @@ opacity: 0.92;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">August 18, 2026</p>
+      <p class="date">October 1, 2026</p>
     </div>
   </div>
   
@@ -5418,11 +5422,20 @@ pnn ppn ppp pnp
 <td><code>&quot;CVE&quot;</code></td>
 <td>Common Variety Effect heatmap (genotype × environment); environments grouped by iClass, genotypes ordered by <code>global_op</code>.</td>
 </tr>
+<tr class="even">
+<td><code>&quot;iclass&quot;</code></td>
+<td>iClassOP vs iClassRMSD scatter, faceted by interaction class; per-class mean reference line. Auto-highlights top by mean iClassOP.</td>
+</tr>
+<tr class="odd">
+<td><code>&quot;OP.pairs&quot;</code></td>
+<td>Lower-triangular pairs plot of iClassOP across all iClass levels; y = x reference diagonal. Requires ≥ 2 classes. Uses <code>patchwork</code> when available.</td>
+</tr>
+<tr class="even">
+<td><code>&quot;OP.variety&quot;</code></td>
+<td>iClassOP trajectory across ordered interaction classes; highlighted varieties over grey background. Auto-highlights by range of iClassOP.</td>
+</tr>
 </tbody>
 </table>
-<p><code>&quot;iclass&quot;</code> | iClassOP vs iClassRMSD scatter, faceted by interaction class; per-class mean reference line. Auto-highlights top by mean iClassOP. |<br>
-<code>&quot;OP.pairs&quot;</code> | Lower-triangular pairs plot of iClassOP across all iClass levels; y = x reference diagonal. Requires ≥ 2 classes. Uses <code>patchwork</code> when available. |<br>
-<code>&quot;OP.variety&quot;</code> | iClassOP trajectory across ordered interaction classes; highlighted varieties over grey background. Auto-highlights by range of iClassOP. |</p>
 <p>All types support <code>highlight = &quot;default&quot; | character | NULL</code> and <code>return_data = TRUE</code> returning <code>list($plot, $data)</code>. The <code>biplot_factors</code> argument (default <code>c(1L, 2L)</code>) selects which two FA factor axes to display in the biplot.</p>
 <hr>
 </section>
