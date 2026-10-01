@@ -51,6 +51,7 @@ reference:
     contents:
       - compare
       - plot_compare
+      - pc_add
       - as_plotly
 
   - title: "Wald Tests on Fixed-Effect Contrasts"
@@ -106,7 +107,6 @@ reference:
     contents:
       - accuracy
       - plot_accuracy
-      - pc_add
 
   - title: "Field Trial Utilities"
     desc: >

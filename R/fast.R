@@ -119,8 +119,8 @@
 #'     \item{`iClassRMSD`}{Within-iClass RMSD for the genotype.}
 #'   }
 #'
-#'   Two attributes are attached to the returned data frame for use by
-#'   [plot_fastIC()] with `type = "VAF"`:
+#'   Two attributes are attached to the returned data frame, passed through
+#'   from [faSummary()], for use by [plot_faSummary()] with `type = "VAF"`:
 #'   \describe{
 #'     \item{`vaf_env`}{Data frame with one row per environment containing the
 #'       proportion of genetic variance accounted for by each factor

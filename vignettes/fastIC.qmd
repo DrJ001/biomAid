@@ -696,7 +696,6 @@ plot_fastIC(res2, type = "OP.variety", n_highlight = 8L)
 | `"fast"` | Global OP vs stability scatter with quadrant annotations. Auto-highlights top by `global_op` and top by `global_stab`. |
 | `"biplot"` | FA biplot — genotype score points and environment loading arrows, coloured by iClass. Default axes are Factors 1 & 2; use `biplot_factors = c(i, j)` to display any two factor axes. Requires k ≥ 2. |
 | `"CVE"` | Common Variety Effect heatmap (genotype × environment); environments grouped by iClass, genotypes ordered by `global_op`. |
-
 | `"iclass"` | iClassOP vs iClassRMSD scatter, faceted by interaction class; per-class mean reference line. Auto-highlights top by mean iClassOP. |
 | `"OP.pairs"` | Lower-triangular pairs plot of iClassOP across all iClass levels; y = x reference diagonal. Requires ≥ 2 classes. Uses `patchwork` when available. |
 | `"OP.variety"` | iClassOP trajectory across ordered interaction classes; highlighted varieties over grey background. Auto-highlights by range of iClassOP. |

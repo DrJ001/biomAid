@@ -6,7 +6,7 @@
 \alias{biomAid-package}
 \title{biomAid: Biometric Tools for Multi-Environment Plant Breeding Trials}
 \description{
-Provides biometric tools for analysing multi-environment plant breeding trials fitted with ASReml-R V4 mixed models. Includes functions for multiple comparison criteria (HSD, LSD, Bonferroni), Wald tests on fixed-effect contrasts, Factor Analytic Selection Tools (FAST) and interaction class (iClass) analysis, multivariate random and fixed regression of treatment BLUPs/BLUEs, and simulation of multi-treatment multi-environment trial data.
+Provides biometric tools for analysing multi-environment plant breeding trials fitted with ASReml-R V4 mixed models. Includes functions for multiple comparison criteria (HSD, LSD, Bonferroni), Wald tests on fixed-effect contrasts, factor analytic variance structure summaries, Factor Analytic Selection Tools (FAST) and interaction class (iClass) analysis, multivariate random and fixed regression of treatment BLUPs/BLUEs, model-based BLUP accuracy and generalised heritability, field trial layout extraction and padding, and simulation of multi-treatment multi-environment trial data. Each analysis function is paired with a ggplot2 visualisation.
 }
 \author{
 \strong{Maintainer}: J Taylor \email{j.taylor@example.com}

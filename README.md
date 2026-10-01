@@ -19,13 +19,13 @@ space, there are a lot more functions coming.
 | Vignette | Description |
 |----------|-------------|
 | [Wald Tests on Fixed-Effect Contrasts](https://DrJ001.github.io/biomAid/waldTest.html) | Mathematical framework and worked examples for `waldTest()` and `plot_waldTest()` |
-| [Multi-treatment Random Regression](https://DrJ001.github.io/biomAid/randomRegress.html) | Conditioning schemes, efficiency/responsiveness decomposition, and all plot types for `randomRegress()` and `plot_randomRegress()` |
-| [Multi-treatment Fixed-Effects Regression](https://DrJ001.github.io/biomAid/fixedRegress.html) | OLS conditioning schemes, efficiency/response index decomposition, and plot types for `fixedRegress()` and `plot_fixedRegress()` |
+| [Multivariate Random Regression](https://DrJ001.github.io/biomAid/randomRegress.html) | Conditioning schemes, efficiency/responsiveness decomposition, and all plot types for `randomRegress()` and `plot_randomRegress()`, worked through on multi-treatment MET data |
+| [Multivariate Fixed-Effects Regression](https://DrJ001.github.io/biomAid/fixedRegress.html) | OLS conditioning schemes, efficiency/response index decomposition, and plot types for `fixedRegress()` and `plot_fixedRegress()` |
 | [Extracting and Padding Field Trial Layouts](https://DrJ001.github.io/biomAid/padTrial.html) | Step-by-step guide to guard-row removal, missing-plot padding, and Before/After visualisation with `padTrial()` and `plot_padTrial()` |
 | [Multiple Comparison Criteria](https://DrJ001.github.io/biomAid/compare.html) | HSD, LSD, and Bonferroni criteria, by-group comparisons, and all three plot types for `compare()` and `plot_compare()` |
 | [BLUP Accuracy in Multi-Environment Trials](https://DrJ001.github.io/biomAid/accuracy.html) | Mrode accuracy and Cullis H², supported random structures, and all six plot types for `accuracy()` and `plot_accuracy()` |
 | [Simulating Multi-Environment Trials](https://DrJ001.github.io/biomAid/simTrialData.html) | Mathematical framework, balanced/unbalanced/split-plot designs, and all four plot types for `simTrialData()` and `plot_simTrialData()` |
-| [Factor Analytic Selection Tools: FAST and iClass](https://DrJ001.github.io/biomAid/fastIC.html) | Mathematical framework, FAST global metrics, iClass interaction classes, and all seven plot types for `fastIC()` and `plot_fastIC()` |
+| [Factor Analytic Selection Tools: FAST and iClass](https://DrJ001.github.io/biomAid/fastIC.html) | Mathematical framework, FAST global metrics, iClass interaction classes, all six plot types for `fastIC()` and `plot_fastIC()`, and the variance-accounted-for chart from `faSummary()` and `plot_faSummary()` |
 
 ## Function reference
 
@@ -169,10 +169,33 @@ plot_waldTest(res,
 
 ### `randomRegress()` — Random regression (BLUP-based)
 
-Decomposes Genotype × Environment × (Treatment/Trait) variety BLUPs from an
-ASReml-R V4 model into **efficiency and responsiveness indices** using a natural
-genetic regression derived from Gaussian conditional distribution theory.
-Supports four conditioning schemes.
+Decomposes a multivariate set of variety BLUPs from an ASReml-R V4 model into
+**efficiency and responsiveness indices**, using a natural genetic regression
+derived from Gaussian conditional distribution theory. Supports four
+conditioning schemes.
+
+The **decomposed** dimension holds multiple treatments or multiple traits —
+levels applied to, or measured on, the same plants within one experiment, so
+that a genetic regression between them is meaningful — nominated in `levs`. The
+decomposition is then repeated independently within each **stratum**, ordinarily
+a site, of which there may be one or many:
+
+| Grouping factor | Decomposed (`levs`) | Strata | Use case |
+|-----------------|---------------------|--------|----------|
+| `us(Treatment)` — plain | treatments | one, `"Single"` | Multi-treatment, single site |
+| `us(Trait)` — plain | traits | one, `"Single"` | Multi-trait, single site |
+| `us(TSite)` — composite | treatments | sites | Multi-treatment MET |
+| `us(TraitSite)` — composite | traits | sites | Multi-trait MET |
+
+Where the grouping factor is a composite of two factors, the two components may
+appear in either order (`"N0-Env1"` and `"Env1-N0"` are both recognised). Where
+it is a plain factor, there is a single stratum reported as `"Single"`.
+
+> **Note:** environments are not a decomposable dimension. Regressing one site's
+> BLUPs on another's would not give an efficiency–responsiveness decomposition,
+> since separate sites are separate experiments; environments belong in the
+> stratum role. For genetic covariance *between* environments use `faSummary()`
+> or `fastIC()`.
 
 ```r
 randomRegress(model, term = "us(TSite):Variety", levs = NULL,
@@ -183,12 +206,19 @@ randomRegress(model, term = "us(TSite):Variety", levs = NULL,
 | Argument | Description |
 |----------|-------------|
 | `model` | An ASReml-R V4 model object |
-| `term` | Full random-effect interaction string, e.g. `"fa(TSite, 2):Variety"` or `"corgh(TSite):vm(Variety, giv1)"`. Default `"us(TSite):Variety"` |
-| `levs` | Character vector of treatment levels to decompose |
+| `term` | Full random-effect interaction string, e.g. `"fa(TSite, 2):Variety"`, `"corgh(TSite):vm(Variety, giv1)"`, `"us(Treatment):Variety"` or `"us(Trait):Variety"`. Default `"us(TSite):Variety"` |
+| `levs` | Character vector naming the levels to decompose — treatment labels or trait names. `levs[1]` is the baseline (efficiency) level |
 | `type` | `"baseline"`, `"sequential"`, `"partial"`, or `"custom"` |
 | `cond` | User-supplied conditioning list when `type = "custom"` |
-| `sep` | Separator between treatment and site in composite `TSite` labels. Default `"-"` |
+| `sep` | Separator splitting composite grouping-factor labels, e.g. `"-"` in `"N0-Env1"`. Ignored when the labels contain no separator. Default `"-"` |
 | `pev` | `TRUE` (default) uses PEV; `FALSE` uses posterior variance |
+
+Returns `blups`, `TGmat`, `Gmat`, `beta`, `sigmat`, `tmat`, `cond_list`, `type`,
+`sep` and `label_map`. In `$blups` the `Site` column carries the stratum label
+whatever the stratifying dimension represents. `$label_map` records how each
+G-matrix column label was resolved into `level` and `stratum`; composite labels
+are resolved once there and that mapping is the authority downstream, so
+`plot_randomRegress()` never re-splits label strings.
 
 ---
 
@@ -196,7 +226,9 @@ randomRegress(model, term = "us(TSite):Variety", levs = NULL,
 
 Generates ggplot2 visualisations from `randomRegress()` output. Three plot
 types are available, each returned as a ggplot object that can be further
-customised with `+`.
+customised with `+`. The `"regress"` and `"quadrant"` grids facet by BLUP pair
+(rows) and stratum (columns) — a single column labelled `"Single"` when the
+grouping factor is not composite.
 
 ```r
 plot_randomRegress(res,
@@ -214,9 +246,9 @@ plot_randomRegress(res,
 |----------|-------------|
 | `res` | List returned by `randomRegress()` |
 | `type` | `"regress"`, `"quadrant"`, or `"gmat"` |
-| `treatments` | Character vector to restrict conditioning pairs plotted. `NULL` = all |
+| `treatments` | Character vector to restrict conditioning pairs plotted. `NULL` = all. Named for the commonest case, but accepts trait names equally |
 | `highlight` | `"default"` auto-selects archetypes by distance from origin; character vector of variety names for custom highlights; `NULL` = no highlighting |
-| `centre` | `TRUE` adds back within-site means (useful for demo data). Default `FALSE` |
+| `centre` | `TRUE` adds back within-stratum means (useful for demo data). Default `FALSE` |
 | `cond_x` | `"regress"` only. Positive integer selecting which member of the conditioning set $A_j$ appears on the x-axis (added variable plot). Default `1L` |
 | `theme` | A ggplot2 theme object. Default `theme_bw()` |
 | `return_data` | `TRUE` returns the tidy data frame instead of the plot |
@@ -367,8 +399,10 @@ faSummary(model, term = NULL, blups = TRUE, combine.ide = TRUE)
 | `combine.ide` | Append the combined `vm()` + `ide()` "total" structure where such a pair exists. Default `TRUE` |
 
 Each `$gammas[[term]]` element contains `Gmat`, `Cmat`, `loads`, `loads_cor`,
-`spec_var`, `vaf_env`, `vaf_summary`, `vaf_total` and `k`; each
-`$blups[[term]]` element contains `blups` and `scores` data frames.
+`spec_var`, `vaf_env`, `vaf_summary`, `vaf_total`, `k`, `env`, `outer`, `inner`
+and `inner_fun`; each `$blups[[term]]` element contains `blups` and `scores`
+data frames. The object also carries `$terms` and `$call`, and has a compact
+`print()` method.
 
 ---
 
@@ -438,6 +472,12 @@ fastIC(model, term = "fa(Site, 4):Genotype",
 | `model` | An ASReml-R V4 model object |
 | `term` | FA model term string. Default `"fa(Site, 4):Genotype"` |
 | `ic.num` | Number of factors used for iClass sign-pattern classification and iClassOP. Must be < k (i.e. 1 to k − 1) so that the kth factor remains available for iClassRMSD. Default `2` |
+| `...` | Additional arguments forwarded to `faSummary()` |
+
+The returned data frame has one row per environment × genotype, sorted by
+`iclass` then environment then genotype. Alongside the loadings, scores and
+per-factor fitted values it carries `CVE`, `global_op`, `iclass`, `iClassOP`
+and `iClassRMSD`; `global_dev` and `global_stab` are present only when k > 1.
 
 ---
 
@@ -451,12 +491,13 @@ lives in `plot_faSummary(type = "VAF")`.
 
 ```r
 plot_fastIC(res,
-            type        = c("fast", "biplot", "CVE",
-                            "iclass", "OP.pairs", "OP.variety"),
-            highlight   = "default",
-            n_highlight = 3L,
-            theme       = ggplot2::theme_bw(),
-            return_data = FALSE,
+            type           = c("fast", "biplot", "CVE",
+                               "iclass", "OP.pairs", "OP.variety"),
+            highlight      = "default",
+            n_highlight    = 3L,
+            biplot_factors = c(1L, 2L),
+            theme          = ggplot2::theme_bw(),
+            return_data    = FALSE,
             ...)
 ```
 
@@ -466,13 +507,14 @@ plot_fastIC(res,
 | `type` | Plot type. Default `"fast"` |
 | `highlight` | `"default"` auto-selects varieties (by `global_op` / instability for `"fast"`, `"biplot"`, `"CVE"`; by mean iClassOP for `"iclass"`, `"OP.pairs"`, `"OP.variety"`); character vector for explicit names; `NULL` = no annotation |
 | `n_highlight` | Maximum number of varieties to highlight automatically. Default `3L` |
+| `biplot_factors` | `"biplot"` only. Length-2 integer vector of distinct FA factor indices within `1:k`, giving the x- and y-axes. Default `c(1L, 2L)`. Useful when `ic.num >= 3` and iClass separation involves a third factor invisible in the default view — e.g. `c(1L, 3L)`. Ignored for all other types |
 | `theme` | A ggplot2 theme object. Default `theme_bw()` |
 | `return_data` | `TRUE` returns a list with `$plot` and `$data`. Default `FALSE` |
 
 | Type | Description |
 |------|-------------|
 | `"fast"` | Scatter of global Overall Performance (`global_op`) vs global stability (`global_stab`) with quadrant annotations (Broadly adapted / Responsive / Poor & stable / Poor & unstable). |
-| `"biplot"` | FA biplot with genotype score points and environment loading arrows for Factors 1 and 2. Arrows coloured by iClass when present. |
+| `"biplot"` | FA biplot with genotype score points and environment loading arrows. Default axes are Factors 1 and 2; `biplot_factors` selects any two factor axes. Arrows coloured by iClass when present. Requires k ≥ 2. |
 | `"CVE"` | Diverging-colour heatmap of the Common Variety Effect (genotype × environment). Environments ordered by iClass then first-factor loading; genotypes by `global_op`. |
 | `"iclass"` | Scatter of within-class iClassOP vs iClassRMSD, faceted by iClass with a per-class mean-OP reference line. |
 | `"OP.pairs"` | Lower-triangular pairs plot of iClassOP across all iClass levels. Uses `patchwork` when available; falls back to `facet_grid`. Requires ≥ 2 iClass levels. |
@@ -553,6 +595,7 @@ plot_simTrialData(res,
 | Argument | Description |
 |----------|-------------|
 | `res` | List returned by `simTrialData()` |
+| `type` | Plot type. Default `"trial"` |
 | `fill` | `"trial"` only. Column name for tile fill, or `NULL` (default → `Rep`) |
 | `label` | `"trial"` only. Column name to overlay as text. `NULL` = no labels |
 | `sites` | `"trial"` and `"blup"` only. Character vector of sites to include. `NULL` = all |

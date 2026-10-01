@@ -15,35 +15,31 @@ NULL
 
 # ---- AVP helpers ---------------------------------------------------------
 
-#' Extract the T x T within-site G-matrix block from the full Gmat
+#' Extract the T x T within-stratum G-matrix block from the full Gmat
 #'
-#' @param Gmat       Full Gmat with column names combining treatment and site
-#' @param site       Site label (e.g. "Env1")
-#' @param treatments Character vector of treatment labels needed
-#' @param sep        Separator used to join treatment and site labels
-#' @return T x T matrix with rownames/colnames = treatments, or NULL on failure
+#' "Site" here means a stratum in the general sense of randomRegress(): the
+#' second component of a composite group label, or the sole pseudo-stratum
+#' "Single" when the group labels carry no separator.
+#'
+#' Label resolution is **not** repeated here.  `map` is the `label_map`
+#' resolved once by randomRegress(); re-splitting the strings independently is
+#' what previously let this function and randomRegress() disagree about which
+#' half of a composite label was the stratum.
+#'
+#' @param Gmat       Full Gmat, columns named by grouping-factor level
+#' @param site       Stratum label (e.g. "Env1", or "Single")
+#' @param treatments Character vector of conditioned-dimension levels needed
+#' @param map        `label_map` data frame: `label`, `level`, `stratum`
+#' @return T x T matrix with rownames/colnames = levels, or NULL on failure
 #' @noRd
-.rreg_site_Gmat <- function(Gmat, site, treatments, sep) {
+.rreg_site_Gmat <- function(Gmat, site, treatments, map) {
 
   tsnams <- colnames(Gmat)
+  idx    <- match(tsnams, map$label)
+  if (anyNA(idx)) return(NULL)
 
-  if (!any(grepl(sep, tsnams, fixed = TRUE))) {
-    # No separator: tsnams ARE the treatment labels (single group, no site)
-    ok <- treatments[treatments %in% tsnams]
-    if (length(ok) == 0L) return(NULL)
-    return(Gmat[ok, ok, drop = FALSE])
-  }
-
-  st    <- strsplit(tsnams, split = sep, fixed = TRUE)
-  part1 <- vapply(st, `[`, character(1L), 1L)
-  part2 <- vapply(st, `[`, character(1L), 2L)
-
-  # Determine which part carries treatment vs site labels
-  if (all(treatments %in% part1)) {
-    tnam <- part1; snam <- part2
-  } else {
-    tnam <- part2; snam <- part1
-  }
+  tnam <- map$level[idx]
+  snam <- map$stratum[idx]
 
   site_cols <- which(snam == site & tnam %in% treatments)
   if (length(site_cols) == 0L) return(NULL)
@@ -55,22 +51,27 @@ NULL
 
 #' Compute added-variable-plot residuals for one conditioning panel
 #'
-#' Projects both the x-axis treatment (k) and the conditioned treatment (j)
+#' Projects both the x-axis level (k) and the conditioned level (j)
 #' onto the orthogonal complement of A_rest using the G-matrix, so that the
 #' slope of the resulting scatter equals the stored partial regression
 #' coefficient exactly (in population).
 #'
-#' @param blups_j    Numeric vector — raw BLUPs for conditioned treatment j
-#' @param blups_k    Numeric vector — raw BLUPs for x-axis treatment k
-#' @param blups_rest Data frame or matrix — raw BLUPs for A_rest treatments
-#' @param G_ss       T x T within-site G-matrix (rownames = treatment labels)
-#' @param j,k        Treatment label strings
-#' @param A_rest     Character vector of remaining conditioning treatments
+#' @param blups_j    Numeric vector — raw BLUPs for conditioned level j
+#' @param blups_k    Numeric vector — raw BLUPs for x-axis level k
+#' @param blups_rest Data frame or matrix — raw BLUPs for A_rest levels
+#' @param G_ss       T x T within-stratum G-matrix (rownames = level labels)
+#' @param j,k        Level label strings
+#' @param A_rest     Character vector of remaining conditioning levels
 #' @return List with elements x and y (partial residuals)
 #' @noRd
 .rreg_avp_xy <- function(blups_j, blups_k, blups_rest, G_ss, j, k, A_rest) {
 
   if (length(A_rest) == 0L)
+    return(list(x = blups_k, y = blups_j))
+
+  # No usable within-stratum G block (absent stratum, or labels that could not
+  # be resolved): fall back to raw BLUPs, as for a singular G below.
+  if (is.null(G_ss) || !all(c(A_rest, j, k) %in% rownames(G_ss)))
     return(list(x = blups_k, y = blups_j))
 
   G_rr <- G_ss[A_rest, A_rest, drop = FALSE]
@@ -108,6 +109,19 @@ NULL
   Gmat      <- res$Gmat
   sep       <- if (!is.null(res$sep)) res$sep else "-"  # stored by randomRegress()
   conditioned <- names(Filter(Negate(is.null), cond_list))
+
+  # Label map resolved by randomRegress().  Older result objects (and hand
+  # built ones) may not carry it, so fall back to the same shared resolver
+  # rather than a second, divergent parsing implementation.
+  map <- res$label_map
+  if (is.null(map) && !is.null(Gmat))
+    map <- tryCatch({
+      lb <- .rreg_labels(colnames(Gmat), names(cond_list), sep)
+      data.frame(label   = colnames(Gmat),
+                 level   = lb$level,
+                 stratum = lb$stratum,
+                 stringsAsFactors = FALSE)
+    }, error = function(e) NULL)
 
   if (!is.null(treatments))
     conditioned <- intersect(conditioned, treatments)
@@ -160,8 +174,8 @@ NULL
         idx <- blups$Site == s
         bs  <- blups[idx, , drop = FALSE]
 
-        G_ss <- .rreg_site_Gmat(Gmat, s,
-                                unique(c(lv_j, A_j)), sep)
+        G_ss <- if (is.null(map)) NULL else
+          .rreg_site_Gmat(Gmat, s, unique(c(lv_j, A_j)), map)
         avp  <- .rreg_avp_xy(
           blups_j    = bs[[lv_j]],
           blups_k    = bs[[cond_lv]],
@@ -492,25 +506,31 @@ NULL
 #' customised with the standard `+` operator.
 #'
 #' @details
+#' Following [randomRegress()], *level* refers to a level of the decomposed
+#' dimension (a member of `levs` — a treatment or a trait) and *stratum* to a
+#' level of the dimension the decomposition is repeated within, ordinarily a
+#' site.  Facet columns are strata, and carry the single label `"Single"` when
+#' the grouping factor of the model term was not composite.
+#'
 #' The three `type` options are:
 #' \describe{
 #'   \item{`"regress"`}{Grid of scatter plots faceted by BLUP pair (rows) and
-#'     site (columns).  Each panel plots the raw conditioned-treatment BLUPs
-#'     (y) against the conditioning-treatment BLUPs (x) for one site x one
-#'     treatment pair.  A dotted random regression line with the site-specific
-#'     beta slope passes through the origin.  The site-specific
+#'     stratum (columns).  Each panel plots the raw conditioned-level BLUPs
+#'     (y) against the conditioning-level BLUPs (x) for one stratum x one
+#'     level pair.  A dotted random regression line with the per-stratum
+#'     beta slope passes through the origin.  The per-stratum
 #'     \eqn{\hat{\beta}} is annotated in the top-left corner of each panel.}
 #'   \item{`"quadrant"`}{Grid of scatter plots faceted by BLUP pair (rows) and
-#'     site (columns).  Each panel plots responsiveness BLUPs (y) against the
-#'     conditioning treatment BLUPs (x = efficiency) for one site x one
-#'     treatment pair.  Dotted zero reference lines on both axes divide each
+#'     stratum (columns).  Each panel plots responsiveness BLUPs (y) against
+#'     the conditioning-level BLUPs (x = efficiency) for one stratum x one
+#'     level pair.  Dotted zero reference lines on both axes divide each
 #'     panel into four quadrants.}
 #'   \item{`"gmat"`}{Heatmap of the G-matrix converted to a correlation
 #'     matrix via [stats::cov2cor()].  Fill uses a diverging palette centred
 #'     at zero.}
 #' }
 #'
- #' **Variety highlighting** (`type = "regress"` and `"quadrant"` only):
+#' **Variety highlighting** (`type = "regress"` and `"quadrant"` only):
 #' By default, up to six varieties are identified and annotated across all
 #' panels — up to three from the top-right quadrant of the efficiency x
 #' responsiveness space (above average on both axes, shown in orange) and up
@@ -518,29 +538,31 @@ NULL
 #' in blue).  Within each quadrant only varieties whose distance from the
 #' origin exceeds the within-quadrant median are considered, and the final
 #' selection is the most extreme of those candidates ordered by decreasing
-#' distance.  The same varieties are consistently annotated across all site
-#' and treatment-pair panels.
+#' distance.  The same varieties are consistently annotated across all
+#' stratum and level-pair panels.
 #'
 #' @param res         A list returned by [randomRegress()].
 #' @param type        Character string selecting the plot type. One of
 #'   `"regress"` (default), `"quadrant"`, or `"gmat"`.
-#' @param treatments  Character vector restricting which conditioned treatments
+#' @param treatments  Character vector restricting which conditioned levels
 #'   are included in the plot.  `NULL` (default) includes all conditioned
-#'   treatments.  Ignored for `type = "gmat"`.
+#'   levels.  Named for the commonest case, but accepts trait names equally
+#'   where the decomposed dimension is a set of traits.
+#'   Ignored for `type = "gmat"`.
 #' @param centre      Logical.  If `FALSE` (default), BLUPs are plotted on
 #'   their natural scale (already centred near zero by the mixed model).
-#'   If `TRUE`, the within-site mean of the unconditional treatment is added
+#'   If `TRUE`, the within-stratum mean of the unconditional level is added
 #'   back to the x-axis values, placing BLUPs on an approximate absolute
-#'   yield scale.  For true ASReml BLUPs the site mean is effectively zero
+#'   scale.  For true ASReml BLUPs the stratum mean is effectively zero
 #'   so the change is minimal; this option is mainly useful when BLUPs have
-#'   been computed from treatment means (e.g. in the demo).
+#'   been computed from means (e.g. in the demo).
 #'   Ignored for `type = "gmat"`.
 #' @param cond_x      Positive integer or integer vector (default `1L`).
 #'   Selects which member of the conditioning set \eqn{A_j} is placed on
-#'   the x-axis of the `"regress"` plot for each conditioned-treatment
+#'   the x-axis of the `"regress"` plot for each conditioned-level
 #'   panel.  A scalar is recycled across all panels; a vector of the same
-#'   length as the number of conditioned treatments plotted sets each panel
-#'   independently.  For example, with three conditioned treatments under
+#'   length as the number of conditioned levels plotted sets each panel
+#'   independently.  For example, with three conditioned levels under
 #'   partial conditioning:
 #'   \itemize{
 #'     \item `cond_x = 1L` (default) — first member of \eqn{A_j} for every
@@ -593,16 +615,21 @@ NULL
 #' # Retrieve the tidy data frame
 #' df <- plot_randomRegress(res, type = "quadrant", return_data = TRUE)
 #'
-#' # Partial conditioning — default (first conditioning treatment on x)
+#' # Partial conditioning — default (first conditioning level on x)
 #' res_part <- randomRegress(model, term = "us(TSite):Variety",
 #'                           levs = c("N0","N1","N2"), type = "partial")
 #' plot_randomRegress(res_part, type = "regress")              # cond_x = 1L
 #'
-#' # Show the second conditioning treatment on the x-axis for all panels
+#' # Show the second conditioning level on the x-axis for all panels
 #' plot_randomRegress(res_part, type = "regress", cond_x = 2L)
 #'
 #' # Mixed: second for panels 1 & 3, first for panel 2
 #' plot_randomRegress(res_part, type = "regress", cond_x = c(2L, 1L, 2L))
+#'
+#' # Traits at a single site: one facet column, labelled "Single"
+#' res_mv <- randomRegress(model, term = "us(Trait):Variety",
+#'                         levs = c("Yield","Protein","Height"))
+#' plot_randomRegress(res_mv, type = "regress")
 #' }
 #'
 #' @export

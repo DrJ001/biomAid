@@ -4,6 +4,7 @@
 # Sections:
 #   A. Unit algebra tests       – no model / no mocking required
 #   B. .condList() unit tests
+#   B3. .rreg_labels()          – composite label resolution + defect guards
 #   B2. .parse_rreg_term() unit tests
 #   C. Error conditions
 #   D. End-to-end tests         – local_mocked_bindings for predict() /
@@ -239,17 +240,132 @@ test_that("beta list has correct names and matrix dimensions", {
 })
 
 test_that("TGmat dimnames include eff. and resp. prefixes", {
-  G      <- make_Gmat(8L)
   tsnams <- c("N0-S1","N1-S1","N2-S1","N0-S2","N1-S2","N2-S2")
-  tmat   <- diag(nrow(G))
-  TG     <- tmat %*% G %*% t(tmat)
-  dimnames(TG) <- list(tsnams, tsnams)
-  tsnams_out <- tsnams
-  for (lv in "N0")
-    tsnams_out <- gsub(lv, paste0("eff.", lv), tsnams_out, fixed = TRUE)
-  for (lv in c("N1","N2"))
-    tsnams_out <- gsub(lv, paste0("resp.", lv), tsnams_out, fixed = TRUE)
-  expect_true(all(grepl("eff\\.N0|resp\\.N1|resp\\.N2", tsnams_out)))
+  levs   <- c("N0","N1","N2")
+  lab    <- biomAid:::.rreg_labels(tsnams, levs, "-")
+
+  uncond      <- "N0"
+  conditioned <- c("N1","N2")
+  prefix <- ifelse(lab$level %in% uncond,      "eff.",
+            ifelse(lab$level %in% conditioned, "resp.", ""))
+  out <- paste0(prefix, lab$level, "-", lab$stratum)
+
+  expect_true(all(grepl("^eff\\.N0|^resp\\.N1|^resp\\.N2", out)))
+  # The stratum half must survive untouched
+  expect_equal(sub("^[a-z]+\\.[^-]+-", "", out), lab$stratum)
+})
+
+# ===========================================================================
+# SECTION B3: .rreg_labels() — composite label resolution
+# ===========================================================================
+
+test_that(".rreg_labels: plain grouping factor gives one 'Single' stratum", {
+  lab <- biomAid:::.rreg_labels(c("N0","N1","N2"), c("N0","N1","N2"), "-")
+  expect_false(lab$composite)
+  expect_equal(lab$level,   c("N0","N1","N2"))
+  expect_equal(unique(lab$stratum), "Single")
+})
+
+test_that(".rreg_labels: plain factor errors when levs absent", {
+  expect_error(
+    biomAid:::.rreg_labels(c("N0","N1"), c("N0","N9"), "-"),
+    "do not exist in"
+  )
+})
+
+test_that(".rreg_labels: composite label, level on the left", {
+  lab <- biomAid:::.rreg_labels(c("N0-S1","N1-S1","N0-S2","N1-S2"),
+                                c("N0","N1"), "-")
+  expect_true(lab$composite)
+  expect_equal(lab$level_side, 1L)
+  expect_equal(lab$level,   c("N0","N1","N0","N1"))
+  expect_equal(lab$stratum, c("S1","S1","S2","S2"))
+})
+
+test_that(".rreg_labels: composite label, level on the right", {
+  lab <- biomAid:::.rreg_labels(c("S1-N0","S1-N1","S2-N0","S2-N1"),
+                                c("N0","N1"), "-")
+  expect_true(lab$composite)
+  expect_equal(lab$level_side, 2L)
+  expect_equal(lab$level,   c("N0","N1","N0","N1"))
+  expect_equal(lab$stratum, c("S1","S1","S2","S2"))
+})
+
+# --- Defect 1: a stratum name containing the separator used to collapse
+#     every stratum into one, silently dropping whole sites.
+test_that(".rreg_labels: separator inside the stratum name (level left)", {
+  tsnams <- c("N0-North-West","N1-North-West","N0-North-East","N1-North-East")
+  lab    <- biomAid:::.rreg_labels(tsnams, c("N0","N1"), "-")
+  expect_equal(lab$level,   c("N0","N1","N0","N1"))
+  expect_equal(lab$stratum,
+               c("North-West","North-West","North-East","North-East"))
+  expect_equal(length(unique(lab$stratum)), 2L)
+})
+
+test_that(".rreg_labels: separator inside the stratum name (level right)", {
+  tsnams <- c("North-West-N0","North-West-N1","North-East-N0","North-East-N1")
+  lab    <- biomAid:::.rreg_labels(tsnams, c("N0","N1"), "-")
+  expect_equal(lab$level_side, 2L)
+  expect_equal(lab$level,   c("N0","N1","N0","N1"))
+  expect_equal(lab$stratum,
+               c("North-West","North-West","North-East","North-East"))
+})
+
+# --- Defect 2/3: levels that are substrings of one another, or that recur
+#     inside the stratum name, must not disturb resolution.
+test_that(".rreg_labels: level recurring inside the stratum name", {
+  lab <- biomAid:::.rreg_labels(c("N1-N1East","N2-N1East"),
+                                c("N1","N2"), "-")
+  expect_equal(lab$level,   c("N1","N2"))
+  expect_equal(lab$stratum, c("N1East","N1East"))
+})
+
+test_that(".rreg_labels: level that is a substring of another level", {
+  lab <- biomAid:::.rreg_labels(c("N1-Env1","N10-Env1"),
+                                c("N1","N10"), "-")
+  expect_equal(lab$level,   c("N1","N10"))
+  expect_equal(lab$stratum, c("Env1","Env1"))
+})
+
+# --- Defect 4: genuinely ambiguous labels must error, not silently invert.
+test_that(".rreg_labels: ambiguous labels error rather than guess", {
+  expect_error(
+    biomAid:::.rreg_labels(c("A-B","B-A"), c("A","B"), "-"),
+    "ambiguous"
+  )
+})
+
+test_that(".rreg_labels: non-unique level-by-stratum crossing errors", {
+  expect_error(
+    biomAid:::.rreg_labels(c("N0-S1","N0-S1"), c("N0"), "-"),
+    "unique level-by-stratum"
+  )
+})
+
+test_that(".rreg_labels: mixed separated / unseparated labels error", {
+  expect_error(
+    biomAid:::.rreg_labels(c("N0-S1","N1"), c("N0","N1"), "-"),
+    "some do not"
+  )
+})
+
+test_that(".rreg_labels: levs absent from both sides errors", {
+  expect_error(
+    biomAid:::.rreg_labels(c("N0-S1","N1-S1"), c("X1","X2"), "-"),
+    "either side"
+  )
+})
+
+test_that(".rreg_labels: regex-special separator is treated literally", {
+  lab <- biomAid:::.rreg_labels(c("N0.S1","N1.S1"), c("N0","N1"), ".")
+  expect_equal(lab$level,   c("N0","N1"))
+  expect_equal(lab$stratum, c("S1","S1"))
+})
+
+test_that(".rreg_labels: levs may be a subset of available levels", {
+  lab <- biomAid:::.rreg_labels(c("N0-S1","N1-S1","N2-S1"),
+                                c("N0","N1"), "-")
+  expect_equal(lab$level, c("N0","N1","N2"))
 })
 
 # ===========================================================================
@@ -345,14 +461,14 @@ test_that(".parse_rreg_term: missing colon errors", {
 test_that("levs = NULL errors", {
   expect_error(
     randomRegress(list(), levs = NULL),
-    "At least two treatment levels"
+    "At least two levels"
   )
 })
 
 test_that("levs with single element errors", {
   expect_error(
     randomRegress(list(), levs = "N0"),
-    "At least two treatment levels"
+    "At least two levels"
   )
 })
 
@@ -434,9 +550,15 @@ test_that("randomRegress() baseline returns named list", {
                        levs = c("N0","N1","N2"),
                        type = "baseline")
   expect_named(res, c("blups","TGmat","Gmat","beta","sigmat","tmat",
-                      "cond_list","type","sep"))
+                      "cond_list","type","sep","label_map"))
   expect_s3_class(res$blups, "data.frame")
   expect_equal(res$type, "baseline")
+
+  # label_map is the authoritative level/stratum resolution
+  expect_s3_class(res$label_map, "data.frame")
+  expect_named(res$label_map, c("label","level","stratum"))
+  expect_equal(res$label_map$label, colnames(res$Gmat))
+  expect_setequal(res$label_map$level, c("N0","N1","N2"))
 })
 
 # --- D2. blups has correct columns -----------------------------------------

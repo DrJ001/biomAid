@@ -1,5 +1,5 @@
 ---
-title: "Simulating Multi-Environment Plant Breeding Trials"
+title: "Simulating Multi-Environment Trials"
 subtitle: "`simTrialData()` and `plot_simTrialData()`"
 author: "Julian Taylor"
 date: today

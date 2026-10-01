@@ -22,9 +22,11 @@ plot_randomRegress(
 \item{type}{Character string selecting the plot type. One of
 \code{"regress"} (default), \code{"quadrant"}, or \code{"gmat"}.}
 
-\item{treatments}{Character vector restricting which conditioned treatments
+\item{treatments}{Character vector restricting which conditioned levels
 are included in the plot.  \code{NULL} (default) includes all conditioned
-treatments.  Ignored for \code{type = "gmat"}.}
+levels.  Named for the commonest case, but accepts trait names equally
+where the decomposed dimension is a set of traits.
+Ignored for \code{type = "gmat"}.}
 
 \item{highlight}{Controls variety annotation for \code{"regress"} and
 \code{"quadrant"} plots. One of:
@@ -38,19 +40,19 @@ Default is \code{"default"}.  Ignored for \code{type = "gmat"}.}
 
 \item{centre}{Logical.  If \code{FALSE} (default), BLUPs are plotted on
 their natural scale (already centred near zero by the mixed model).
-If \code{TRUE}, the within-site mean of the unconditional treatment is added
+If \code{TRUE}, the within-stratum mean of the unconditional level is added
 back to the x-axis values, placing BLUPs on an approximate absolute
-yield scale.  For true ASReml BLUPs the site mean is effectively zero
+scale.  For true ASReml BLUPs the stratum mean is effectively zero
 so the change is minimal; this option is mainly useful when BLUPs have
-been computed from treatment means (e.g. in the demo).
+been computed from means (e.g. in the demo).
 Ignored for \code{type = "gmat"}.}
 
 \item{cond_x}{Positive integer or integer vector (default \code{1L}).
 Selects which member of the conditioning set \eqn{A_j} is placed on
-the x-axis of the \code{"regress"} plot for each conditioned-treatment
+the x-axis of the \code{"regress"} plot for each conditioned-level
 panel.  A scalar is recycled across all panels; a vector of the same
-length as the number of conditioned treatments plotted sets each panel
-independently.  For example, with three conditioned treatments under
+length as the number of conditioned levels plotted sets each panel
+independently.  For example, with three conditioned levels under
 partial conditioning:
 \itemize{
 \item \code{cond_x = 1L} (default) — first member of \eqn{A_j} for every
@@ -82,18 +84,24 @@ object.  All plot types return a \code{ggplot} object that can be further
 customised with the standard \code{+} operator.
 }
 \details{
+Following \code{\link[=randomRegress]{randomRegress()}}, \emph{level} refers to a level of the decomposed
+dimension (a member of \code{levs} — a treatment or a trait) and \emph{stratum} to a
+level of the dimension the decomposition is repeated within, ordinarily a
+site.  Facet columns are strata, and carry the single label \code{"Single"} when
+the grouping factor of the model term was not composite.
+
 The three \code{type} options are:
 \describe{
 \item{\code{"regress"}}{Grid of scatter plots faceted by BLUP pair (rows) and
-site (columns).  Each panel plots the raw conditioned-treatment BLUPs
-(y) against the conditioning-treatment BLUPs (x) for one site x one
-treatment pair.  A dotted random regression line with the site-specific
-beta slope passes through the origin.  The site-specific
+stratum (columns).  Each panel plots the raw conditioned-level BLUPs
+(y) against the conditioning-level BLUPs (x) for one stratum x one
+level pair.  A dotted random regression line with the per-stratum
+beta slope passes through the origin.  The per-stratum
 \eqn{\hat{\beta}} is annotated in the top-left corner of each panel.}
 \item{\code{"quadrant"}}{Grid of scatter plots faceted by BLUP pair (rows) and
-site (columns).  Each panel plots responsiveness BLUPs (y) against the
-conditioning treatment BLUPs (x = efficiency) for one site x one
-treatment pair.  Dotted zero reference lines on both axes divide each
+stratum (columns).  Each panel plots responsiveness BLUPs (y) against
+the conditioning-level BLUPs (x = efficiency) for one stratum x one
+level pair.  Dotted zero reference lines on both axes divide each
 panel into four quadrants.}
 \item{\code{"gmat"}}{Heatmap of the G-matrix converted to a correlation
 matrix via \code{\link[stats:cor]{stats::cov2cor()}}.  Fill uses a diverging palette centred
@@ -108,8 +116,8 @@ to three from the bottom-left quadrant (below average on both axes, shown
 in blue).  Within each quadrant only varieties whose distance from the
 origin exceeds the within-quadrant median are considered, and the final
 selection is the most extreme of those candidates ordered by decreasing
-distance.  The same varieties are consistently annotated across all site
-and treatment-pair panels.
+distance.  The same varieties are consistently annotated across all
+stratum and level-pair panels.
 }
 \examples{
 \dontrun{
@@ -131,16 +139,21 @@ plot_randomRegress(res, type = "gmat")
 # Retrieve the tidy data frame
 df <- plot_randomRegress(res, type = "quadrant", return_data = TRUE)
 
-# Partial conditioning — default (first conditioning treatment on x)
+# Partial conditioning — default (first conditioning level on x)
 res_part <- randomRegress(model, term = "us(TSite):Variety",
                           levs = c("N0","N1","N2"), type = "partial")
 plot_randomRegress(res_part, type = "regress")              # cond_x = 1L
 
-# Show the second conditioning treatment on the x-axis for all panels
+# Show the second conditioning level on the x-axis for all panels
 plot_randomRegress(res_part, type = "regress", cond_x = 2L)
 
 # Mixed: second for panels 1 & 3, first for panel 2
 plot_randomRegress(res_part, type = "regress", cond_x = c(2L, 1L, 2L))
+
+# Traits at a single site: one facet column, labelled "Single"
+res_mv <- randomRegress(model, term = "us(Trait):Variety",
+                        levs = c("Yield","Protein","Height"))
+plot_randomRegress(res_mv, type = "regress")
 }
 
 }

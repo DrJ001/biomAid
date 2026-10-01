@@ -1,5 +1,5 @@
 ---
-title: "Fixed Regression of Treatment BLUPs from multi-treatment MET anlyses"
+title: "Multivariate Fixed-Effects Regression"
 subtitle: "`fixedRegress()` and `plot_fixedRegress()`"
 author: "Julian Taylor"
 date: today

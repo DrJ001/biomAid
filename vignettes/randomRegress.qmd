@@ -1,5 +1,5 @@
 ---
-title: "Random Regression of Treatment BLUPs from Multi-Treatment MET Analyses"
+title: "Multivariate Random Regression"
 subtitle: "`randomRegress()` and `plot_randomRegress()`"
 author: "Julian Taylor"
 date: today
@@ -42,18 +42,51 @@ if (asreml_ok) {
 
 ## Overview
 
-`randomRegress()` decomposes variety BLUPs from a multi-treatment, multi-environment trial
-into two biologically interpretable components:
+`randomRegress()` decomposes a multivariate set of variety BLUPs into two
+biologically interpretable components:
 
-- **Efficiency** — a variety's genetic value under the baseline (typically
-  low-input or control) treatment.
+- **Efficiency** — a variety's genetic value at the baseline level (typically
+  a low-input or control treatment).
 - **Responsiveness (or Tolerance)** — a variety's capacity to respond
-  genetically to the application of a treatment.
+  genetically as that level changes.
 
-The decomposition is derived from the **G-matrix** (genetic
-variance–covariance matrix across Treatment × Site combinations) using
+The decomposition is derived from the **G-matrix** (the genetic
+variance–covariance matrix across the levels being decomposed) using
 Gaussian conditional distribution theory. It generalises naturally from two
-treatments to any number, with four built-in conditioning schemes used in this function.
+levels to any number, with four built-in conditioning schemes.
+
+### Scope
+
+Two distinct dimensions are involved, and they play quite different roles.
+
+The dimension that is **decomposed** holds multiple **treatments** or multiple
+**traits** — levels that are applied to, or measured on, the same plants within
+the one experiment. This is what makes a genetic regression between them
+meaningful: the levels are commensurable, so the conditional distribution of
+one given another has a genuine biological interpretation. For treatments that
+interpretation is efficiency and responsiveness; for traits it is the part of
+one trait that is not genetically predictable from another.
+
+The second dimension is the **stratum** — ordinarily the site or environment.
+The decomposition is simply repeated, independently, within each stratum. There
+may be one stratum or many:
+
+| Grouping factor | Decomposed (`levs`) | Strata | Use case |
+|-----------------|---------------------|--------|----------|
+| `us(Treatment)` — plain | treatments | one, `"Single"` | Multi-treatment, single site |
+| `us(Trait)` — plain | traits | one, `"Single"` | Multivariate (multi-trait), single site |
+| `us(TSite)` — composite | treatments | sites | Multi-treatment MET |
+| `us(TraitSite)` — composite | traits | sites | Multi-trait MET |
+
+Where the grouping factor is a composite of two factors — such as the
+Treatment-by-Site factor `TSite` used throughout this vignette — the
+decomposition is carried out independently within each level of the second
+factor. Where it is a plain factor there is a single stratum, reported as
+`"Single"`, and plots show one facet column.
+
+Multi-treatment MET data is used as the worked example here because it is the
+most complex case, exercising both dimensions at once; the single-stratum cases
+follow by simply supplying a plain grouping factor.
 
 `plot_randomRegress()` visualises the result as a regression scatter plot,
 an efficiency–responsiveness quadrant plot, or a G-matrix heatmap.

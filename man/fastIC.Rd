@@ -48,8 +48,8 @@ Only present when \eqn{k > 1}.}
 \item{\code{iClassRMSD}}{Within-iClass RMSD for the genotype.}
 }
 
-Two attributes are attached to the returned data frame for use by
-\code{\link[=plot_fastIC]{plot_fastIC()}} with \code{type = "VAF"}:
+Two attributes are attached to the returned data frame, passed through
+from \code{\link[=faSummary]{faSummary()}}, for use by \code{\link[=plot_faSummary]{plot_faSummary()}} with \code{type = "VAF"}:
 \describe{
 \item{\code{vaf_env}}{Data frame with one row per environment containing the
 proportion of genetic variance accounted for by each factor

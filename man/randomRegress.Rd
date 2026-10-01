@@ -2,7 +2,7 @@
 % Please edit documentation in R/randomRegress.R
 \name{randomRegress}
 \alias{randomRegress}
-\title{Multivariate Random Regression of Treatment BLUPs Within Environments}
+\title{Multivariate Random Regression of Variety BLUPs}
 \usage{
 randomRegress(
   model,
@@ -16,8 +16,10 @@ randomRegress(
 )
 }
 \arguments{
-\item{model}{An ASReml-R V4 model object containing a random
-Treatment \eqn{\times} Site \eqn{\times} Variety term.}
+\item{model}{An ASReml-R V4 model object containing a random term that
+crosses a grouping factor with the variety factor.  The grouping factor
+may index treatments or traits, or be a composite of treatments or traits
+with a site factor.}
 
 \item{term}{Character string giving the \strong{full} random-effect interaction
 term exactly as it appears in the model formula, written as
@@ -32,7 +34,7 @@ Supported variance structures on the left-hand side:
 \item{\code{corgh(TSite)}}{Heterogeneous correlation — one correlation
 parameter shared across groups with group-specific variances.}
 \item{\code{corh(TSite)}}{Correlation and variance structure for two-group
-(two-treatment-level) models.}
+(two-level) models.}
 \item{\code{diag(TSite)}}{Diagonal — independent genetic variances per group,
 zero between-group covariances.}
 }
@@ -48,38 +50,44 @@ Supported wrappers on the right-hand side (variety factor):
 
 Examples:
 \preformatted{
-  term = "us(TSite):Variety"
+  term = "us(TSite):Variety"           # treatments within environments
   term = "fa(TSite, 2):Variety"
   term = "corgh(TSite):Variety"
   term = "corh(TSite):Variety"
   term = "us(TSite):vm(Variety, giv1)"
   term = "us(TSite):ide(Variety)"
+  term = "us(Treatment):Variety"       # treatments, single site
+  term = "us(Trait):Variety"           # traits, single site
   }}
 
-\item{levs}{Character vector of length \eqn{\ge 2} giving the treatment
-labels.  For \code{type = "baseline"} and \code{type = "sequential"} the \strong{first}
-element is the baseline (efficiency) treatment.  For \code{type = "partial"}
-the ordering does not affect results.  For \code{type = "custom"} the ordering
-determines which element of \code{cond} applies to which treatment.}
+\item{levs}{Character vector of length \eqn{\ge 2} naming the levels to
+decompose — treatment labels or trait names, depending on what the
+grouping factor indexes.  For \code{type = "baseline"} and
+\code{type = "sequential"} the \strong{first} element is the baseline (efficiency)
+level.  For \code{type = "partial"} the ordering does not affect results.  For
+\code{type = "custom"} the ordering determines which element of \code{cond} applies
+to which level.}
 
 \item{type}{Character string selecting the conditioning scheme. One of
 \code{"baseline"} (default), \code{"sequential"}, \code{"partial"}, or \code{"custom"}.
 See \strong{Description} for full details of each scheme.}
 
 \item{cond}{Named list required when \code{type = "custom"}.  Each element name
-must be a treatment label from \code{levs}; each element value is either
-\code{NULL} (treatment is unconditional / efficiency) or a character vector
-of treatment labels from \code{levs} that form the conditioning set.
-Treatments absent from \code{cond} are treated as unconditional.  Example
-for a three-treatment sequential-style custom scheme:
+must be a level from \code{levs}; each element value is either \code{NULL} (the
+level is unconditional / efficiency) or a character vector of levels from
+\code{levs} that form the conditioning set.  Levels absent from \code{cond} are
+treated as unconditional.  Example for a three-level sequential-style
+custom scheme:
 \preformatted{
   cond = list(T0 = NULL,
               T1 = "T0",
               T2 = c("T0", "T1"))
   }}
 
-\item{sep}{Character separator used inside the composite Treatment-Site
-factor labels.  Defaults to \code{"-"}.}
+\item{sep}{Character separator used inside the labels of a composite
+grouping factor, e.g. \code{"-"} in \code{"N0-Env1"}.  Ignored when the grouping
+factor's labels contain no separator, in which case a single stratum
+named \code{"Single"} is reported.  Defaults to \code{"-"}.}
 
 \item{pev}{Logical.  If \code{TRUE} (default) the variance used for HSD
 computation is the prediction error variance (PEV) of each responsiveness
@@ -94,39 +102,57 @@ BLUP.  If \code{FALSE} it is the posterior variance
 A named list:
 \describe{
 \item{\code{blups}}{Data frame with columns: \code{Site}, \code{Variety}, one raw BLUP
-column per treatment in \code{levs}, one \verb{resp.<lev>} column per conditioned
-treatment, and one \verb{HSD.<lev>} column per conditioned treatment
-(Tukey's HSD on the responsiveness scale; \code{NA} for FA models or absent
-treatment combinations).}
+column per level in \code{levs}, one \verb{resp.<lev>} column per conditioned
+level, and one \verb{HSD.<lev>} column per conditioned level (Tukey's HSD on
+the responsiveness scale; \code{NA} for FA models or absent combinations).
+The \code{Site} column holds the \strong{stratum} label whatever the stratifying
+dimension represents, and is \code{"Single"} throughout when the grouping
+factor is not composite.  The \code{Variety} column holds the levels of the
+variety factor named in \code{term}, whatever that factor is called in the
+model.}
 \item{\code{TGmat}}{Transformed G-matrix \eqn{\boldsymbol{T}\boldsymbol{G}
-    \boldsymbol{T}^\top}.  Unconditional treatments are labelled
-\verb{eff.<lev>}; conditioned treatments are labelled \verb{resp.<lev>}.
-Diagonal for \code{type = "sequential"}.}
+    \boldsymbol{T}^\top}.  Unconditional levels are labelled \verb{eff.<lev>};
+conditioned levels are labelled \verb{resp.<lev>}.  Diagonal for
+\code{type = "sequential"}.}
 \item{\code{Gmat}}{Original G-matrix.}
 \item{\code{beta}}{Named list of length equal to the number of conditioned
-treatments.  Each element \code{beta[["<lev>"]]} is an
-\eqn{n_s \times |A_j|} matrix of site-specific regression coefficients,
-with column names equal to the conditioning treatment labels.  \code{NA}
-where a treatment combination is absent in a site.}
+levels.  Each element \code{beta[["<lev>"]]} is an
+\eqn{n_s \times |A_j|} matrix of per-stratum regression coefficients,
+with column names equal to the conditioning levels.  \code{NA} where a
+combination is absent from a stratum.}
 \item{\code{sigmat}}{Numeric matrix of dimensions \eqn{n_s \times n_{\text{cond}}}
 containing the scalar conditional genetic variances
-\eqn{\sigma_{j|A_j}^2} for each conditioned treatment at each site.
+\eqn{\sigma_{j|A_j}^2} for each conditioned level in each stratum.
 \code{NA} where absent.}
 \item{\code{tmat}}{Full transformation matrix \eqn{\boldsymbol{T}}.
 Lower-triangular for \code{type = "sequential"}; sparse (one non-trivial
-column per site) for \code{type = "baseline"}; dense for \code{type = "partial"}.}
+column per stratum) for \code{type = "baseline"}; dense for
+\code{type = "partial"}.}
 \item{\code{cond_list}}{The resolved conditioning structure as a named list,
-one element per treatment in \code{levs}.}
+one element per level in \code{levs}.}
 \item{\code{type}}{The \code{type} argument used.}
+\item{\code{sep}}{The \code{sep} argument used.}
+\item{\code{label_map}}{Data frame with one row per G-matrix column —
+\code{label} (the grouping-factor level as ASReml-R stores it), \code{level} (the
+decomposed level) and \code{stratum}.  Composite labels are resolved once
+here and this mapping is the authority downstream, so
+\code{\link[=plot_randomRegress]{plot_randomRegress()}} never re-splits label strings.}
 }
 }
 \description{
-Uses the G-matrix from an ASReml-R V4 model to decompose variety BLUPs into
-\strong{efficiency} and \strong{responsiveness} components within each environment,
+Uses the G-matrix from an ASReml-R V4 model to decompose a multivariate set
+of variety BLUPs into \strong{efficiency} and \strong{responsiveness} components,
 supporting four conditioning schemes via the \code{type} argument.
 
-For any treatment \eqn{j} with conditioning set \eqn{A_j}, the
-multivariate conditional normal distribution gives:
+The decomposed dimension holds multiple \strong{treatments} or multiple
+\strong{traits} — levels applied to, or measured on, the same plants within one
+experiment — nominated in \code{levs}.  The decomposition is repeated
+independently within each \strong{stratum}, ordinarily a site, of which there may
+be one or many.  Multi-treatment multi-environment data is the most complex
+case, not the only one; see \strong{Usage regimes} below.
+
+For any level \eqn{j} with conditioning set \eqn{A_j}, the multivariate
+conditional normal distribution gives:
 
 \deqn{
   \boldsymbol{\beta}_j = \boldsymbol{G}_{A_j A_j}^{-1}\, \boldsymbol{G}_{A_j j}
@@ -135,28 +161,66 @@ multivariate conditional normal distribution gives:
 }
 
 The four built-in conditioning schemes differ only in how \eqn{A_j} is
-chosen for each treatment:
+chosen for each level:
 
 \describe{
-\item{\code{"baseline"} (default)}{Every non-first treatment is conditioned on
+\item{\code{"baseline"} (default)}{Every non-first level is conditioned on
 \code{levs[1]} alone.  Responsiveness BLUPs are orthogonal to the
 baseline but may be correlated with each other.  The transformed
 G-matrix \code{TGmat} is block-diagonal.}
-\item{\code{"sequential"}}{Treatment \eqn{j} is conditioned on all preceding
-treatments \code{levs[1:(j-1)]}.  This is the Gram-Schmidt
+\item{\code{"sequential"}}{Level \eqn{j} is conditioned on all preceding
+levels \code{levs[1:(j-1)]}.  This is the Gram-Schmidt
 orthogonalisation of the BLUPs, equivalent to the \eqn{LDL^\top}
 Cholesky decomposition of the G-matrix.  All components are mutually
 orthogonal and \code{TGmat} is \strong{diagonal}, with the Schur complements on
-the diagonal.  Treatment ordering matters.}
-\item{\code{"partial"}}{Each treatment is conditioned on \strong{all other}
-treatments simultaneously.  The diagonal of \code{TGmat} gives the partial
-genetic variances; off-diagonals are generally non-zero.}
-\item{\code{"custom"}}{The conditioning set for each treatment is specified
+the diagonal.  The ordering of \code{levs} matters.}
+\item{\code{"partial"}}{Each level is conditioned on \strong{all other} levels
+simultaneously.  The diagonal of \code{TGmat} gives the partial genetic
+variances; off-diagonals are generally non-zero.}
+\item{\code{"custom"}}{The conditioning set for each level is specified
 explicitly via the \code{cond} argument.}
 }
 }
+\section{Usage regimes}{
+
+Two dimensions are involved, playing different roles.  The \strong{decomposed}
+dimension holds the treatments or traits named in \code{levs}; the \strong{stratum}
+dimension is the site or environment the decomposition is repeated within.
+Which regime applies is determined automatically from the G-matrix column
+labels.
+
+\describe{
+\item{Plain grouping factor — one stratum}{When the labels contain no
+\code{sep} the labels themselves are the decomposed dimension, and a single
+stratum is reported as \code{"Single"}.  This covers a single-site
+multi-treatment model, \code{us(Treatment):Variety}, and a single-site
+multi-trait model, \code{us(Trait):Variety}.}
+\item{Composite grouping factor — several strata}{When the labels contain
+\code{sep} — e.g. a Treatment-by-Site factor \code{TSite} with levels
+\code{"N0-Env1"} — they are split in two.  The component holding the \code{levs}
+values is the decomposed dimension; the other becomes the stratum, and
+the decomposition is carried out independently within each.  The two
+components may appear in either order: both \code{"N0-Env1"} and \code{"Env1-N0"}
+are recognised.}
+}
+
+Only treatments and traits are decomposable: they are commensurable levels
+observed on common material within one experiment, so the conditional
+distribution of one given another is biologically interpretable.
+\strong{Environments are not.}  Regressing one site's BLUPs on another's would
+not give an efficiency-responsiveness decomposition, because separate sites
+are separate experiments; environments belong in the stratum role.  Where
+the genetic covariance \emph{between} environments is the question of interest,
+use \code{\link[=faSummary]{faSummary()}} or \code{\link[=fastIC]{fastIC()}} instead.
+
+Throughout the documentation and output, \emph{level} refers to a level of the
+decomposed dimension (a member of \code{levs}) and \emph{stratum} refers to a level
+of the second, repeated-over dimension.
+}
+
 \examples{
 \dontrun{
+## ---- Treatments within environments (composite grouping factor) ------
 ## Baseline scheme — unstructured G-matrix
 res_base <- randomRegress(model, term = "us(TSite):Variety",
                           levs = c("N0","N1","N2"))
@@ -180,9 +244,20 @@ res_cust <- randomRegress(model, term = "us(TSite):Variety",
                           cond = list(N0 = NULL,
                                       N1 = "N0",
                                       N2 = c("N0","N1")))
+
+## ---- Single site (plain grouping factor; one stratum, "Single") -------
+## Treatments
+res_1s   <- randomRegress(model, term = "us(Treatment):Variety",
+                          levs = c("N0","N1","N2"))
+
+## Traits, each conditioned on all others
+res_mv   <- randomRegress(model, term = "us(Trait):Variety",
+                          levs = c("Yield","Protein","Height"),
+                          type = "partial")
 }
 
 }
 \seealso{
+\code{\link[=plot_randomRegress]{plot_randomRegress()}}, \code{\link[=fixedRegress]{fixedRegress()}}, \code{\link[=faSummary]{faSummary()}},
 \code{asreml::predict.asreml()}
 }
