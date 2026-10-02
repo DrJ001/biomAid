@@ -301,6 +301,41 @@
     "text": "References\nLemerle, D., Smith, A., Verbeek, B., Koetz, E., Lockley, P. & Martin, P. (2006). Incremental crop tolerance to weeds: A measure for selecting competitive ability in Australian wheats. Euphytica, 149, 85–95. https://doi.org/10.1007/s10681-005-9056-5\nMcDonald G, Bovill W, Taylor J, Wheeler R. (2015) Responses to phosphorus among wheat genotypes. Crop and Pasture Science, 66(5), 430–444. (2015). https://doi.org/10.1071/CP14191\nThe WtmsDW Locus on Wheat Chromosome 2B Controls Major Natural Variation for Floret Sterility Responses to Heat Stress at Booting Stage. Frontiers in Plant Science, 12, 635397. (2021). https://doi.org/10.3389/fpls.2021.635397"
   },
   {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "biomAid",
+    "section": "",
+    "text": "Welcome to biomAid! This package has been specifically built to provide biometricians with flexible functions for interpreting and further modelling of results from complex linear mixed models fitted with software such as ASReml-R V4. Watch this space, there are a lot more functions coming.\nEvery analysis function is paired with a ggplot2 visualisation, and each pair has a vignette working through the mathematics and a set of examples."
+  },
+  {
+    "objectID": "index.html#installation",
+    "href": "index.html#installation",
+    "title": "biomAid",
+    "section": "Installation",
+    "text": "Installation\n# From GitHub (requires remotes or pak)\npak::pkg_install(\"DrJ001/biomAid\")\n\n# or\nremotes::install_github(\"DrJ001/biomAid\")\n\nNote: The core modelling functions require an ASReml-R V4 licence. simTrialData() and all plot_*() functions are fully standalone."
+  },
+  {
+    "objectID": "index.html#vignettes",
+    "href": "index.html#vignettes",
+    "title": "biomAid",
+    "section": "Vignettes",
+    "text": "Vignettes\n\n\n\nVignette\nFunctions\nDescription\n\n\n\n\nWald Tests on Fixed-Effect Contrasts\nwaldTest(), plot_waldTest()\nMathematical framework and worked examples for Wald and F-tests on linear contrasts\n\n\nMultivariate Random Regression\nrandomRegress(), plot_randomRegress()\nConditioning schemes, baseline/adjusted decomposition and all plot types, worked through on multi-treatment MET data\n\n\nMultivariate Fixed-Effects Regression\nfixedRegress(), plot_fixedRegress()\nOLS conditioning schemes, baseline/adjusted index decomposition and plot types\n\n\nExtracting and Padding Field Trial Layouts\npadTrial(), plot_padTrial()\nGuard-row removal, missing-plot padding and Before/After visualisation\n\n\nMultiple Comparison Criteria\ncompare(), plot_compare()\nHSD, LSD and Bonferroni criteria, by-group comparisons and all four plot types\n\n\nBLUP Accuracy in Multi-Environment Trials\naccuracy(), plot_accuracy()\nMrode accuracy and Cullis H², supported random structures and all six plot types\n\n\nSimulating Multi-Environment Trials\nsimTrialData(), plot_simTrialData()\nMathematical framework, balanced/unbalanced/split-plot designs and all four plot types\n\n\nFactor Analytic Selection Tools: FAST and iClass\nfastIC(), plot_fastIC(), faSummary(), plot_faSummary()\nFAST global metrics, iClass interaction classes, all six plot types and the variance-accounted-for chart"
+  },
+  {
+    "objectID": "index.html#function-reference",
+    "href": "index.html#function-reference",
+    "title": "biomAid",
+    "section": "Function reference",
+    "text": "Function reference\nFull documentation for every exported function, generated from the package help files:\n👉 Reference index\nA condensed summary of each function — signature, arguments and plot types in table form — is in the README on GitHub."
+  },
+  {
+    "objectID": "index.html#source",
+    "href": "index.html#source",
+    "title": "biomAid",
+    "section": "Source",
+    "text": "Source\nThe package is developed at github.com/DrJ001/biomAid. Bug reports and feature requests are welcome via GitHub issues.\n\nMIT © J Taylor"
+  },
+  {
     "objectID": "padTrial.html#overview",
     "href": "padTrial.html#overview",
     "title": "Extracting and Padding Field Trial Layouts",
