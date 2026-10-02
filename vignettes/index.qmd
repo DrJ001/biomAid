@@ -1,0 +1,73 @@
+---
+title: "biomAid"
+subtitle: "Biometric Tools for Multi-Environment Plant Breeding Trials"
+format:
+  html:
+    toc: false
+---
+
+<img id="biomaid-logo" src="../man/figures/biomAid_logo.png" alt="biomAid"/>
+<script>(function(){ var i=document.getElementById('biomaid-logo'),h=document.getElementById('title-block-header'); if(i&&h){h.appendChild(i);} })();</script>
+
+[![R-CMD-check](https://github.com/DrJ001/biomAid/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/DrJ001/biomAid/actions/workflows/R-CMD-check.yml)
+[![Codecov](https://app.codecov.io/gh/DrJ001/biomAid/graph/badge.svg)](https://app.codecov.io/gh/DrJ001/biomAid)
+[![R >= 4.1](https://img.shields.io/badge/R-%3E%3D4.1-blue)](https://cran.r-project.org/)
+
+---
+
+Welcome to biomAid! This package has been specifically built to provide
+biometricians with flexible functions for interpreting and further modelling of
+results from complex linear mixed models fitted with software such as
+**ASReml-R V4**. Watch this space, there are a lot more functions coming.
+
+Every analysis function is paired with a `ggplot2` visualisation, and each pair
+has a vignette working through the mathematics and a set of examples.
+
+## Installation
+
+```r
+# From GitHub (requires remotes or pak)
+pak::pkg_install("DrJ001/biomAid")
+
+# or
+remotes::install_github("DrJ001/biomAid")
+```
+
+> **Note:** The core modelling functions require an
+> [ASReml-R V4](https://vsni.co.uk/software/asreml-r/) licence.
+> `simTrialData()` and all `plot_*()` functions are fully standalone.
+
+## Vignettes
+
+| Vignette | Functions | Description |
+|----------|-----------|-------------|
+| [Wald Tests on Fixed-Effect Contrasts](waldTest.html) | `waldTest()`, `plot_waldTest()` | Mathematical framework and worked examples for Wald and F-tests on linear contrasts |
+| [Multivariate Random Regression](randomRegress.html) | `randomRegress()`, `plot_randomRegress()` | Conditioning schemes, baseline/adjusted decomposition and all plot types, worked through on multi-treatment MET data |
+| [Multivariate Fixed-Effects Regression](fixedRegress.html) | `fixedRegress()`, `plot_fixedRegress()` | OLS conditioning schemes, baseline/adjusted index decomposition and plot types |
+| [Extracting and Padding Field Trial Layouts](padTrial.html) | `padTrial()`, `plot_padTrial()` | Guard-row removal, missing-plot padding and Before/After visualisation |
+| [Multiple Comparison Criteria](compare.html) | `compare()`, `plot_compare()` | HSD, LSD and Bonferroni criteria, by-group comparisons and all four plot types |
+| [BLUP Accuracy in Multi-Environment Trials](accuracy.html) | `accuracy()`, `plot_accuracy()` | Mrode accuracy and Cullis H², supported random structures and all six plot types |
+| [Simulating Multi-Environment Trials](simTrialData.html) | `simTrialData()`, `plot_simTrialData()` | Mathematical framework, balanced/unbalanced/split-plot designs and all four plot types |
+| [Factor Analytic Selection Tools: FAST and iClass](fastIC.html) | `fastIC()`, `plot_fastIC()`, `faSummary()`, `plot_faSummary()` | FAST global metrics, iClass interaction classes, all six plot types and the variance-accounted-for chart |
+
+## Function reference
+
+Full documentation for every exported function, generated from the package
+help files:
+
+👉 **[Reference index](https://DrJ001.github.io/biomAid/reference/)**
+
+A condensed summary of each function — signature, arguments and plot types in
+table form — is in the
+[README](https://github.com/DrJ001/biomAid#readme) on GitHub.
+
+## Source
+
+The package is developed at
+[github.com/DrJ001/biomAid](https://github.com/DrJ001/biomAid).
+Bug reports and feature requests are welcome via
+[GitHub issues](https://github.com/DrJ001/biomAid/issues).
+
+---
+
+MIT © J Taylor

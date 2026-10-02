@@ -6,6 +6,8 @@ website:
   title: "biomAid"
   navbar:
     left:
+      - text: "Home"
+        href: index.html
       - text: "Vignettes"
         menu:
           - text: "Wald Tests on Fixed-Effect Contrasts"
@@ -24,6 +26,14 @@ website:
             href: simTrialData.html
           - text: "Factor Analytic Selection Tools: FAST and iClass"
             href: fastIC.html
+    right:
+      # Absolute URL: the reference pages are pkgdown output and so are not
+      # part of this Quarto project, which cannot resolve them as a local path.
+      - text: "Reference"
+        href: https://DrJ001.github.io/biomAid/reference/index.html
+      - icon: github
+        href: https://github.com/DrJ001/biomAid
+        aria-label: "biomAid on GitHub"
 
 format:
   html:
