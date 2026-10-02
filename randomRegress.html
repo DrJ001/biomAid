@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Julian Taylor">
-<meta name="dcterms.date" content="2026-10-01">
+<meta name="dcterms.date" content="2026-10-02">
 
 <title>Multivariate Random Regression – biomAid</title>
 <style>
@@ -4430,7 +4430,7 @@ opacity: 0.92;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 1, 2026</p>
+      <p class="date">October 2, 2026</p>
     </div>
   </div>
   
@@ -4447,17 +4447,21 @@ opacity: 0.92;
 <hr>
 <section id="overview" class="level2">
 <h2 class="anchored" data-anchor-id="overview">Overview</h2>
-<p><code>randomRegress()</code> decomposes a multivariate set of variety BLUPs into two biologically interpretable components:</p>
+<p><code>randomRegress()</code> decomposes a multivariate set of variety BLUPs into two interpretable components:</p>
 <ul>
-<li><strong>Efficiency</strong> — a variety’s genetic value at the baseline level (typically a low-input or control treatment).</li>
-<li><strong>Responsiveness (or Tolerance)</strong> — a variety’s capacity to respond genetically as that level changes.</li>
+<li><strong>Baseline</strong> — a variety’s genetic value at the reference level, returned with the prefix <code>base.</code></li>
+<li><strong>Adjusted</strong> — the part of a variety’s genetic value at a given level that is <em>not</em> linearly predictable from the levels it is conditioned on, returned with the prefix <code>adj.</code></li>
 </ul>
 <p>The decomposition is derived from the <strong>G-matrix</strong> (the genetic variance–covariance matrix across the levels being decomposed) using Gaussian conditional distribution theory. It generalises naturally from two levels to any number, with four built-in conditioning schemes.</p>
 <section id="scope" class="level3">
 <h3 class="anchored" data-anchor-id="scope">Scope</h3>
 <p>Two distinct dimensions are involved, and they play quite different roles.</p>
-<p>The dimension that is <strong>decomposed</strong> holds multiple <strong>treatments</strong> or multiple <strong>traits</strong> — levels that are applied to, or measured on, the same plants within the one experiment. This is what makes a genetic regression between them meaningful: the levels are commensurable, so the conditional distribution of one given another has a genuine biological interpretation. For treatments that interpretation is efficiency and responsiveness; for traits it is the part of one trait that is not genetically predictable from another.</p>
-<p>The second dimension is the <strong>section</strong> — ordinarily the site or environment. The decomposition is simply repeated, independently, within each section. There may be one section or many:</p>
+<p>The dimension that is <strong>decomposed</strong> holds multiple <strong>treatments</strong> or multiple <strong>traits</strong> — levels that are applied to, or measured on, the same plants within the one experiment. This is what makes a genetic regression between them meaningful. The levels are commensurable, so the conditional distribution of one given another has a genuine biological interpretation. They are:</p>
+<ul>
+<li><strong>Treatments</strong>: the baseline can be viewed as the variety’s <strong>efficiency</strong>, its genetic value under the control or low-input treatment. The adjusted component is its <strong>responsiveness</strong> (or <strong>tolerance</strong>), the extra genetic gain it realises when the treatment is applied.</li>
+<li><strong>Traits</strong>: the baseline is just the unadjusted variety genetic value for the trait and the adjusted component is part of the genetic value of the second trait that is not genetically predictable from another.</li>
+</ul>
+<p>The second dimension is the <strong>section</strong>, ordinarily the site or environment. The decomposition is simply repeated, independently, within each section. There may be one section or many:</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 30%">
@@ -4500,9 +4504,9 @@ opacity: 0.92;
 </tr>
 </tbody>
 </table>
-<p>Where the grouping factor is a composite of two factors — such as the Treatment-by-Site factor <code>TSite</code> used throughout this vignette — the decomposition is carried out independently within each level of the second factor. Where it is a plain factor there is a single section, reported as <code>&quot;Single&quot;</code>, and plots show one facet column.</p>
+<p>Where the grouping factor is a composite of two factors, such as the Treatment-by-Site factor <code>TSite</code> used throughout this vignette, the decomposition is carried out independently within each level of the second factor. Where it is a plain factor there is a single section, reported as <code>&quot;Single&quot;</code>, and plots show one facet column.</p>
 <p>Multi-treatment MET data is used as the worked example here because it is the most complex case, exercising both dimensions at once; the single-section cases follow by simply supplying a plain grouping factor.</p>
-<p><code>plot_randomRegress()</code> visualises the result as a regression scatter plot, an efficiency–responsiveness quadrant plot, or a G-matrix heatmap.</p>
+<p><code>plot_randomRegress()</code> visualises the result as a regression scatter plot, a baseline–adjusted quadrant plot, or a G-matrix heatmap.</p>
 <hr>
 </section>
 </section>
@@ -4583,8 +4587,8 @@ u_2 \mid u_1 \sim \mathcal{N}\!\left(\beta\, u_1,\; \sigma^2_{2 \mid 1}\right),
 \qquad
 \sigma^2_{2 \mid 1} = G_{22}\left(1 - \rho^2\right),
 </span></p>
-<p>where <span class="math inline">\rho = G_{12} / \sqrt{G_{11}G_{22}}</span> is the genetic correlation between the two treatments. Here <span class="math inline">u_1</span> is the <strong>efficiency</strong> BLUP and the residual <span class="math inline">r_2 = u_2 - \beta u_1</span> is the <strong>responsiveness</strong> BLUP.</p>
-<p>The form <span class="math inline">G_{22}(1 - \rho^2)</span> shows exactly what responsiveness measures i.e. the genetic variance in treatment 2 that its correlation with treatment 1 leaves unexplained. As <span class="math inline">\rho \to 1</span> the responsiveness variance vanishes and then treatment 2 tells us nothing that treatment 1 has not already explained, and there is no independent axis on which to select. When <span class="math inline">\rho</span> is moderate, a substantial share of the genetic variance in treatment 2 is unique to it, and efficiency and responsiveness can be selected on separately.</p>
+<p>where <span class="math inline">\rho = G_{12} / \sqrt{G_{11}G_{22}}</span> is the genetic correlation between the two treatments. Here <span class="math inline">u_1</span> is the <strong>baseline</strong> BLUP and the residual <span class="math inline">r_2 = u_2 - \beta u_1</span> is the <strong>adjusted</strong> BLUP.</p>
+<p>The form <span class="math inline">G_{22}(1 - \rho^2)</span> shows exactly what adjusted measures i.e. the genetic variance in treatment 2 that its correlation with treatment 1 leaves unexplained. As <span class="math inline">\rho \to 1</span> the adjusted variance vanishes and then treatment 2 tells us nothing that treatment 1 has not already explained, and there is no independent axis on which to select. When <span class="math inline">\rho</span> is moderate, a substantial share of the genetic variance in treatment 2 is unique to it, and baseline and adjusted can be selected on separately.</p>
 <hr>
 </section>
 <section id="universal-conditional-decomposition" class="level3">
@@ -4605,15 +4609,15 @@ u_{j} \mid \mathbf{u}_{A_j}
 \sigma^2_{j \mid A_j} = G_{jj} - \mathbf{G}_{j A_j}\,\boldsymbol{\beta}_j.
 </span></p>
 <p>Here <span class="math inline">\mathbf{G}_{A_j A_j}</span>, <span class="math inline">\mathbf{G}_{A_j j}</span>, and <span class="math inline">G_{jj}</span> are all sub-blocks or elements of the within-site diagonal block <span class="math inline">\mathbf{G}_{ss}</span>.</p>
-<p>The <strong>responsiveness BLUP</strong> for variety <span class="math inline">v</span> is the residual from this regression:</p>
+<p>The <strong>adjusted BLUP</strong> for variety <span class="math inline">v</span> is the residual from this regression:</p>
 <p><span class="math display">
 r_{j,v} = u_{j,v} - \boldsymbol{\beta}_j^\top \mathbf{u}_{A_j,v}.
 </span></p>
-<p>Responsiveness BLUPs are:</p>
+<p>Adjusted BLUPs are:</p>
 <ul>
 <li><strong>zero-mean</strong> within each treatment-site group (inherited from the BLUPs)</li>
 <li><strong>orthogonal</strong> to the conditioning BLUPs in the G-matrix sense</li>
-<li><strong>genetically independent</strong> of the efficiency signal, with variance <span class="math inline">\sigma^2_{j \mid A_j}</span></li>
+<li><strong>genetically independent</strong> of the baseline signal, with variance <span class="math inline">\sigma^2_{j \mid A_j}</span></li>
 </ul>
 <p>The orthogonality property follows directly from the definition of <span class="math inline">\boldsymbol{\beta}_j</span>. For any conditioning treatment <span class="math inline">l \in A_j</span>,</p>
 <p><span class="math display">
@@ -4769,7 +4773,7 @@ r_{j,v} = u_{j,v} - \boldsymbol{\beta}_j^\top \mathbf{u}_{A_j,v}.
 </section>
 <section id="running-randomregress-partial-conditioning" class="level3">
 <h3 class="anchored" data-anchor-id="running-randomregress-partial-conditioning">Running <code>randomRegress()</code> — partial conditioning</h3>
-<p>With a single site, <strong>partial conditioning</strong> is the natural choice: each treatment is conditioned on all the others simultaneously, so the three responsiveness BLUPs capture the genetic signal that is unique to each treatment and unshared with the others.</p>
+<p>With a single site, <strong>partial conditioning</strong> is the natural choice: each treatment is conditioned on all the others simultaneously, so the three adjusted BLUPs capture the genetic signal that is unique to each treatment and unshared with the others.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>res1 <span class="ot">&lt;-</span> <span class="fu">randomRegress</span>(</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  model1,</span>
@@ -4822,12 +4826,12 @@ y_v = \hat{u}_{j,v} - \tfrac{G_{rj}}{G_{rr}}\,\hat{u}_{r,v}.
 </section>
 <section id="quadrant-plot-with-default-highlights" class="level3">
 <h3 class="anchored" data-anchor-id="quadrant-plot-with-default-highlights">Quadrant plot with default highlights</h3>
-<p>The quadrant plot places the T0 BLUPs on the x-axis and <strong>responsiveness</strong> on the y-axis. Under partial conditioning, every treatment has a responsiveness axis, so there are three quadrant panels:</p>
+<p>The quadrant plot places the T0 BLUPs on the x-axis and <strong>adjusted</strong> on the y-axis. Under partial conditioning, every treatment has an adjusted axis, so there are three quadrant panels:</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>p_quad1 <span class="ot">&lt;-</span> <span class="fu">plot_randomRegress</span>(res1, <span class="at">type =</span> <span class="st">&quot;quadrant&quot;</span>, <span class="at">highlight =</span> <span class="st">&quot;default&quot;</span>)</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(p_quad1)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The default highlight algorithm (<code>highlight = &quot;default&quot;</code>) selects up to six varieties to annotate across all panels — up to three from the top-right quadrant (high efficiency + high responsiveness, shown in orange) and up to three from the bottom-left (low efficiency + low responsiveness, shown in blue). Within each quadrant the candidates are restricted to varieties whose distance from the origin exceeds the within-quadrant median, and the final selection is simply the most extreme of those candidates, ordered by decreasing distance from the origin. The same varieties are labelled in every site and treatment-pair panel, making it easy to trace how a variety’s relative position shifts across panels.</p>
+<p>The default highlight algorithm (<code>highlight = &quot;default&quot;</code>) selects up to six varieties to annotate across all panels — up to three from the top-right quadrant (high baseline + high adjusted, shown in orange) and up to three from the bottom-left (low baseline + low adjusted, shown in blue). Within each quadrant the candidates are restricted to varieties whose distance from the origin exceeds the within-quadrant median, and the final selection is simply the most extreme of those candidates, ordered by decreasing distance from the origin. The same varieties are labelled in every site and treatment-pair panel, making it easy to trace how a variety’s relative position shifts across panels.</p>
 <p>Varieties that appear in the top-right of all panels respond positively to every treatment; those that shift between quadrants across panels show treatment-specific responses. To highlight specific varieties instead, pass a character vector of variety names, e.g. <code>highlight = c(&quot;Var01&quot;, &quot;Var15&quot;, &quot;Var22&quot;)</code>; to suppress highlighting entirely, use <code>highlight = NULL</code>.</p>
 <hr>
 </section>
@@ -4888,7 +4892,7 @@ y_v = \hat{u}_{j,v} - \tfrac{G_{rj}}{G_{rr}}\,\hat{u}_{r,v}.
 </section>
 <section id="running-randomregress-baseline-conditioning" class="level3">
 <h3 class="anchored" data-anchor-id="running-randomregress-baseline-conditioning">Running <code>randomRegress()</code> — baseline conditioning</h3>
-<p>For multi-site data with an FA model, <strong>baseline conditioning</strong> is the most widely used scheme: T0 is the efficiency (control) treatment, and T1 and T2 are conditioned on T0 to give treatment-specific responsiveness BLUPs.</p>
+<p>For multi-site data with an FA model, <strong>baseline conditioning</strong> is the most widely used scheme: T0 is the baseline (control) treatment, and T1 and T2 are conditioned on T0 to give treatment-specific adjusted BLUPs.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>res2 <span class="ot">&lt;-</span> <span class="fu">randomRegress</span>(</span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>  model2,</span>
@@ -4918,7 +4922,7 @@ y_v = \hat{u}_{j,v} - \tfrac{G_{rj}}{G_{rr}}\,\hat{u}_{r,v}.
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>p_quad2 <span class="ot">&lt;-</span> <span class="fu">plot_randomRegress</span>(res2, <span class="at">type =</span> <span class="st">&quot;quadrant&quot;</span>, <span class="at">highlight =</span> <span class="st">&quot;default&quot;</span>)</span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(p_quad2)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The automatic highlight algorithm identifies the six most informative archetypes by their position in the efficiency–responsiveness space, averaged across all sites. Orange points are top-right archetypes (broadly adapted and responsive); blue points are bottom-left archetypes (consistently poor performers). The same six varieties are labelled in every panel.</p>
+<p>The automatic highlight algorithm identifies the six most informative archetypes by their position in the baseline–adjusted space, averaged across all sites. Orange points are top-right archetypes (broadly adapted and responsive); blue points are bottom-left archetypes (consistently poor performers). The same six varieties are labelled in every panel.</p>
 </section>
 <section id="filtering-to-a-single-treatment-pair" class="level3">
 <h3 class="anchored" data-anchor-id="filtering-to-a-single-treatment-pair">Filtering to a single treatment pair</h3>
@@ -4951,9 +4955,9 @@ y_v = \hat{u}_{j,v} - \tfrac{G_{rj}}{G_{rr}}\,\hat{u}_{r,v}.
 <span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">&quot;dotted&quot;</span>, <span class="at">colour =</span> <span class="st">&quot;grey40&quot;</span>) <span class="sc">+</span></span>
 <span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="fl">1.8</span>, <span class="at">alpha =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
 <span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> Site, <span class="at">nrow =</span> <span class="dv">2</span>L) <span class="sc">+</span></span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">&quot;Efficiency (T0 BLUP)&quot;</span>,</span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">&quot;Responsiveness (T1 | T0)&quot;</span>,</span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">&quot;T1 responsiveness by site&quot;</span>) <span class="sc">+</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">&quot;Baseline (T0 BLUP)&quot;</span>,</span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">&quot;Adjusted (T1 | T0)&quot;</span>,</span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">&quot;T1 adjusted by site&quot;</span>) <span class="sc">+</span></span>
 <span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>() <span class="sc">+</span></span>
 <span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">&quot;none&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
@@ -5022,7 +5026,7 @@ y_v = \hat{u}_{j,v} - \tfrac{G_{rj}}{G_{rr}}\,\hat{u}_{r,v}.
 <td><code>plot_randomRegress(res, type = &quot;regress&quot;)</code></td>
 </tr>
 <tr class="even">
-<td>Efficiency–responsiveness plot</td>
+<td>Baseline–adjusted plot</td>
 <td><code>plot_randomRegress(res, type = &quot;quadrant&quot;)</code></td>
 </tr>
 <tr class="odd">
