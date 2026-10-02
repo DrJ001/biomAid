@@ -8,9 +8,9 @@
 
 <img src="man/figures/biomAid_logo.png" align="right" height="150" alt="biomAid"/>
 
-Welcome to bioMaid! This package has been specifically built to provide
+Welcome to biomAid! This package has been specifically built to provide
 biometricians with flexible functions for interpreting and further modelling of results
-from complex linear mixed models fitted wth software such as **ASReml-R V4**. Watch this
+from complex linear mixed models fitted with software such as **ASReml-R V4**. Watch this
 space, there are a lot more functions coming.
 
 
@@ -54,10 +54,9 @@ remotes::install_github("DrJ001/biomAid")
 
 ### `compare()` — Pairwise comparison criteria
 
-Computes **HSD**, **LSD**, or **Bonferroni**-corrected LSD for predicted values
-from an ASReml-R V4 model, optionally within subgroups. Two predicted values in
-the same group are significantly different when their absolute difference exceeds
-the returned criterion value.
+Computes **HSD**, **LSD**, or **Bonferroni**-corrected LSD criteria for predicted
+values from an ASReml-R V4 model, optionally within subgroups. Two predictions
+differ significantly when their absolute difference exceeds the criterion.
 
 ```r
 compare(model, term, by = NULL,
@@ -80,11 +79,9 @@ compare(model, term, by = NULL,
 
 ### `plot_compare()` — Visualise pairwise comparison results
 
-Four plot types for exploring the output of `compare()`. All types handle
-multi-factor `by`-group structure automatically through faceting, and support
-an optional interactive [plotly](https://plotly.com/r/) version with hover
-tooltips. The result object supports `+` for adding ggplot2 layers before
-plotly conversion via `pc_add()`.
+Four plot types for the output of `compare()`, faceted automatically over
+multi-factor `by`-group structure, with an optional interactive
+[plotly](https://plotly.com/r/) version (see `pc_add()`).
 
 ```r
 plot_compare(res,
@@ -116,9 +113,9 @@ plot_compare(res,
 
 ### `waldTest()` — Wald / F-tests on contrasts
 
-Tests linear contrasts of predicted values using prediction error information
+Tests linear contrasts of predicted values using the prediction error variance
 from `predict.asreml()`. Supports pairwise, custom contrast matrix, and joint
-zero tests with optional p-value adjustment.
+zero tests, with optional p-value adjustment.
 
 ```r
 waldTest(pred, cc, by = NULL,
@@ -140,11 +137,9 @@ waldTest(pred, cc, by = NULL,
 
 ### `plot_waldTest()` — Forest plot for Wald test contrasts
 
-Produces a publication-ready forest plot from the output of `waldTest()`.
-Each contrast is shown as a filled circle with horizontal confidence interval
-bars. Points are coloured by **−log₁₀(p)**: non-significant results appear in
-grey with a warm gradient from gold through to dark red as evidence strengthens.
-The raw p-value is printed beside each row.
+Forest plot of the contrasts returned by `waldTest()` — one row per contrast
+with confidence interval bars, points coloured by **−log₁₀(p)**, and the raw
+p-value printed alongside.
 
 ```r
 plot_waldTest(res,
@@ -170,32 +165,12 @@ plot_waldTest(res,
 ### `randomRegress()` — Random regression (BLUP-based)
 
 Decomposes a multivariate set of variety BLUPs from an ASReml-R V4 model into
-**baseline and adjusted indices**, using a natural genetic regression
-derived from Gaussian conditional distribution theory. Supports four
-conditioning schemes.
-
-The **decomposed** dimension holds multiple treatments or multiple traits —
-levels applied to, or measured on, the same plants within one experiment, so
-that a genetic regression between them is meaningful — nominated in `levs`. The
-decomposition is then repeated independently within each **section**, ordinarily
-a site, of which there may be one or many:
-
-| Grouping factor | Decomposed (`levs`) | Sections | Use case |
-|-----------------|---------------------|--------|----------|
-| `us(Treatment)` — plain | treatments | one, `"Single"` | Multi-treatment, single site |
-| `us(Trait)` — plain | traits | one, `"Single"` | Multi-trait, single site |
-| `us(TSite)` — composite | treatments | sites | Multi-treatment MET |
-| `us(TraitSite)` — composite | traits | sites | Multi-trait MET |
-
-Where the grouping factor is a composite of two factors, the two components may
-appear in either order (`"N0-Env1"` and `"Env1-N0"` are both recognised). Where
-it is a plain factor, there is a single section reported as `"Single"`.
-
-> **Note:** environments are not a decomposable dimension. Regressing one site's
-> BLUPs on another's would not give a baseline–adjusted decomposition,
-> since separate sites are separate experiments; environments belong in the
-> section role. For genetic covariance *between* environments use `faSummary()`
-> or `fastIC()`.
+**baseline and adjusted indices** by genetic regression, under one of four
+conditioning schemes. The decomposed dimension (`levs`) holds multiple
+treatments or multiple traits; the decomposition is repeated independently
+within each **section**, ordinarily a site, of which there may be one or many.
+See the [vignette](https://DrJ001.github.io/biomAid/randomRegress.html) for the
+supported grouping-factor forms.
 
 ```r
 randomRegress(model, term = "us(TSite):Variety", levs = NULL,
@@ -214,21 +189,14 @@ randomRegress(model, term = "us(TSite):Variety", levs = NULL,
 | `pev` | `TRUE` (default) uses PEV; `FALSE` uses posterior variance |
 
 Returns `blups`, `TGmat`, `Gmat`, `beta`, `sigmat`, `tmat`, `cond_list`, `type`,
-`sep` and `label_map`. In `$blups` the `Site` column carries the section label
-whatever the stratifying dimension represents. `$label_map` records how each
-G-matrix column label was resolved into `level` and `section`; composite labels
-are resolved once there and that mapping is the authority downstream, so
-`plot_randomRegress()` never re-splits label strings.
+`sep` and `label_map`.
 
 ---
 
 ### `plot_randomRegress()` — Visualise random regression results
 
-Generates ggplot2 visualisations from `randomRegress()` output. Three plot
-types are available, each returned as a ggplot object that can be further
-customised with `+`. The `"regress"` and `"quadrant"` grids facet by BLUP pair
-(rows) and section (columns) — a single column labelled `"Single"` when the
-grouping factor is not composite.
+Three ggplot2 plot types for `randomRegress()` output. The `"regress"` and
+`"quadrant"` grids facet by BLUP pair (rows) and section (columns).
 
 ```r
 plot_randomRegress(res,
@@ -257,15 +225,12 @@ plot_randomRegress(res,
 
 ### `fixedRegress()` — Fixed regression (BLUE-based)
 
-The fixed-effects analogue of `randomRegress()`. Regresses BLUEs via OLS within
-each group and returns **baseline and adjusted indices** for every genotype. The
-same four conditioning schemes are available.
-
-As in `randomRegress()`, the decomposed dimension may hold multiple treatments
-(`term = "Treatment:Genotype"`) or multiple traits from a multivariate model
-(`term = "trait:Genotype"`). The second dimension is supplied explicitly through
-`by`, rather than recovered from a composite factor label — a `by` group here
-plays the role of a *section* in `randomRegress()`.
+The fixed-effects analogue of `randomRegress()`: regresses BLUEs by OLS within
+each `by` group and returns **baseline and adjusted indices** for every
+genotype, under the same four conditioning schemes. The decomposed dimension
+may hold treatments (`term = "Treatment:Genotype"`) or traits
+(`term = "trait:Genotype"`); a `by` group here plays the role of a *section* in
+`randomRegress()`.
 
 ```r
 fixedRegress(model, term = "Treatment:Genotype",
@@ -288,9 +253,7 @@ fixedRegress(model, term = "Treatment:Genotype",
 
 ### `plot_fixedRegress()` — Visualise fixed regression results
 
-Generates ggplot2 visualisations from `fixedRegress()` output. Two plot types
-are available, each returned as a ggplot object that can be further customised
-with `+`.
+Two ggplot2 plot types for `fixedRegress()` output.
 
 ```r
 plot_fixedRegress(res,
@@ -317,10 +280,10 @@ plot_fixedRegress(res,
 
 ### `padTrial()` — Extract and pad a field trial layout
 
-Extracts a rectangular sub-trial from a field layout data frame based on a
-plot-type classification, trims guard rows outside the bounding box of the
-target plot types, and pads any missing interior grid positions with blank rows.
-Useful for preparing irregular trial layouts for spatial analysis.
+Extracts a rectangular sub-trial from a field layout by plot-type
+classification, trims guard rows outside its bounding box, and pads missing
+interior grid positions with blank rows — preparing irregular layouts for
+spatial analysis.
 
 ```r
 padTrial(data,
@@ -351,9 +314,7 @@ padTrial(data,
 ### `plot_padTrial()` — Before/after field layout tile map
 
 Visualises the effect of `padTrial()` as a pair of tile maps — **Before** on
-top, **After** below. Tiles are coloured by plot type; inserted (padded) cells
-appear in light grey. When `data` is supplied the Before panel shows the
-complete original layout including guard rows.
+top, **After** below — coloured by plot type, with padded cells in light grey.
 
 ```r
 plot_padTrial(result,
@@ -383,15 +344,10 @@ plot_padTrial(result,
 ### `faSummary()` — Factor analytic model summary
 
 Extracts and rotates the factor analytic variance structure from an ASReml-R V4
-model, returning one entry for every `fa()` term in the random formula. Provides
-the genetic covariance (`Gmat`) and correlation (`Cmat`) matrices, the rotated
-loadings, specific variances, variance accounted for, and the genotype BLUPs and
-factor score EBLUPs. This is the engine underlying `fastIC()` and the FA path of
-`randomRegress()`.
-
-Where a model fits both `fa(Site, k):vm(Variety, G)` and
-`fa(Site, k):ide(Variety)`, an additional `"<outer>:<inner>-total"` entry holds
-the summed covariance structure and BLUPs.
+model, returning one entry per `fa()` term: the genetic covariance (`Gmat`) and
+correlation (`Cmat`) matrices, rotated loadings, specific variances, variance
+accounted for, genotype BLUPs and factor score EBLUPs. This is the engine
+underlying `fastIC()` and the FA path of `randomRegress()`.
 
 ```r
 faSummary(model, term = NULL, blups = TRUE, combine.ide = TRUE)
@@ -406,9 +362,7 @@ faSummary(model, term = NULL, blups = TRUE, combine.ide = TRUE)
 
 Each `$gammas[[term]]` element contains `Gmat`, `Cmat`, `loads`, `loads_cor`,
 `spec_var`, `vaf_env`, `vaf_summary`, `vaf_total`, `k`, `env`, `outer`, `inner`
-and `inner_fun`; each `$blups[[term]]` element contains `blups` and `scores`
-data frames. The object also carries `$terms` and `$call`, and has a compact
-`print()` method.
+and `inner_fun`; each `$blups[[term]]` element contains `blups` and `scores`.
 
 ---
 
@@ -456,16 +410,9 @@ plot_faSummary(res,
 
 Implements the **FAST** (Smith & Cullis 2018) and **iClass** (Smith et al. 2021)
 approaches for summarising variety performance from an FA mixed model fitted in
-ASReml-R V4. Always computes both global FAST metrics (`global_op`,
-`global_stab`) and within-class iClass metrics (`iClassOP`, `iClassRMSD`).
-The genotype factor may be wrapped in `vm(...)` or `ide(...)` for
-relationship-aware models.
-
-The FA decomposition is performed by `faSummary()`. Two of its results are
-carried through as attributes of the returned data frame — `vaf_env`
-(per-environment variance accounted for by each factor and the specific
-variance) and `vaf_summary` (overall proportions across all environments) — for
-use by `plot_faSummary(type = "VAF")`.
+ASReml-R V4, computing both global FAST metrics (`global_op`, `global_stab`)
+and within-class iClass metrics (`iClassOP`, `iClassRMSD`). The FA
+decomposition is performed by `faSummary()`.
 
 ```r
 fastIC(model, term = "fa(Site, 4):Genotype",
@@ -480,20 +427,18 @@ fastIC(model, term = "fa(Site, 4):Genotype",
 | `ic.num` | Number of factors used for iClass sign-pattern classification and iClassOP. Must be < k (i.e. 1 to k − 1) so that the kth factor remains available for iClassRMSD. Default `2` |
 | `...` | Additional arguments forwarded to `faSummary()` |
 
-The returned data frame has one row per environment × genotype, sorted by
-`iclass` then environment then genotype. Alongside the loadings, scores and
-per-factor fitted values it carries `CVE`, `global_op`, `iclass`, `iClassOP`
-and `iClassRMSD`; `global_dev` and `global_stab` are present only when k > 1.
+Returns one row per environment × genotype carrying the loadings, scores,
+per-factor fitted values, `CVE`, `global_op`, `iclass`, `iClassOP` and
+`iClassRMSD` (`global_dev` and `global_stab` only when k > 1), plus the
+`vaf_env` and `vaf_summary` attributes used by `plot_faSummary(type = "VAF")`.
 
 ---
 
 ### `plot_fastIC()` — Visualise FAST and iClass results
 
-Six plot types for exploring the output of `fastIC()`. Covers global
-performance and stability, the FA factor structure, within-class metrics, and
-cross-class comparisons — together providing a comprehensive view of the GEI
-landscape captured by the FA model. The per-environment variance decomposition
-lives in `plot_faSummary(type = "VAF")`.
+Six plot types for the output of `fastIC()`, covering global performance and
+stability, the FA factor structure, and within- and between-class metrics. The
+per-environment variance decomposition lives in `plot_faSummary(type = "VAF")`.
 
 ```r
 plot_fastIC(res,
@@ -531,13 +476,10 @@ plot_fastIC(res,
 ### `simTrialData()` — Simulate trial data
 
 Generates a balanced or unbalanced MET or split-plot dataset with a realistic
-genetic covariance structure across environments. The genetic covariance matrix
-`G` is either auto-generated from correlation bounds (`G = "auto"`, default)
-or supplied directly by the user.
-
-Set `treatments = NULL` for a pure MET (simple RCB, no Treatment column).
-Supply `treatments = c("T0", "T1", ...)` for a split-plot design; the
-genetic structure then operates over all Treatment x Site (`TSite`) combinations.
+genetic covariance structure across environments, from a `G` matrix either
+auto-generated from correlation bounds or supplied directly. `treatments = NULL`
+gives a pure MET (simple RCB); supplying treatment labels gives a split-plot
+design whose genetic structure operates over Treatment × Site (`TSite`).
 
 ```r
 simTrialData(nvar        = 20L,
@@ -580,10 +522,9 @@ Key `sim.options` elements (all have built-in defaults):
 
 ### `plot_simTrialData()` — Visualise simulated trial data
 
-Four complementary plot types for exploring the structure of data generated
-by `simTrialData()`. Covers the field layout, variety connectivity, true
-genetic correlation structure, and the underlying GEI surface — together
-providing a complete view of what was simulated before any model is fitted.
+Four plot types for data generated by `simTrialData()`, covering the field
+layout, variety connectivity, true genetic correlation structure and the
+underlying GEI surface.
 
 ```r
 plot_simTrialData(res,
@@ -610,7 +551,6 @@ plot_simTrialData(res,
 | `theme` | A ggplot2 theme object. Default `theme_bw()` |
 | `return_data` | `TRUE` returns a list with `$plot` and `$data`. Default `FALSE` |
 
-
 | Type | Description |
 |------|-------------|
 | `"trial"` | Tiled Row × Column field layout, one panel per site. `fill` maps any data column onto tile colour (`NULL` → `Rep`; numeric → viridis; factor → discrete palette). `label` overlays text from any column. |
@@ -622,17 +562,10 @@ plot_simTrialData(res,
 
 ### `accuracy()` — Model-based BLUP accuracy
 
-Computes per-environment mean BLUP accuracy from a fitted ASReml-R V4
-mixed model. Two complementary metrics are available:
-
-- **Mrode accuracy** — `r = mean[sqrt(1 - PEV / G_jj)]` per variety,
-  averaged over environments.
-- **Generalised H²** — `1 - mean(SED²) / (2 G_jj)`, a variety-comparison
-  reliability analogue from Cullis et al. (2006)
-
-Supports `fa()`, `diag()`, `corgh()`, `corh()`, `us()`, and single-environment
-`id()` random structures. The `only =` argument to `predict.asreml()` is invoked
-internally to avoid fixed-effect inflation of the PEV.
+Computes per-environment mean BLUP accuracy from a fitted ASReml-R V4 model as
+**Mrode accuracy** `r = mean[sqrt(1 - PEV / G_jj)]` and/or **generalised H²**
+`1 - mean(SED²) / (2 G_jj)` (Cullis et al. 2006). Supports `fa()`, `diag()`,
+`corgh()`, `corh()`, `us()` and single-environment `id()` random structures.
 
 ```r
 accuracy(model,
@@ -654,8 +587,8 @@ accuracy(model,
 
 ### `plot_accuracy()` — Visualise BLUP accuracy
 
-Six plot types for visualising and comparing accuracy results.
-Pass a second accuracy object via `res2` for head-to-head model comparisons.
+Six plot types for `accuracy()` results; pass a second accuracy object via
+`res2` for head-to-head model comparisons.
 
 ```r
 plot_accuracy(res,
@@ -669,6 +602,7 @@ plot_accuracy(res,
               return_data = FALSE,
               ...)
 ```
+
 | Argument | Description |
 |----------|-------------|
 | `res` | Data frame returned by `accuracy()` |
