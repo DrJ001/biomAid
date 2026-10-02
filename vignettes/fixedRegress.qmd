@@ -39,32 +39,13 @@ if (asreml_ok) library(asreml)
 
 ## Overview
 
-`fixedRegress()` is the **fixed-effects (BLUE) analogue** of `randomRegress()`.
-For each group (e.g. site, environment, year) it regresses the BLUEs of each
-*conditioned* level on the BLUEs of its *conditioning* set using ordinary
-least squares, returning an **adjusted index** — the OLS residual — for every
-genotype.
-
-As in `randomRegress()`, the decomposed dimension may hold multiple
-**treatments** or multiple **traits** — levels applied to, or measured on, the
-same plants within the one experiment, so that a regression between them is
-meaningful. For treatments, `term = "Treatment:Genotype"` with `levs` naming
-the treatment labels; for traits, a multivariate model gives
-`term = "trait:Genotype"` with `levs` naming the traits. This vignette works
-through the treatment case throughout.
-
-The decomposition separates two components:
+`fixedRegress()` is the **fixed-effects (BLUE) analogue** of `randomRegress()` and similar to `randomRegress()` it has also been set up generally. Again, to aid intepretation, we focus on decompositions of variety or gentoype BLUEs into two intepretable components when differing treatments or traits are appplied over groupings such as sites. 
 
 - **Baseline** — a genotype's unconditional BLUE at the reference level.
 - **Adjusted index** — the OLS residual from regressing the conditioned level's
   BLUE on the baseline: the part not predictable from baseline performance.
 
-Read agronomically, where the levels are treatments the baseline is the
-genotype's **efficiency** (its value irrespective of applied inputs) and the
-adjusted index its **responsiveness** — the capacity to respond *above and
-beyond* what its baseline performance would predict. Where the levels are
-traits that reading does not apply; the adjusted index is simply one trait with
-another projected out.
+Further details of these components meanings when traits or treatments are used can be found in the **Scope** section of the [Multivariate Random Regression](https://DrJ001.github.io/biomAid/randomRegress.html) vignette.
 
 One difference from `randomRegress()` worth noting: the second dimension is
 supplied explicitly here via `by`, rather than being recovered from a composite

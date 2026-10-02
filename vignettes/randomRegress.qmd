@@ -42,8 +42,9 @@ if (asreml_ok) {
 
 ## Overview
 
-`randomRegress()` decomposes a multivariate set of variety BLUPs into two
-interpretable components:
+Although the `randomRegress()` function has been set up generally, to aid in intepretation
+this vignette focusses on specific use cases that allow a decomposition a multivariate set of
+variety BLUPs into two interpretable components:
 
 - **Baseline** — a variety's genetic value at the reference level, returned
   with the prefix `base.`
