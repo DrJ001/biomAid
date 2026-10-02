@@ -262,25 +262,25 @@ test_that("fixedRegress() baseline returns correct list structure", {
   expect_equal(res$type, "baseline")
 })
 
-test_that("fixedRegress() baseline blues has resp.*, se.*, and HSD.* columns", {
+test_that("fixedRegress() baseline blues has adj.*, se.*, and HSD.* columns", {
   p <- make_frm_pred()
   local_mocked_bindings(predict = function(...) p, .package = "biomAid")
   res <- fixedRegress(mock_asreml(),
                       term = "Treatment:Genotype",
                       levs = c("T0", "T1", "T2"))
-  expect_true(all(c("resp.T1", "resp.T2") %in% names(res$blues)))
+  expect_true(all(c("adj.T1", "adj.T2") %in% names(res$blues)))
   expect_true(all(c("HSD.T1",  "HSD.T2")  %in% names(res$blues)))
   expect_true(all(c("se.T1",   "se.T2")   %in% names(res$blues)))
 })
 
-test_that("fixedRegress() baseline: resp residuals sum to zero", {
+test_that("fixedRegress() baseline: adj residuals sum to zero", {
   p <- make_frm_pred(seed = 2L)
   local_mocked_bindings(predict = function(...) p, .package = "biomAid")
   res <- fixedRegress(mock_asreml(),
                       term = "Treatment:Genotype",
                       levs = c("T0", "T1", "T2"))
-  expect_equal(sum(res$blues$resp.T1), 0, tolerance = 1e-8)
-  expect_equal(sum(res$blues$resp.T2), 0, tolerance = 1e-8)
+  expect_equal(sum(res$blues$adj.T1), 0, tolerance = 1e-8)
+  expect_equal(sum(res$blues$adj.T2), 0, tolerance = 1e-8)
 })
 
 test_that("fixedRegress() baseline HSD values are all positive", {
@@ -308,14 +308,14 @@ test_that("fixedRegress() sequential: type field is 'sequential'", {
   expect_equal(res$type, "sequential")
 })
 
-test_that("fixedRegress() sequential: resp.T1 uncorrelated with T0 column", {
+test_that("fixedRegress() sequential: adj.T1 uncorrelated with T0 column", {
   p <- make_frm_pred(seed = 3L)
   local_mocked_bindings(predict = function(...) p, .package = "biomAid")
   res <- fixedRegress(mock_asreml(),
                       term = "Treatment:Genotype",
                       levs = c("T0", "T1", "T2"),
                       type = "sequential")
-  expect_equal(cor(res$blues$resp.T1, res$blues$T0), 0, tolerance = 1e-10)
+  expect_equal(cor(res$blues$adj.T1, res$blues$T0), 0, tolerance = 1e-10)
 })
 
 
@@ -323,14 +323,14 @@ test_that("fixedRegress() sequential: resp.T1 uncorrelated with T0 column", {
 # F. End-to-end: partial type
 # ===========================================================================
 
-test_that("fixedRegress() partial: all levs have resp columns", {
+test_that("fixedRegress() partial: all levs have adj columns", {
   p <- make_frm_pred(seed = 5L)
   local_mocked_bindings(predict = function(...) p, .package = "biomAid")
   res <- fixedRegress(mock_asreml(),
                       term = "Treatment:Genotype",
                       levs = c("T0", "T1", "T2"),
                       type = "partial")
-  expect_true(all(c("resp.T0", "resp.T1", "resp.T2") %in% names(res$blues)))
+  expect_true(all(c("adj.T0", "adj.T1", "adj.T2") %in% names(res$blues)))
   expect_equal(res$type, "partial")
 })
 
@@ -352,7 +352,7 @@ test_that("fixedRegress() custom type works and returns correct type field", {
                       type = "custom",
                       cond = list(T1 = "T0", T2 = c("T0", "T1")))
   expect_equal(res$type, "custom")
-  expect_true(all(c("resp.T1", "resp.T2") %in% names(res$blues)))
+  expect_true(all(c("adj.T1", "adj.T2") %in% names(res$blues)))
 })
 
 

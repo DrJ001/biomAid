@@ -285,8 +285,18 @@
 #'
 #' @description
 #' Uses the G-matrix from an ASReml-R V4 model to decompose a multivariate set
-#' of variety BLUPs into **efficiency** and **responsiveness** components,
+#' of variety BLUPs into **baseline** and **adjusted** components,
 #' supporting four conditioning schemes via the `type` argument.
+#'
+#' The **baseline** component (prefix `base.`) is the raw BLUP at the
+#' unconditioned reference level; the **adjusted** component (prefix `adj.`)
+#' is the part of a level's BLUP that is not linearly predictable from the
+#' levels it is conditioned on.  Where the decomposed levels are treatments
+#' these are conventionally called *efficiency* and *responsiveness* (or
+#' *tolerance*): genetic value under the control, and the extra genetic gain
+#' realised when the treatment is applied.  That reading does not carry over
+#' to traits — protein does not "respond" to yield — so the generic names are
+#' used throughout.
 #'
 #' The decomposed dimension holds multiple **treatments** or multiple
 #' **traits** — levels applied to, or measured on, the same plants within one
@@ -309,7 +319,7 @@
 #'
 #' \describe{
 #'   \item{`"baseline"` (default)}{Every non-first level is conditioned on
-#'     \code{levs[1]} alone.  Responsiveness BLUPs are orthogonal to the
+#'     \code{levs[1]} alone.  Adjusted BLUPs are orthogonal to the
 #'     baseline but may be correlated with each other.  The transformed
 #'     G-matrix `TGmat` is block-diagonal.}
 #'   \item{`"sequential"`}{Level \eqn{j} is conditioned on all preceding
@@ -351,7 +361,7 @@
 #' observed on common material within one experiment, so the conditional
 #' distribution of one given another is biologically interpretable.
 #' **Environments are not.**  Regressing one site's BLUPs on another's would
-#' not give an efficiency-responsiveness decomposition, because separate sites
+#' not give a baseline/adjusted decomposition, because separate sites
 #' are separate experiments; environments belong in the section role.  Where
 #' the genetic covariance *between* environments is the question of interest,
 #' use [faSummary()] or [fastIC()] instead.
@@ -414,7 +424,7 @@
 #' @param levs Character vector of length \eqn{\ge 2} naming the levels to
 #'   decompose — treatment labels or trait names, depending on what the
 #'   grouping factor indexes.  For `type = "baseline"` and
-#'   `type = "sequential"` the **first** element is the baseline (efficiency)
+#'   `type = "sequential"` the **first** element is the unconditioned baseline
 #'   level.  For `type = "partial"` the ordering does not affect results.  For
 #'   `type = "custom"` the ordering determines which element of `cond` applies
 #'   to which level.
@@ -423,7 +433,7 @@
 #'   See **Description** for full details of each scheme.
 #' @param cond Named list required when `type = "custom"`.  Each element name
 #'   must be a level from `levs`; each element value is either `NULL` (the
-#'   level is unconditional / efficiency) or a character vector of levels from
+#'   level is unconditional / baseline) or a character vector of levels from
 #'   `levs` that form the conditioning set.  Levels absent from `cond` are
 #'   treated as unconditional.  Example for a three-level sequential-style
 #'   custom scheme:
@@ -437,7 +447,7 @@
 #'   factor's labels contain no separator, in which case a single section
 #'   named `"Single"` is reported.  Defaults to `"-"`.
 #' @param pev Logical.  If `TRUE` (default) the variance used for HSD
-#'   computation is the prediction error variance (PEV) of each responsiveness
+#'   computation is the prediction error variance (PEV) of each adjusted
 #'   BLUP.  If `FALSE` it is the posterior variance
 #'   \eqn{\sigma_{j|A_j}^2 - \text{PEV}}.  Ignored for FA models
 #'   (HSD is always `NA`).
@@ -447,17 +457,17 @@
 #' @return A named list:
 #' \describe{
 #'   \item{`blups`}{Data frame with columns: `Site`, `Variety`, one raw BLUP
-#'     column per level in `levs`, one `resp.<lev>` column per conditioned
+#'     column per level in `levs`, one `adj.<lev>` column per conditioned
 #'     level, and one `HSD.<lev>` column per conditioned level (Tukey's HSD on
-#'     the responsiveness scale; `NA` for FA models or absent combinations).
+#'     the adjusted scale; `NA` for FA models or absent combinations).
 #'     The `Site` column holds the **section** label whatever the stratifying
 #'     dimension represents, and is `"Single"` throughout when the grouping
 #'     factor is not composite.  The `Variety` column holds the levels of the
 #'     variety factor named in `term`, whatever that factor is called in the
 #'     model.}
 #'   \item{`TGmat`}{Transformed G-matrix \eqn{\boldsymbol{T}\boldsymbol{G}
-#'     \boldsymbol{T}^\top}.  Unconditional levels are labelled `eff.<lev>`;
-#'     conditioned levels are labelled `resp.<lev>`.  Diagonal for
+#'     \boldsymbol{T}^\top}.  Unconditional levels are labelled `base.<lev>`;
+#'     conditioned levels are labelled `adj.<lev>`.  Diagonal for
 #'     `type = "sequential"`.}
 #'   \item{`Gmat`}{Original G-matrix.}
 #'   \item{`beta`}{Named list of length equal to the number of conditioned
@@ -621,7 +631,7 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
   nvar   <- length(unique(as.character(pvals[[vnam]])))
   glev   <- unique(as.character(pvals[[vnam]]))
 
-  resp_nams <- paste0("resp.", conditioned)
+  adj_nams <- paste0("adj.", conditioned)
   hsd_nams  <- paste0("HSD.",  conditioned)
 
   # ---- Initialise outputs ------------------------------------------------
@@ -646,14 +656,14 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
     present     <- levs[levs %in% names(inds)]
 
     raw_df  <- matrix(NA_real_, nvar, ntreat, dimnames = list(NULL, levs))
-    resp_df <- matrix(NA_real_, nvar, n_cond, dimnames = list(NULL, resp_nams))
+    adj_df <- matrix(NA_real_, nvar, n_cond, dimnames = list(NULL, adj_nams))
     hsd_df  <- matrix(NA_real_, nvar, n_cond, dimnames = list(NULL, hsd_nams))
 
     # Fill raw BLUPs for all present treatments
     for (lv in present)
       raw_df[, lv] <- pvals$blup[pvals[[enam]] == tsnams[inds[lv]]]
 
-    # Responsiveness BLUP for each conditioned treatment
+    # Adjusted BLUP for each conditioned treatment
     for (ci in seq_len(n_cond)) {
 
       lv_j <- conditioned[ci]
@@ -710,10 +720,10 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
       # Update transformation matrix
       tmat[j_ind, a_inds] <- -beta_j
 
-      # ---- Responsiveness BLUPs: u_j - u_A %*% beta_j ------------------
+      # ---- Adjusted BLUPs: u_j - u_A %*% beta_j ------------------
       u_A    <- raw_df[, A_j, drop = FALSE]         # nvar x |A|
-      resp_j <- raw_df[, lv_j] - drop(u_A %*% beta_j)
-      resp_df[, paste0("resp.", lv_j)] <- resp_j
+      adj_j <- raw_df[, lv_j] - drop(u_A %*% beta_j)
+      adj_df[, paste0("adj.", lv_j)] <- adj_j
 
       # ---- PEV via block decomposition (non-FA only) --------------------
       # For FA models pred = NULL; HSD columns remain NA.
@@ -754,7 +764,7 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
       }
     }
 
-    blist[[i]] <- as.data.frame(cbind(raw_df, resp_df, hsd_df))
+    blist[[i]] <- as.data.frame(cbind(raw_df, adj_df, hsd_df))
   }
 
   # ---- Transformed G-matrix ----------------------------------------------
@@ -765,8 +775,8 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
   TGmat  <- tmat %*% Gmat %*% t(tmat)
   uncond <- levs[vapply(cond_list, is.null, logical(1L))]
 
-  prefix <- ifelse(tnam %in% uncond,      "eff.",
-            ifelse(tnam %in% conditioned, "resp.", ""))
+  prefix <- ifelse(tnam %in% uncond,      "base.",
+            ifelse(tnam %in% conditioned, "adj.", ""))
 
   tsnams_out <- if (!lab$composite) {
     paste0(prefix, tnam)

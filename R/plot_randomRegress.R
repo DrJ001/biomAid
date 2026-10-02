@@ -225,21 +225,21 @@ NULL
     stop("No conditioned treatments to plot. Check 'treatments'.")
 
   # Under "partial" conditioning every treatment has a non-NULL conditioning
-  # set, so there is no unconditional (efficiency) treatment. Fall back to
+  # set, so there is no unconditional (baseline) treatment. Fall back to
   # the raw BLUP of the first treatment in levs as the x-axis reference.
   uncond <- names(Filter(is.null, cond_list))
-  eff_lv <- if (length(uncond) > 0L) uncond[1L] else names(cond_list)[1L]
+  base_lv <- if (length(uncond) > 0L) uncond[1L] else names(cond_list)[1L]
 
   rows <- lapply(conditioned, function(lv_j) {
-    resp_col <- paste0("resp.", lv_j)
-    if (!(resp_col %in% names(blups)))
-      stop("Column '", resp_col, "' not found in res$blups.")
+    adj_col <- paste0("adj.", lv_j)
+    if (!(adj_col %in% names(blups)))
+      stop("Column '", adj_col, "' not found in res$blups.")
     cond_lv <- cond_list[[lv_j]][1L]
     df <- data.frame(
       Site       = blups$Site,
       Variety    = blups$Variety,
-      x          = blups[[eff_lv]],
-      y          = blups[[resp_col]],
+      x          = blups[[base_lv]],
+      y          = blups[[adj_col]],
       pair_label = paste0(lv_j, " | ", paste(cond_list[[lv_j]], collapse = ", ")),
       stringsAsFactors = FALSE
     )
@@ -248,7 +248,7 @@ NULL
     df
   })
   out <- do.call(rbind, rows)
-  attr(out, "eff_lv") <- eff_lv   # carry forward for axis labelling
+  attr(out, "base_lv") <- base_lv   # carry forward for axis labelling
   out
 }
 
@@ -439,14 +439,14 @@ NULL
 
   base_col <- if (is.null(hl)) "#E15759" else "grey50"
 
-  # eff_lv is attached by .rreg_quadrant_data() so axis label reflects
-  # whether the x-axis is an unconditional efficiency BLUP or the first
+  # base_lv is attached by .rreg_quadrant_data() so axis label reflects
+  # whether the x-axis is an unconditional baseline BLUP or the first
   # treatment in levs (partial conditioning fallback).
-  eff_lv <- attr(df, "eff_lv")
+  base_lv <- attr(df, "base_lv")
   x_label <- if (centre)
-    paste0(eff_lv, " BLUP (+ site mean)")
+    paste0(base_lv, " BLUP (+ site mean)")
   else
-    paste0(eff_lv, " BLUP")
+    paste0(base_lv, " BLUP")
 
   p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y)) +
     ggplot2::geom_hline(yintercept = 0, linetype = "dotted",
@@ -458,7 +458,7 @@ NULL
     ggplot2::facet_grid(pair_label ~ Site, scales = "free") +
     ggplot2::labs(
       x       = x_label,
-      y       = "Responsiveness (conditional BLUP)",
+      y       = "Adjusted (conditional BLUP)",
       caption = "Dotted lines at zero divide each panel into four quadrants"
     ) +
     theme +
@@ -521,8 +521,8 @@ NULL
 #'     beta slope passes through the origin.  The per-section
 #'     \eqn{\hat{\beta}} is annotated in the top-left corner of each panel.}
 #'   \item{`"quadrant"`}{Grid of scatter plots faceted by BLUP pair (rows) and
-#'     section (columns).  Each panel plots responsiveness BLUPs (y) against
-#'     the conditioning-level BLUPs (x = efficiency) for one section x one
+#'     section (columns).  Each panel plots adjusted BLUPs (y) against
+#'     the conditioning-level BLUPs (x = baseline) for one section x one
 #'     level pair.  Dotted zero reference lines on both axes divide each
 #'     panel into four quadrants.}
 #'   \item{`"gmat"`}{Heatmap of the G-matrix converted to a correlation
@@ -532,8 +532,8 @@ NULL
 #'
 #' **Variety highlighting** (`type = "regress"` and `"quadrant"` only):
 #' By default, up to six varieties are identified and annotated across all
-#' panels — up to three from the top-right quadrant of the efficiency x
-#' responsiveness space (above average on both axes, shown in orange) and up
+#' panels — up to three from the top-right quadrant of the baseline x
+#' adjusted space (above average on both axes, shown in orange) and up
 #' to three from the bottom-left quadrant (below average on both axes, shown
 #' in blue).  Within each quadrant only varieties whose distance from the
 #' origin exceeds the within-quadrant median are considered, and the final

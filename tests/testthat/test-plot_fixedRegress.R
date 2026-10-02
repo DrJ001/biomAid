@@ -23,7 +23,7 @@ make_mock_freg <- function(ns = 4L, nvar = 12L,
                      HSD1 = abs(rnorm(1, 50, 5)),
                      HSD2 = abs(rnorm(1, 55, 5)),
                      stringsAsFactors = FALSE)
-    names(df) <- c(levs, paste0("resp.", levs[-1]),
+    names(df) <- c(levs, paste0("adj.", levs[-1]),
                    paste0("se.", levs[-1]), paste0("HSD.", levs[-1]))
     cbind(
       setNames(data.frame(g, paste0("V", sprintf("%02d", seq_len(nvar))),

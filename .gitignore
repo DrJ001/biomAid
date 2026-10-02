@@ -44,3 +44,7 @@ vignettes/*_cache/
 
 # Stray R graphics output
 Rplots.pdf
+
+# Quarto site libraries - regenerated on render; pages use embed-resources
+docs/site_libs/
+vignettes/_freeze/site_libs/

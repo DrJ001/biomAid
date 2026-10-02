@@ -110,19 +110,19 @@ NULL
   if (length(conditioned) == 0L)
     stop("No conditioned treatments to plot. Check 'treatments'.")
 
-  eff_lv <- names(Filter(is.null, cond_list))[1L]
+  base_lv <- names(Filter(is.null, cond_list))[1L]
 
   rows <- lapply(conditioned, function(lv_j) {
-    resp_col <- paste0("resp.", lv_j)
-    if (!(resp_col %in% names(blues)))
-      stop("Column '", resp_col, "' not found in res$blues.")
+    adj_col <- paste0("adj.", lv_j)
+    if (!(adj_col %in% names(blues)))
+      stop("Column '", adj_col, "' not found in res$blues.")
     cond_lv <- cond_list[[lv_j]][1L]
 
     df <- data.frame(
       Group      = as.character(blues[[grp_col]]),
       Genotype   = as.character(blues[[geno_col]]),
-      x          = blues[[eff_lv]],
-      y          = blues[[resp_col]],
+      x          = blues[[base_lv]],
+      y          = blues[[adj_col]],
       pair_label = paste0(lv_j, " | ", cond_lv),
       stringsAsFactors = FALSE
     )
@@ -335,9 +335,9 @@ NULL
     .freg_highlight_layers(df, hl) +
     ggplot2::facet_grid(pair_label ~ Group, scales = "free") +
     ggplot2::labs(
-      x       = if (centre) "Efficiency (centred BLUE)" else
-                             "Efficiency (unconditional BLUE)",
-      y       = "Response index (OLS residual)",
+      x       = if (centre) "Baseline (centred BLUE)" else
+                             "Baseline (unconditional BLUE)",
+      y       = "Adjusted index (OLS residual)",
       caption = "Dotted lines at zero divide each panel into four quadrants"
     ) +
     theme +
@@ -365,23 +365,24 @@ NULL
 #' The two `type` options are:
 #' \describe{
 #'   \item{`"regress"`}{Grid of scatter plots faceted by BLUP pair (rows) and
-#'     group (columns).  Each panel plots the raw conditioned-treatment BLUEs
-#'     (y) against the conditioning-treatment BLUEs (x) for one group × one
-#'     treatment pair.  A dotted OLS regression line is drawn and the slope
+#'     group (columns).  Each panel plots the raw conditioned-level BLUEs
+#'     (y) against the conditioning-level BLUEs (x) for one group × one
+#'     level pair.  A dotted OLS regression line is drawn and the slope
 #'     \eqn{\hat{\beta}} is annotated in the top-left corner of each panel.
 #'     Unlike the random-effects analogue the line need not pass through the
 #'     origin because OLS includes an intercept.}
 #'   \item{`"quadrant"`}{Grid of scatter plots faceted by BLUP pair (rows) and
-#'     group (columns).  Each panel plots the response index (OLS residual,
-#'     y) against the unconditional treatment BLUE (efficiency, x).  Dotted
+#'     group (columns).  Each panel plots the adjusted index (OLS residual,
+#'     y) against the unconditional BLUE at the reference level (baseline, x).
+#'     Dotted
 #'     zero reference lines divide each panel into four quadrants.}
 #' }
 #'
 #' **Variety highlighting** — see [plot_randomRegress()] for the full
 #' description of the polar-angle algorithm used to select the default six
-#' genotypes.  The same three archetypes (efficiency, balanced,
-#' responsiveness) are chosen from the top-right and bottom-left quadrants of
-#' the efficiency × response-index space, averaged across all groups.
+#' genotypes.  The same three archetypes (baseline, balanced,
+#' adjusted) are chosen from the top-right and bottom-left quadrants of
+#' the baseline × response-index space, averaged across all groups.
 #'
 #' The output data frames returned when `return_data = TRUE` use standardised
 #' column names `"Group"` (the grouping variable) and `"Genotype"` (the
@@ -391,8 +392,9 @@ NULL
 #' @param res         A list returned by [fixedRegress()].
 #' @param type        Character string selecting the plot type. One of
 #'   `"regress"` (default) or `"quadrant"`.
-#' @param treatments  Character vector restricting which conditioned treatments
-#'   are included.  `NULL` (default) includes all conditioned treatments.
+#' @param treatments  Character vector restricting which conditioned levels
+#'   are included.  `NULL` (default) includes all conditioned levels.  Named
+#'   for the commonest case, but accepts trait names equally.
 #' @param centre      Logical.  If `TRUE` (default), within-group means are
 #'   subtracted from the x-axis (unconditional treatment BLUE) and, for
 #'   `type = "regress"`, also from the y-axis.  This removes the treatment

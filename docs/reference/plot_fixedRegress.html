@@ -29,6 +29,9 @@ with the standard + operator."></head><body>
     <li><a class="dropdown-item" href="../randomRegress.html">Multivariate Random Regression</a></li>
     <li><a class="dropdown-item" href="../fixedRegress.html">Multivariate Fixed-Effects Regression</a></li>
     <li><a class="dropdown-item" href="../padTrial.html">Extracting and Padding Field Trial Layouts</a></li>
+    <li><a class="dropdown-item" href="../accuracy.html">BLUP Accuracy in Multi-Environment Trials</a></li>
+    <li><a class="dropdown-item" href="../simTrialData.html">Simulating Multi-Environment Trials</a></li>
+    <li><a class="dropdown-item" href="../fastIC.html">Factor Analytic Selection Tools: FAST and iClass</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"></ul></div>
 
@@ -78,8 +81,9 @@ with the standard <code>+</code> operator.</p>
 
 
 <dt id="arg-treatments">treatments<a class="anchor" aria-label="anchor" href="#arg-treatments"></a></dt>
-<dd><p>Character vector restricting which conditioned treatments
-are included.  <code>NULL</code> (default) includes all conditioned treatments.</p></dd>
+<dd><p>Character vector restricting which conditioned levels
+are included.  <code>NULL</code> (default) includes all conditioned levels.  Named
+for the commonest case, but accepts trait names equally.</p></dd>
 
 
 <dt id="arg-highlight">highlight<a class="anchor" aria-label="anchor" href="#arg-highlight"></a></dt>
@@ -130,25 +134,26 @@ than the plot. Default <code>FALSE</code>.</p></dd>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The two <code>type</code> options are:</p><dl><dt><code>"regress"</code></dt>
 <dd><p>Grid of scatter plots faceted by BLUP pair (rows) and
-group (columns).  Each panel plots the raw conditioned-treatment BLUEs
-(y) against the conditioning-treatment BLUEs (x) for one group × one
-treatment pair.  A dotted OLS regression line is drawn and the slope
+group (columns).  Each panel plots the raw conditioned-level BLUEs
+(y) against the conditioning-level BLUEs (x) for one group × one
+level pair.  A dotted OLS regression line is drawn and the slope
 \(\hat{\beta}\) is annotated in the top-left corner of each panel.
 Unlike the random-effects analogue the line need not pass through the
 origin because OLS includes an intercept.</p></dd>
 
 <dt><code>"quadrant"</code></dt>
 <dd><p>Grid of scatter plots faceted by BLUP pair (rows) and
-group (columns).  Each panel plots the response index (OLS residual,
-y) against the unconditional treatment BLUE (efficiency, x).  Dotted
+group (columns).  Each panel plots the adjusted index (OLS residual,
+y) against the unconditional BLUE at the reference level (baseline, x).
+Dotted
 zero reference lines divide each panel into four quadrants.</p></dd>
 
 
 </dl><p><strong>Variety highlighting</strong> — see <code><a href="plot_randomRegress.html">plot_randomRegress()</a></code> for the full
 description of the polar-angle algorithm used to select the default six
-genotypes.  The same three archetypes (efficiency, balanced,
-responsiveness) are chosen from the top-right and bottom-left quadrants of
-the efficiency × response-index space, averaged across all groups.</p>
+genotypes.  The same three archetypes (baseline, balanced,
+adjusted) are chosen from the top-right and bottom-left quadrants of
+the baseline × response-index space, averaged across all groups.</p>
 <p>The output data frames returned when <code>return_data = TRUE</code> use standardised
 column names <code>"Group"</code> (the grouping variable) and <code>"Genotype"</code> (the
 regression unit) regardless of the original column names in

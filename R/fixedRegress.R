@@ -1,13 +1,27 @@
-#' Multivariate Fixed-Effects Regression of Treatment BLUEs Within Groups
+#' Multivariate Fixed-Effects Regression of BLUEs Within Groups
 #'
 #' @description
 #' The fixed-effects (BLUE) analogue of [randomRegress()].  For each group
 #' defined by the `by` argument, the function regresses the BLUEs of each
-#' conditioned treatment on the BLUEs of its conditioning set using ordinary
-#' least squares, returning a **response index** (regression residual) for
+#' conditioned level on the BLUEs of its conditioning set using ordinary
+#' least squares, returning an **adjusted index** (regression residual) for
 #' every genotype.
 #'
-#' For treatment \eqn{j} with conditioning set \eqn{A_j} of size
+#' As in [randomRegress()], the decomposed dimension may hold multiple
+#' **treatments** or multiple **traits** — levels applied to, or measured on,
+#' the same plants within one experiment, so that a regression between them is
+#' meaningful.  For treatments, `term = "Treatment:Genotype"` with `levs`
+#' naming the treatment labels; for traits, a multivariate model gives
+#' `term = "trait:Genotype"` with `levs` naming the traits.  The `levs[1]`
+#' baseline and the adjusted indices are interpreted exactly as described in
+#' [randomRegress()] — as *efficiency* and *responsiveness* where the levels
+#' are treatments, and as one trait adjusted for another where they are traits.
+#'
+#' The second dimension is supplied explicitly here through `by`, rather than
+#' being recovered from a composite factor label as [randomRegress()] must do:
+#' a `by` group in `fixedRegress()` plays the role of a *section* there.
+#'
+#' For level \eqn{j} with conditioning set \eqn{A_j} of size
 #' \eqn{a = |A_j|}, the OLS fit is:
 #'
 #' \deqn{
@@ -17,8 +31,8 @@
 #' }
 #'
 #' where \eqn{\hat{\bm{\tau}}_j} and \eqn{\hat{\bm{\tau}}_{A_j}} are the
-#' \eqn{n}-vectors of predicted values (BLUEs) for treatment \eqn{j} and its
-#' conditioning set across genotypes.  The **response index**
+#' \eqn{n}-vectors of predicted values (BLUEs) for level \eqn{j} and its
+#' conditioning set across genotypes.  The **adjusted index**
 #' \eqn{\tilde{\bm{\tau}}_j = \bar{\bm{H}}_j \hat{\bm{\tau}}_j} is the
 #' vector of OLS residuals, where
 #' \eqn{\bar{\bm{H}}_j = \bm{I} - \bm{X}_j(\bm{X}_j^\top\bm{X}_j)^{-1}\bm{X}_j^\top}
@@ -30,39 +44,41 @@
 #' via the `type` argument:
 #'
 #' \describe{
-#'   \item{`"baseline"` (default)}{Each non-first treatment regressed on
+#'   \item{`"baseline"` (default)}{Each non-first level regressed on
 #'     \code{levs[1]} alone (simple regression, \eqn{df = n-2}).}
-#'   \item{`"sequential"`}{Treatment \eqn{j} regressed on all preceding
-#'     treatments \code{levs[1:(j-1)]} (multiple regression).  By the
-#'     Gram--Schmidt property, residuals from treatment \eqn{j} are
-#'     uncorrelated with all previous treatment BLUEs.}
-#'   \item{`"partial"`}{Each treatment regressed on all other treatments
+#'   \item{`"sequential"`}{Level \eqn{j} regressed on all preceding
+#'     levels \code{levs[1:(j-1)]} (multiple regression).  By the
+#'     Gram--Schmidt property, residuals from level \eqn{j} are
+#'     uncorrelated with all previous BLUEs.}
+#'   \item{`"partial"`}{Each level regressed on all other levels
 #'     simultaneously.  Residuals are partial regression residuals,
 #'     uncorrelated with the conditioning set but not necessarily with each
 #'     other.}
-#'   \item{`"custom"`}{Conditioning set for each treatment supplied
+#'   \item{`"custom"`}{Conditioning set for each level supplied
 #'     explicitly via `cond`.}
 #' }
 #'
 #' @param model   An ASReml-R V4 model object.
 #' @param term    Character string specifying the `classify` term containing
-#'   the treatment and genotype factors, e.g. `"Treatment:Genotype"` or
-#'   `"Treatment:Site:Genotype"`.
+#'   the decomposed factor and the genotype factor, e.g.
+#'   `"Treatment:Genotype"`, `"Treatment:Site:Genotype"`, or `"trait:Genotype"`
+#'   for a multivariate (multi-trait) model.
 #' @param by      Optional character string naming a factor in `term` to split
 #'   the analysis by (e.g. `"Site"`).  Separate regressions are performed
 #'   within each level of `by`.  When `NULL` (default) the regression is
 #'   performed over all observations jointly.
-#' @param levs    Character vector of length \eqn{\ge 2} giving the treatment
-#'   labels.  The first element is the baseline for `type = "baseline"` and
-#'   `type = "sequential"`.  Cannot be `NULL`.
+#' @param levs    Character vector of length \eqn{\ge 2} naming the levels to
+#'   decompose — treatment labels or trait names, depending on what the
+#'   decomposed factor in `term` indexes.  The first element is the baseline for
+#'   `type = "baseline"` and `type = "sequential"`.  Cannot be `NULL`.
 #' @param type    Conditioning scheme.  One of `"baseline"` (default),
 #'   `"sequential"`, `"partial"`, or `"custom"`.  See **Description**.
 #' @param cond    Named list required when `type = "custom"`.  Each name must
-#'   be a treatment label from `levs`; each value is `NULL` (unconditional)
-#'   or a character vector of conditioning treatment labels.  Treatments
+#'   be a level from `levs`; each value is `NULL` (unconditional)
+#'   or a character vector of conditioning levels.  Levels
 #'   absent from `cond` are treated as unconditional.
 #' @param min_obs Minimum number of genotypes with non-missing BLUEs in all
-#'   required treatments for a regression to be attempted.  Defaults to
+#'   required levels for a regression to be attempted.  Defaults to
 #'   \eqn{\max(5,\; 2(|A_j|_{\max} + 1))}.  Groups below this threshold
 #'   produce a warning and are omitted.
 #' @param ...     Additional arguments forwarded to
@@ -72,13 +88,13 @@
 #' \describe{
 #'   \item{`blues`}{Data frame with columns: the grouping variable (or
 #'     `"Group"` when `by = NULL`), `Genotype`, one raw BLUE column per
-#'     element of `levs`, one `resp.<lev>` column per conditioned treatment
-#'     (response indices / OLS residuals), one `se.<lev>` column (residual
+#'     element of `levs`, one `adj.<lev>` column per conditioned level
+#'     (adjusted indices / OLS residuals), one `se.<lev>` column (residual
 #'     standard errors), and one `HSD.<lev>` column (Tukey HSD for pairwise
-#'     genotype comparisons on the response-index scale).}
+#'     genotype comparisons on the adjusted-index scale).}
 #'   \item{`beta`}{Named list of length \eqn{n_{\text{cond}}}.  Each element
 #'     `beta[["<lev>"]]` is a data frame with the grouping variable plus one
-#'     column per conditioning treatment, giving the OLS regression
+#'     column per conditioning level, giving the OLS regression
 #'     coefficients estimated within each group.}
 #'   \item{`sigmat`}{Numeric matrix of dimensions
 #'     \eqn{n_{\text{groups}} \times n_{\text{cond}}} containing the residual
@@ -200,7 +216,7 @@ fixedRegress <- function(model, term = "Treatment:Genotype",
     min_obs <- max(5L, 2L * (max_a + 1L))
 
   # ---- Column name vectors -----------------------------------------------
-  resp_nams <- paste0("resp.", conditioned)
+  adj_nams <- paste0("adj.", conditioned)
   se_nams   <- paste0("se.",   conditioned)
   hsd_nams  <- paste0("HSD.",  conditioned)
 
@@ -254,7 +270,7 @@ fixedRegress <- function(model, term = "Treatment:Genotype",
       blue_mat[, lv] <- geno_by_trt[[lv]][common_genos]
 
     # Output matrices for this group [n x n_cond]
-    resp_mat <- matrix(NA_real_, n, n_cond, dimnames = list(common_genos, resp_nams))
+    adj_mat <- matrix(NA_real_, n, n_cond, dimnames = list(common_genos, adj_nams))
     se_mat   <- matrix(NA_real_, n, n_cond, dimnames = list(common_genos, se_nams))
     hsd_mat  <- matrix(NA_real_, n, n_cond, dimnames = list(common_genos, hsd_nams))
 
@@ -286,7 +302,7 @@ fixedRegress <- function(model, term = "Treatment:Genotype",
       )
       if (is.null(fit)) next
 
-      resp <- residuals(fit)
+      adj <- residuals(fit)
       sig  <- summary(fit)$sigma
 
       # Hat-matrix annihilator: H-bar = I - X(X'X)^{-1}X'
@@ -312,7 +328,7 @@ fixedRegress <- function(model, term = "Treatment:Genotype",
       hsd  <- (mean(sqrt(sed), na.rm = TRUE) / sqrt(2)) *
                 qtukey(0.95, n, df = ndf)
 
-      resp_mat[, ci] <- resp
+      adj_mat[, ci] <- adj
       se_mat[, ci]   <- sqrt(dv)
       hsd_mat[, ci]  <- hsd
       sigmat[i, ci]  <- sig
@@ -329,7 +345,7 @@ fixedRegress <- function(model, term = "Treatment:Genotype",
                           stringsAsFactors = FALSE),
                c(by_col, gnam)),
       as.data.frame(blue_mat),
-      as.data.frame(resp_mat),
+      as.data.frame(adj_mat),
       as.data.frame(se_mat),
       as.data.frame(hsd_mat)
     )

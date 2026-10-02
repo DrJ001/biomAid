@@ -99,8 +99,8 @@ level pair.  A dotted random regression line with the per-section
 beta slope passes through the origin.  The per-section
 \eqn{\hat{\beta}} is annotated in the top-left corner of each panel.}
 \item{\code{"quadrant"}}{Grid of scatter plots faceted by BLUP pair (rows) and
-section (columns).  Each panel plots responsiveness BLUPs (y) against
-the conditioning-level BLUPs (x = efficiency) for one section x one
+section (columns).  Each panel plots adjusted BLUPs (y) against
+the conditioning-level BLUPs (x = baseline) for one section x one
 level pair.  Dotted zero reference lines on both axes divide each
 panel into four quadrants.}
 \item{\code{"gmat"}}{Heatmap of the G-matrix converted to a correlation
@@ -110,8 +110,8 @@ at zero.}
 
 \strong{Variety highlighting} (\code{type = "regress"} and \code{"quadrant"} only):
 By default, up to six varieties are identified and annotated across all
-panels — up to three from the top-right quadrant of the efficiency x
-responsiveness space (above average on both axes, shown in orange) and up
+panels — up to three from the top-right quadrant of the baseline x
+adjusted space (above average on both axes, shown in orange) and up
 to three from the bottom-left quadrant (below average on both axes, shown
 in blue).  Within each quadrant only varieties whose distance from the
 origin exceeds the within-quadrant median are considered, and the final

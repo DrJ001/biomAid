@@ -11,7 +11,7 @@
 Welcome to bioMaid! This package has been specifically built to provide
 biometricians with flexible functions for interpreting and further modelling of results
 from complex linear mixed models fitted wth software such as **ASReml-R V4**. Watch this
-space, there are a lot more functions coming. 
+space, there are a lot more functions coming.
 
 
 ## Vignettes
@@ -19,8 +19,8 @@ space, there are a lot more functions coming.
 | Vignette | Description |
 |----------|-------------|
 | [Wald Tests on Fixed-Effect Contrasts](https://DrJ001.github.io/biomAid/waldTest.html) | Mathematical framework and worked examples for `waldTest()` and `plot_waldTest()` |
-| [Multivariate Random Regression](https://DrJ001.github.io/biomAid/randomRegress.html) | Conditioning schemes, efficiency/responsiveness decomposition, and all plot types for `randomRegress()` and `plot_randomRegress()`, worked through on multi-treatment MET data |
-| [Multivariate Fixed-Effects Regression](https://DrJ001.github.io/biomAid/fixedRegress.html) | OLS conditioning schemes, efficiency/response index decomposition, and plot types for `fixedRegress()` and `plot_fixedRegress()` |
+| [Multivariate Random Regression](https://DrJ001.github.io/biomAid/randomRegress.html) | Conditioning schemes, baseline/adjusted decomposition, and all plot types for `randomRegress()` and `plot_randomRegress()`, worked through on multi-treatment MET data |
+| [Multivariate Fixed-Effects Regression](https://DrJ001.github.io/biomAid/fixedRegress.html) | OLS conditioning schemes, baseline/adjusted index decomposition, and plot types for `fixedRegress()` and `plot_fixedRegress()` |
 | [Extracting and Padding Field Trial Layouts](https://DrJ001.github.io/biomAid/padTrial.html) | Step-by-step guide to guard-row removal, missing-plot padding, and Before/After visualisation with `padTrial()` and `plot_padTrial()` |
 | [Multiple Comparison Criteria](https://DrJ001.github.io/biomAid/compare.html) | HSD, LSD, and Bonferroni criteria, by-group comparisons, and all three plot types for `compare()` and `plot_compare()` |
 | [BLUP Accuracy in Multi-Environment Trials](https://DrJ001.github.io/biomAid/accuracy.html) | Mrode accuracy and Cullis H², supported random structures, and all six plot types for `accuracy()` and `plot_accuracy()` |
@@ -170,7 +170,7 @@ plot_waldTest(res,
 ### `randomRegress()` — Random regression (BLUP-based)
 
 Decomposes a multivariate set of variety BLUPs from an ASReml-R V4 model into
-**efficiency and responsiveness indices**, using a natural genetic regression
+**baseline and adjusted indices**, using a natural genetic regression
 derived from Gaussian conditional distribution theory. Supports four
 conditioning schemes.
 
@@ -192,7 +192,7 @@ appear in either order (`"N0-Env1"` and `"Env1-N0"` are both recognised). Where
 it is a plain factor, there is a single section reported as `"Single"`.
 
 > **Note:** environments are not a decomposable dimension. Regressing one site's
-> BLUPs on another's would not give an efficiency–responsiveness decomposition,
+> BLUPs on another's would not give a baseline–adjusted decomposition,
 > since separate sites are separate experiments; environments belong in the
 > section role. For genetic covariance *between* environments use `faSummary()`
 > or `fastIC()`.
@@ -207,7 +207,7 @@ randomRegress(model, term = "us(TSite):Variety", levs = NULL,
 |----------|-------------|
 | `model` | An ASReml-R V4 model object |
 | `term` | Full random-effect interaction string, e.g. `"fa(TSite, 2):Variety"`, `"corgh(TSite):vm(Variety, giv1)"`, `"us(Treatment):Variety"` or `"us(Trait):Variety"`. Default `"us(TSite):Variety"` |
-| `levs` | Character vector naming the levels to decompose — treatment labels or trait names. `levs[1]` is the baseline (efficiency) level |
+| `levs` | Character vector naming the levels to decompose — treatment labels or trait names. `levs[1]` is the unconditioned baseline level |
 | `type` | `"baseline"`, `"sequential"`, `"partial"`, or `"custom"` |
 | `cond` | User-supplied conditioning list when `type = "custom"` |
 | `sep` | Separator splitting composite grouping-factor labels, e.g. `"-"` in `"N0-Env1"`. Ignored when the labels contain no separator. Default `"-"` |
@@ -257,9 +257,15 @@ plot_randomRegress(res,
 
 ### `fixedRegress()` — Fixed regression (BLUE-based)
 
-The fixed-effects analogue of `randomRegress()`. Regresses treatment BLUEs via
-OLS within each group and returns **efficiency and response indices** for every
-genotype. The same four conditioning schemes are available.
+The fixed-effects analogue of `randomRegress()`. Regresses BLUEs via OLS within
+each group and returns **baseline and adjusted indices** for every genotype. The
+same four conditioning schemes are available.
+
+As in `randomRegress()`, the decomposed dimension may hold multiple treatments
+(`term = "Treatment:Genotype"`) or multiple traits from a multivariate model
+(`term = "trait:Genotype"`). The second dimension is supplied explicitly through
+`by`, rather than recovered from a composite factor label — a `by` group here
+plays the role of a *section* in `randomRegress()`.
 
 ```r
 fixedRegress(model, term = "Treatment:Genotype",
@@ -271,9 +277,9 @@ fixedRegress(model, term = "Treatment:Genotype",
 | Argument | Description |
 |----------|-------------|
 | `model` | An ASReml-R V4 model object |
-| `term` | Classify string passed to `predict.asreml()`. Default `"Treatment:Genotype"` |
+| `term` | Classify string passed to `predict.asreml()`, e.g. `"Treatment:Genotype"` or `"trait:Genotype"`. Default `"Treatment:Genotype"` |
 | `by` | Column(s) defining groups for separate regressions |
-| `levs` | Character vector of treatment levels to decompose |
+| `levs` | Character vector naming the levels to decompose — treatment labels or trait names |
 | `type` | `"baseline"`, `"sequential"`, `"partial"`, or `"custom"` |
 | `cond` | User-supplied conditioning list when `type = "custom"` |
 | `min_obs` | Minimum common genotypes required to fit a regression. `NULL` = auto |

@@ -2,7 +2,7 @@
 % Please edit documentation in R/fixedRegress.R
 \name{fixedRegress}
 \alias{fixedRegress}
-\title{Multivariate Fixed-Effects Regression of Treatment BLUEs Within Groups}
+\title{Multivariate Fixed-Effects Regression of BLUEs Within Groups}
 \usage{
 fixedRegress(
   model,
@@ -19,28 +19,30 @@ fixedRegress(
 \item{model}{An ASReml-R V4 model object.}
 
 \item{term}{Character string specifying the \code{classify} term containing
-the treatment and genotype factors, e.g. \code{"Treatment:Genotype"} or
-\code{"Treatment:Site:Genotype"}.}
+the decomposed factor and the genotype factor, e.g.
+\code{"Treatment:Genotype"}, \code{"Treatment:Site:Genotype"}, or \code{"trait:Genotype"}
+for a multivariate (multi-trait) model.}
 
 \item{by}{Optional character string naming a factor in \code{term} to split
 the analysis by (e.g. \code{"Site"}).  Separate regressions are performed
 within each level of \code{by}.  When \code{NULL} (default) the regression is
 performed over all observations jointly.}
 
-\item{levs}{Character vector of length \eqn{\ge 2} giving the treatment
-labels.  The first element is the baseline for \code{type = "baseline"} and
-\code{type = "sequential"}.  Cannot be \code{NULL}.}
+\item{levs}{Character vector of length \eqn{\ge 2} naming the levels to
+decompose — treatment labels or trait names, depending on what the
+decomposed factor in \code{term} indexes.  The first element is the baseline for
+\code{type = "baseline"} and \code{type = "sequential"}.  Cannot be \code{NULL}.}
 
 \item{type}{Conditioning scheme.  One of \code{"baseline"} (default),
 \code{"sequential"}, \code{"partial"}, or \code{"custom"}.  See \strong{Description}.}
 
 \item{cond}{Named list required when \code{type = "custom"}.  Each name must
-be a treatment label from \code{levs}; each value is \code{NULL} (unconditional)
-or a character vector of conditioning treatment labels.  Treatments
+be a level from \code{levs}; each value is \code{NULL} (unconditional)
+or a character vector of conditioning levels.  Levels
 absent from \code{cond} are treated as unconditional.}
 
 \item{min_obs}{Minimum number of genotypes with non-missing BLUEs in all
-required treatments for a regression to be attempted.  Defaults to
+required levels for a regression to be attempted.  Defaults to
 \eqn{\max(5,\; 2(|A_j|_{\max} + 1))}.  Groups below this threshold
 produce a warning and are omitted.}
 
@@ -52,13 +54,13 @@ A named list with the following elements:
 \describe{
 \item{\code{blues}}{Data frame with columns: the grouping variable (or
 \code{"Group"} when \code{by = NULL}), \code{Genotype}, one raw BLUE column per
-element of \code{levs}, one \verb{resp.<lev>} column per conditioned treatment
-(response indices / OLS residuals), one \verb{se.<lev>} column (residual
+element of \code{levs}, one \verb{adj.<lev>} column per conditioned level
+(adjusted indices / OLS residuals), one \verb{se.<lev>} column (residual
 standard errors), and one \verb{HSD.<lev>} column (Tukey HSD for pairwise
-genotype comparisons on the response-index scale).}
+genotype comparisons on the adjusted-index scale).}
 \item{\code{beta}}{Named list of length \eqn{n_{\text{cond}}}.  Each element
 \code{beta[["<lev>"]]} is a data frame with the grouping variable plus one
-column per conditioning treatment, giving the OLS regression
+column per conditioning level, giving the OLS regression
 coefficients estimated within each group.}
 \item{\code{sigmat}}{Numeric matrix of dimensions
 \eqn{n_{\text{groups}} \times n_{\text{cond}}} containing the residual
@@ -70,11 +72,25 @@ standard deviation \eqn{\sigma_j} from each OLS regression.}
 \description{
 The fixed-effects (BLUE) analogue of \code{\link[=randomRegress]{randomRegress()}}.  For each group
 defined by the \code{by} argument, the function regresses the BLUEs of each
-conditioned treatment on the BLUEs of its conditioning set using ordinary
-least squares, returning a \strong{response index} (regression residual) for
+conditioned level on the BLUEs of its conditioning set using ordinary
+least squares, returning an \strong{adjusted index} (regression residual) for
 every genotype.
 
-For treatment \eqn{j} with conditioning set \eqn{A_j} of size
+As in \code{\link[=randomRegress]{randomRegress()}}, the decomposed dimension may hold multiple
+\strong{treatments} or multiple \strong{traits} — levels applied to, or measured on,
+the same plants within one experiment, so that a regression between them is
+meaningful.  For treatments, \code{term = "Treatment:Genotype"} with \code{levs}
+naming the treatment labels; for traits, a multivariate model gives
+\code{term = "trait:Genotype"} with \code{levs} naming the traits.  The \code{levs[1]}
+baseline and the adjusted indices are interpreted exactly as described in
+\code{\link[=randomRegress]{randomRegress()}} — as \emph{efficiency} and \emph{responsiveness} where the levels
+are treatments, and as one trait adjusted for another where they are traits.
+
+The second dimension is supplied explicitly here through \code{by}, rather than
+being recovered from a composite factor label as \code{\link[=randomRegress]{randomRegress()}} must do:
+a \code{by} group in \code{fixedRegress()} plays the role of a \emph{section} there.
+
+For level \eqn{j} with conditioning set \eqn{A_j} of size
 \eqn{a = |A_j|}, the OLS fit is:
 
 \deqn{
@@ -84,8 +100,8 @@ For treatment \eqn{j} with conditioning set \eqn{A_j} of size
 }
 
 where \eqn{\hat{\bm{\tau}}_j} and \eqn{\hat{\bm{\tau}}_{A_j}} are the
-\eqn{n}-vectors of predicted values (BLUEs) for treatment \eqn{j} and its
-conditioning set across genotypes.  The \strong{response index}
+\eqn{n}-vectors of predicted values (BLUEs) for level \eqn{j} and its
+conditioning set across genotypes.  The \strong{adjusted index}
 \eqn{\tilde{\bm{\tau}}_j = \bar{\bm{H}}_j \hat{\bm{\tau}}_j} is the
 vector of OLS residuals, where
 \eqn{\bar{\bm{H}}_j = \bm{I} - \bm{X}_j(\bm{X}_j^\top\bm{X}_j)^{-1}\bm{X}_j^\top}
@@ -97,17 +113,17 @@ The same four conditioning schemes as \code{\link[=randomRegress]{randomRegress(
 via the \code{type} argument:
 
 \describe{
-\item{\code{"baseline"} (default)}{Each non-first treatment regressed on
+\item{\code{"baseline"} (default)}{Each non-first level regressed on
 \code{levs[1]} alone (simple regression, \eqn{df = n-2}).}
-\item{\code{"sequential"}}{Treatment \eqn{j} regressed on all preceding
-treatments \code{levs[1:(j-1)]} (multiple regression).  By the
-Gram--Schmidt property, residuals from treatment \eqn{j} are
-uncorrelated with all previous treatment BLUEs.}
-\item{\code{"partial"}}{Each treatment regressed on all other treatments
+\item{\code{"sequential"}}{Level \eqn{j} regressed on all preceding
+levels \code{levs[1:(j-1)]} (multiple regression).  By the
+Gram--Schmidt property, residuals from level \eqn{j} are
+uncorrelated with all previous BLUEs.}
+\item{\code{"partial"}}{Each level regressed on all other levels
 simultaneously.  Residuals are partial regression residuals,
 uncorrelated with the conditioning set but not necessarily with each
 other.}
-\item{\code{"custom"}}{Conditioning set for each treatment supplied
+\item{\code{"custom"}}{Conditioning set for each level supplied
 explicitly via \code{cond}.}
 }
 }

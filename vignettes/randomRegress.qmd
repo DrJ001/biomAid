@@ -43,12 +43,13 @@ if (asreml_ok) {
 ## Overview
 
 `randomRegress()` decomposes a multivariate set of variety BLUPs into two
-biologically interpretable components:
+interpretable components:
 
-- **Efficiency** — a variety's genetic value at the baseline level (typically
-  a low-input or control treatment).
-- **Responsiveness (or Tolerance)** — a variety's capacity to respond
-  genetically as that level changes.
+- **Baseline** — a variety's genetic value at the reference level, returned
+  with the prefix `base.`
+- **Adjusted** — the part of a variety's genetic value at a given level that
+  is *not* linearly predictable from the levels it is conditioned on, returned
+  with the prefix `adj.`
 
 The decomposition is derived from the **G-matrix** (the genetic
 variance–covariance matrix across the levels being decomposed) using
@@ -62,12 +63,18 @@ Two distinct dimensions are involved, and they play quite different roles.
 The dimension that is **decomposed** holds multiple **treatments** or multiple
 **traits** — levels that are applied to, or measured on, the same plants within
 the one experiment. This is what makes a genetic regression between them
-meaningful: the levels are commensurable, so the conditional distribution of
-one given another has a genuine biological interpretation. For treatments that
-interpretation is efficiency and responsiveness; for traits it is the part of
-one trait that is not genetically predictable from another.
+meaningful. The levels are commensurable, so the conditional distribution of
+one given another has a genuine biological interpretation. They are:
 
-The second dimension is the **section** — ordinarily the site or environment.
+- **Treatments**: the baseline can be viewed as the variety's **efficiency**, its
+genetic value under the control or low-input treatment. The adjusted
+component is its **responsiveness** (or **tolerance**), the extra genetic
+gain it realises when the treatment is applied.
+- **Traits**: the baseline is just the unadjusted variety genetic value for the trait
+and the adjusted component is part of the genetic value of the second trait that is not
+genetically predictable from another.
+
+The second dimension is the **section**, ordinarily the site or environment.
 The decomposition is simply repeated, independently, within each section. There
 may be one section or many:
 
@@ -78,8 +85,8 @@ may be one section or many:
 | `us(TSite)` — composite | treatments | sites | Multi-treatment MET |
 | `us(TraitSite)` — composite | traits | sites | Multi-trait MET |
 
-Where the grouping factor is a composite of two factors — such as the
-Treatment-by-Site factor `TSite` used throughout this vignette — the
+Where the grouping factor is a composite of two factors, such as the
+Treatment-by-Site factor `TSite` used throughout this vignette, the
 decomposition is carried out independently within each level of the second
 factor. Where it is a plain factor there is a single section, reported as
 `"Single"`, and plots show one facet column.
@@ -89,7 +96,7 @@ most complex case, exercising both dimensions at once; the single-section cases
 follow by simply supplying a plain grouping factor.
 
 `plot_randomRegress()` visualises the result as a regression scatter plot,
-an efficiency–responsiveness quadrant plot, or a G-matrix heatmap.
+a baseline–adjusted quadrant plot, or a G-matrix heatmap.
 
 ---
 
@@ -194,16 +201,16 @@ u_2 \mid u_1 \sim \mathcal{N}\!\left(\beta\, u_1,\; \sigma^2_{2 \mid 1}\right),
 $$
 
 where $\rho = G_{12} / \sqrt{G_{11}G_{22}}$ is the genetic correlation between
-the two treatments. Here $u_1$ is the **efficiency** BLUP and the residual
-$r_2 = u_2 - \beta u_1$ is the **responsiveness** BLUP.
+the two treatments. Here $u_1$ is the **baseline** BLUP and the residual
+$r_2 = u_2 - \beta u_1$ is the **adjusted** BLUP.
 
-The form $G_{22}(1 - \rho^2)$ shows exactly what responsiveness measures i.e. the
+The form $G_{22}(1 - \rho^2)$ shows exactly what adjusted measures i.e. the
 genetic variance in treatment 2 that its correlation with treatment 1 leaves
-unexplained. As $\rho \to 1$ the responsiveness variance vanishes and then treatment
+unexplained. As $\rho \to 1$ the adjusted variance vanishes and then treatment
 2 tells us nothing that treatment 1 has not already explained, and there is no
 independent axis on which to select. When $\rho$ is moderate, a substantial
-share of the genetic variance in treatment 2 is unique to it, and efficiency
-and responsiveness can be selected on separately.
+share of the genetic variance in treatment 2 is unique to it, and baseline
+and adjusted can be selected on separately.
 
 ---
 
@@ -240,18 +247,18 @@ $$
 Here $\mathbf{G}_{A_j A_j}$, $\mathbf{G}_{A_j j}$, and $G_{jj}$ are all
 sub-blocks or elements of the within-site diagonal block $\mathbf{G}_{ss}$.
 
-The **responsiveness BLUP** for variety $v$ is the residual from this
+The **adjusted BLUP** for variety $v$ is the residual from this
 regression:
 
 $$
 r_{j,v} = u_{j,v} - \boldsymbol{\beta}_j^\top \mathbf{u}_{A_j,v}.
 $$
 
-Responsiveness BLUPs are:
+Adjusted BLUPs are:
 
 - **zero-mean** within each treatment-site group (inherited from the BLUPs)
 - **orthogonal** to the conditioning BLUPs in the G-matrix sense
-- **genetically independent** of the efficiency signal, with variance
+- **genetically independent** of the baseline signal, with variance
   $\sigma^2_{j \mid A_j}$
 
 The orthogonality property follows directly from the definition of
@@ -267,7 +274,7 @@ $$
 The final step holds because $l$ is itself a member of $A_j$, so the row
 vector $\mathbf{G}_{l A_j}$ is a row of $\mathbf{G}_{A_j A_j}$ and the product
 $\mathbf{G}_{l A_j}\mathbf{G}_{A_j A_j}^{-1}$ is the corresponding unit
-vector, leaving $G_{lj} - G_{lj} = 0$. 
+vector, leaving $G_{lj} - G_{lj} = 0$.
 
 ---
 
@@ -317,7 +324,7 @@ covariance between the transformed components.
 ### Conditioning schemes
 
 The function allows complete flexibility in the choice of conditioning schemes.
-To help users there are four built-in schemes and they only differ in the conditioning set $A_j$. 
+To help users there are four built-in schemes and they only differ in the conditioning set $A_j$.
 To to help understand the differences in the transformation components of these
 onditioning schemes consider $T = 3$ at a single site. Treatments are indexed
 in the order supplied to the `levs` argument of the function, so treatment 1
@@ -447,7 +454,7 @@ all conditional variances are positive.
 
 With a single site, **partial conditioning** is the natural choice: each
 treatment is conditioned on all the others simultaneously, so the three
-responsiveness BLUPs capture the genetic signal that is unique to each
+adjusted BLUPs capture the genetic signal that is unique to each
 treatment and unshared with the others.
 
 ```{r rr1}
@@ -485,7 +492,7 @@ in treatment $j$ that is **orthogonal** to all other treatments. A small
 value relative to $G_{jj}$ (the diagonal of `Gmat`) indicates that most of
 the genetic variation in that treatment is shared with the others;
 a value close to $G_{jj}$ indicates a large treatment-specific genetic
-component. 
+component.
 
 ```{r compare_gvar1}
 #| eval: !expr asreml_ok
@@ -549,8 +556,8 @@ carries more of the shared genetic signal.
 ### Quadrant plot with default highlights
 
 The quadrant plot places the T0 BLUPs on the x-axis and
-**responsiveness** on the y-axis. Under partial conditioning, every
-treatment has a responsiveness axis, so there are three quadrant panels:
+**adjusted** on the y-axis. Under partial conditioning, every
+treatment has an adjusted axis, so there are three quadrant panels:
 
 ```{r plot_quad1}
 #| eval: !expr asreml_ok
@@ -562,8 +569,8 @@ print(p_quad1)
 
 The default highlight algorithm (`highlight = "default"`) selects up to six
 varieties to annotate across all panels — up to three from the top-right
-quadrant (high efficiency + high responsiveness, shown in orange) and up to
-three from the bottom-left (low efficiency + low responsiveness, shown in
+quadrant (high baseline + high adjusted, shown in orange) and up to
+three from the bottom-left (low baseline + low adjusted, shown in
 blue). Within each quadrant the candidates are restricted to varieties whose
 distance from the origin exceeds the within-quadrant median, and the final
 selection is simply the most extreme of those candidates, ordered by
@@ -660,8 +667,8 @@ these is $\hat{\mathbf{G}} = \hat{\boldsymbol{\Lambda}}\hat{\boldsymbol{\Lambda}
 ### Running `randomRegress()` — baseline conditioning
 
 For multi-site data with an FA model, **baseline conditioning** is the most
-widely used scheme: T0 is the efficiency (control) treatment, and T1 and T2
-are conditioned on T0 to give treatment-specific responsiveness BLUPs.
+widely used scheme: T0 is the baseline (control) treatment, and T1 and T2
+are conditioned on T0 to give treatment-specific adjusted BLUPs.
 
 ```{r rr2}
 #| eval: !expr asreml_ok
@@ -714,7 +721,7 @@ print(p_quad2)
 ```
 
 The automatic highlight algorithm identifies the six most informative
-archetypes by their position in the efficiency–responsiveness space,
+archetypes by their position in the baseline–adjusted space,
 averaged across all sites. Orange points are top-right archetypes (broadly
 adapted and responsive); blue points are bottom-left archetypes (consistently
 poor performers). The same six varieties are labelled in every panel.
@@ -772,9 +779,9 @@ ggplot(df_t1, aes(x = x, y = y, colour = Site)) +
   geom_vline(xintercept = 0, linetype = "dotted", colour = "grey40") +
   geom_point(size = 1.8, alpha = 0.8) +
   facet_wrap(~ Site, nrow = 2L) +
-  labs(x = "Efficiency (T0 BLUP)",
-       y = "Responsiveness (T1 | T0)",
-       title = "T1 responsiveness by site") +
+  labs(x = "Baseline (T0 BLUP)",
+       y = "Adjusted (T1 | T0)",
+       title = "T1 adjusted by site") +
   theme_bw() +
   theme(legend.position = "none")
 ```
@@ -800,7 +807,7 @@ ggplot(df_t1, aes(x = x, y = y, colour = Site)) +
 | Task | Code |
 |------|------|
 | Regression scatter plot | `plot_randomRegress(res, type = "regress")` |
-| Efficiency–responsiveness plot | `plot_randomRegress(res, type = "quadrant")` |
+| Baseline–adjusted plot | `plot_randomRegress(res, type = "quadrant")` |
 | G-matrix heatmap | `plot_randomRegress(res, type = "gmat")` |
 | Default highlights | `highlight = "default"` |
 | Named variety highlights | `highlight = c("Var01", "Var15")` |

@@ -21,8 +21,9 @@ plot_fixedRegress(
 \item{type}{Character string selecting the plot type. One of
 \code{"regress"} (default) or \code{"quadrant"}.}
 
-\item{treatments}{Character vector restricting which conditioned treatments
-are included.  \code{NULL} (default) includes all conditioned treatments.}
+\item{treatments}{Character vector restricting which conditioned levels
+are included.  \code{NULL} (default) includes all conditioned levels.  Named
+for the commonest case, but accepts trait names equally.}
 
 \item{highlight}{Controls genotype annotation. One of:
 \describe{
@@ -63,23 +64,24 @@ with the standard \code{+} operator.
 The two \code{type} options are:
 \describe{
 \item{\code{"regress"}}{Grid of scatter plots faceted by BLUP pair (rows) and
-group (columns).  Each panel plots the raw conditioned-treatment BLUEs
-(y) against the conditioning-treatment BLUEs (x) for one group × one
-treatment pair.  A dotted OLS regression line is drawn and the slope
+group (columns).  Each panel plots the raw conditioned-level BLUEs
+(y) against the conditioning-level BLUEs (x) for one group × one
+level pair.  A dotted OLS regression line is drawn and the slope
 \eqn{\hat{\beta}} is annotated in the top-left corner of each panel.
 Unlike the random-effects analogue the line need not pass through the
 origin because OLS includes an intercept.}
 \item{\code{"quadrant"}}{Grid of scatter plots faceted by BLUP pair (rows) and
-group (columns).  Each panel plots the response index (OLS residual,
-y) against the unconditional treatment BLUE (efficiency, x).  Dotted
+group (columns).  Each panel plots the adjusted index (OLS residual,
+y) against the unconditional BLUE at the reference level (baseline, x).
+Dotted
 zero reference lines divide each panel into four quadrants.}
 }
 
 \strong{Variety highlighting} — see \code{\link[=plot_randomRegress]{plot_randomRegress()}} for the full
 description of the polar-angle algorithm used to select the default six
-genotypes.  The same three archetypes (efficiency, balanced,
-responsiveness) are chosen from the top-right and bottom-left quadrants of
-the efficiency × response-index space, averaged across all groups.
+genotypes.  The same three archetypes (baseline, balanced,
+adjusted) are chosen from the top-right and bottom-left quadrants of
+the baseline × response-index space, averaged across all groups.
 
 The output data frames returned when \code{return_data = TRUE} use standardised
 column names \code{"Group"} (the grouping variable) and \code{"Genotype"} (the

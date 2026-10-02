@@ -63,7 +63,7 @@ Examples:
 \item{levs}{Character vector of length \eqn{\ge 2} naming the levels to
 decompose — treatment labels or trait names, depending on what the
 grouping factor indexes.  For \code{type = "baseline"} and
-\code{type = "sequential"} the \strong{first} element is the baseline (efficiency)
+\code{type = "sequential"} the \strong{first} element is the unconditioned baseline
 level.  For \code{type = "partial"} the ordering does not affect results.  For
 \code{type = "custom"} the ordering determines which element of \code{cond} applies
 to which level.}
@@ -74,7 +74,7 @@ See \strong{Description} for full details of each scheme.}
 
 \item{cond}{Named list required when \code{type = "custom"}.  Each element name
 must be a level from \code{levs}; each element value is either \code{NULL} (the
-level is unconditional / efficiency) or a character vector of levels from
+level is unconditional / baseline) or a character vector of levels from
 \code{levs} that form the conditioning set.  Levels absent from \code{cond} are
 treated as unconditional.  Example for a three-level sequential-style
 custom scheme:
@@ -90,7 +90,7 @@ factor's labels contain no separator, in which case a single section
 named \code{"Single"} is reported.  Defaults to \code{"-"}.}
 
 \item{pev}{Logical.  If \code{TRUE} (default) the variance used for HSD
-computation is the prediction error variance (PEV) of each responsiveness
+computation is the prediction error variance (PEV) of each adjusted
 BLUP.  If \code{FALSE} it is the posterior variance
 \eqn{\sigma_{j|A_j}^2 - \text{PEV}}.  Ignored for FA models
 (HSD is always \code{NA}).}
@@ -102,17 +102,17 @@ BLUP.  If \code{FALSE} it is the posterior variance
 A named list:
 \describe{
 \item{\code{blups}}{Data frame with columns: \code{Site}, \code{Variety}, one raw BLUP
-column per level in \code{levs}, one \verb{resp.<lev>} column per conditioned
+column per level in \code{levs}, one \verb{adj.<lev>} column per conditioned
 level, and one \verb{HSD.<lev>} column per conditioned level (Tukey's HSD on
-the responsiveness scale; \code{NA} for FA models or absent combinations).
+the adjusted scale; \code{NA} for FA models or absent combinations).
 The \code{Site} column holds the \strong{section} label whatever the stratifying
 dimension represents, and is \code{"Single"} throughout when the grouping
 factor is not composite.  The \code{Variety} column holds the levels of the
 variety factor named in \code{term}, whatever that factor is called in the
 model.}
 \item{\code{TGmat}}{Transformed G-matrix \eqn{\boldsymbol{T}\boldsymbol{G}
-    \boldsymbol{T}^\top}.  Unconditional levels are labelled \verb{eff.<lev>};
-conditioned levels are labelled \verb{resp.<lev>}.  Diagonal for
+    \boldsymbol{T}^\top}.  Unconditional levels are labelled \verb{base.<lev>};
+conditioned levels are labelled \verb{adj.<lev>}.  Diagonal for
 \code{type = "sequential"}.}
 \item{\code{Gmat}}{Original G-matrix.}
 \item{\code{beta}}{Named list of length equal to the number of conditioned
@@ -141,8 +141,18 @@ here and this mapping is the authority downstream, so
 }
 \description{
 Uses the G-matrix from an ASReml-R V4 model to decompose a multivariate set
-of variety BLUPs into \strong{efficiency} and \strong{responsiveness} components,
+of variety BLUPs into \strong{baseline} and \strong{adjusted} components,
 supporting four conditioning schemes via the \code{type} argument.
+
+The \strong{baseline} component (prefix \code{base.}) is the raw BLUP at the
+unconditioned reference level; the \strong{adjusted} component (prefix \code{adj.})
+is the part of a level's BLUP that is not linearly predictable from the
+levels it is conditioned on.  Where the decomposed levels are treatments
+these are conventionally called \emph{efficiency} and \emph{responsiveness} (or
+\emph{tolerance}): genetic value under the control, and the extra genetic gain
+realised when the treatment is applied.  That reading does not carry over
+to traits — protein does not "respond" to yield — so the generic names are
+used throughout.
 
 The decomposed dimension holds multiple \strong{treatments} or multiple
 \strong{traits} — levels applied to, or measured on, the same plants within one
@@ -165,7 +175,7 @@ chosen for each level:
 
 \describe{
 \item{\code{"baseline"} (default)}{Every non-first level is conditioned on
-\code{levs[1]} alone.  Responsiveness BLUPs are orthogonal to the
+\code{levs[1]} alone.  Adjusted BLUPs are orthogonal to the
 baseline but may be correlated with each other.  The transformed
 G-matrix \code{TGmat} is block-diagonal.}
 \item{\code{"sequential"}}{Level \eqn{j} is conditioned on all preceding
@@ -208,7 +218,7 @@ Only treatments and traits are decomposable: they are commensurable levels
 observed on common material within one experiment, so the conditional
 distribution of one given another is biologically interpretable.
 \strong{Environments are not.}  Regressing one site's BLUPs on another's would
-not give an efficiency-responsiveness decomposition, because separate sites
+not give a baseline/adjusted decomposition, because separate sites
 are separate experiments; environments belong in the section role.  Where
 the genetic covariance \emph{between} environments is the question of interest,
 use \code{\link[=faSummary]{faSummary()}} or \code{\link[=fastIC]{fastIC()}} instead.

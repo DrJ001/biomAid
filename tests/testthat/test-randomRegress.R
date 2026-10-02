@@ -239,18 +239,18 @@ test_that("beta list has correct names and matrix dimensions", {
   expect_equal(dim(beta[["N2"]]), c(length(usnams), 1L))
 })
 
-test_that("TGmat dimnames include eff. and resp. prefixes", {
+test_that("TGmat dimnames include base. and adj. prefixes", {
   tsnams <- c("N0-S1","N1-S1","N2-S1","N0-S2","N1-S2","N2-S2")
   levs   <- c("N0","N1","N2")
   lab    <- biomAid:::.rreg_labels(tsnams, levs, "-")
 
   uncond      <- "N0"
   conditioned <- c("N1","N2")
-  prefix <- ifelse(lab$level %in% uncond,      "eff.",
-            ifelse(lab$level %in% conditioned, "resp.", ""))
+  prefix <- ifelse(lab$level %in% uncond,      "base.",
+            ifelse(lab$level %in% conditioned, "adj.", ""))
   out <- paste0(prefix, lab$level, "-", lab$section)
 
-  expect_true(all(grepl("^eff\\.N0|^resp\\.N1|^resp\\.N2", out)))
+  expect_true(all(grepl("^base\\.N0|^adj\\.N1|^adj\\.N2", out)))
   # The section half must survive untouched
   expect_equal(sub("^[a-z]+\\.[^-]+-", "", out), lab$section)
 })
@@ -576,8 +576,8 @@ test_that("randomRegress() blups has correct columns", {
   expect_true("Site"    %in% names(res$blups))
   expect_true("Variety" %in% names(res$blups))
   expect_true("N0"      %in% names(res$blups))
-  expect_true("resp.N1" %in% names(res$blups))
-  expect_true("resp.N2" %in% names(res$blups))
+  expect_true("adj.N1" %in% names(res$blups))
+  expect_true("adj.N2" %in% names(res$blups))
 })
 
 # --- D3. Gmat returned correctly -------------------------------------------
@@ -612,8 +612,8 @@ test_that("randomRegress() sequential: TGmat is a matrix", {
   expect_true(is.matrix(res$TGmat))
 })
 
-# --- D5. Partial: resp columns for all levs --------------------------------
-test_that("randomRegress() partial: resp columns for all levs", {
+# --- D5. Partial: adj columns for all levs --------------------------------
+test_that("randomRegress() partial: adj columns for all levs", {
   G  <- make_Gmat_rrm(seed = 4L)
   pv <- make_pvals_rrm(seed = 4L)
   local_mocked_bindings(
@@ -625,7 +625,7 @@ test_that("randomRegress() partial: resp columns for all levs", {
                        term = "us(TSite):Variety",
                        levs = c("N0","N1","N2"),
                        type = "partial")
-  expect_true(all(c("resp.N0","resp.N1","resp.N2") %in% names(res$blups)))
+  expect_true(all(c("adj.N0","adj.N1","adj.N2") %in% names(res$blups)))
 })
 
 # --- D6. sigmat values are positive ----------------------------------------
@@ -675,7 +675,7 @@ test_that("randomRegress() custom type runs without error", {
                   cond = list(N0 = NULL, N1 = "N0", N2 = c("N0","N1")))
   )
   expect_equal(res$type, "custom")
-  expect_true(all(c("resp.N1","resp.N2") %in% names(res$blups)))
+  expect_true(all(c("adj.N1","adj.N2") %in% names(res$blups)))
 })
 
 # --- D9. blups data frame structure (row count) ----------------------------
@@ -862,7 +862,7 @@ test_that("randomRegress() sep='-' correctly parses site-treatment labels", {
                        sep  = "-")
   expect_s3_class(res$blups, "data.frame")
   expect_true("Site"    %in% names(res$blups))
-  expect_true("resp.N1" %in% names(res$blups))
+  expect_true("adj.N1" %in% names(res$blups))
   # Sites should be S1 and S2
   expect_equal(sort(unique(res$blups$Site)), c("S1","S2"))
 })
@@ -982,13 +982,13 @@ test_that("treatment absent from a site: no error, other sites return results", 
                        levs = c("N0","N1","N2"),
                        type = "baseline")
   expect_s3_class(res$blups, "data.frame")
-  # S1 has all three treatments — resp.N1 and resp.N2 should be non-NA for S1
+  # S1 has all three treatments — adj.N1 and adj.N2 should be non-NA for S1
   s1_rows <- res$blups$Site == "S1"
-  expect_true(any(!is.na(res$blups$resp.N1[s1_rows])))
-  expect_true(any(!is.na(res$blups$resp.N2[s1_rows])))
-  # S2 is missing N2: resp.N2 rows for S2 must all be NA
+  expect_true(any(!is.na(res$blups$adj.N1[s1_rows])))
+  expect_true(any(!is.na(res$blups$adj.N2[s1_rows])))
+  # S2 is missing N2: adj.N2 rows for S2 must all be NA
   s2_rows <- res$blups$Site == "S2"
-  expect_true(all(is.na(res$blups$resp.N2[s2_rows])))
+  expect_true(all(is.na(res$blups$adj.N2[s2_rows])))
 })
 
 # ===========================================================================
@@ -1131,7 +1131,7 @@ test_that("corgh: randomRegress returns valid blups and positive sigmat", {
                        levs = c("N0","N1","N2"),
                        type = "baseline")
   expect_s3_class(res$blups, "data.frame")
-  expect_true("resp.N1" %in% names(res$blups))
+  expect_true("adj.N1" %in% names(res$blups))
   expect_true(all(res$sigmat > 0, na.rm = TRUE))
 })
 
@@ -1200,7 +1200,7 @@ test_that("corh: randomRegress returns valid blups", {
                        levs = c("N0","N1"),
                        type = "baseline")
   expect_s3_class(res$blups, "data.frame")
-  expect_true("resp.N1" %in% names(res$blups))
+  expect_true("adj.N1" %in% names(res$blups))
   expect_true(all(res$sigmat > 0, na.rm = TRUE))
 })
 
@@ -1231,7 +1231,7 @@ test_that("vm wrapper: randomRegress parses bare Variety name correctly", {
   expect_s3_class(res$blups, "data.frame")
   # Columns should use bare "Variety" name, not "vm(Variety, giv1)"
   expect_true("Variety" %in% names(res$blups))
-  expect_true("resp.N1" %in% names(res$blups))
+  expect_true("adj.N1" %in% names(res$blups))
 })
 
   test_that("vm wrapper: by_wrapper recorded, only_term includes vm wrapper", {
@@ -1267,7 +1267,7 @@ test_that("ide wrapper: randomRegress parses bare Variety name correctly", {
                        type = "baseline")
   expect_s3_class(res$blups, "data.frame")
   expect_true("Variety" %in% names(res$blups))
-  expect_true("resp.N1" %in% names(res$blups))
+  expect_true("adj.N1" %in% names(res$blups))
 })
 
   test_that("ide wrapper: by_wrapper recorded, only_term includes ide wrapper", {

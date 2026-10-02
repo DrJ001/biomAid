@@ -41,30 +41,46 @@ if (asreml_ok) library(asreml)
 
 `fixedRegress()` is the **fixed-effects (BLUE) analogue** of `randomRegress()`.
 For each group (e.g. site, environment, year) it regresses the BLUEs of each
-*conditioned* treatment on the BLUEs of its *conditioning* set using ordinary
-least squares, returning a **response index** — the OLS residual — for every
+*conditioned* level on the BLUEs of its *conditioning* set using ordinary
+least squares, returning an **adjusted index** — the OLS residual — for every
 genotype.
 
-The response index separates two biologically distinct components of treatment
-response:
+As in `randomRegress()`, the decomposed dimension may hold multiple
+**treatments** or multiple **traits** — levels applied to, or measured on, the
+same plants within the one experiment, so that a regression between them is
+meaningful. For treatments, `term = "Treatment:Genotype"` with `levs` naming
+the treatment labels; for traits, a multivariate model gives
+`term = "trait:Genotype"` with `levs` naming the traits. This vignette works
+through the treatment case throughout.
 
-- **Efficiency** — a genotype's unconditional BLUE under the baseline treatment
-  (genetic value irrespective of applied inputs).
-- **Response index** — the OLS residual from regressing the conditioned
-  treatment BLUE on the baseline, measuring the genotype's capacity to respond
-  *above and beyond* what its baseline performance would predict.
+The decomposition separates two components:
+
+- **Baseline** — a genotype's unconditional BLUE at the reference level.
+- **Adjusted index** — the OLS residual from regressing the conditioned level's
+  BLUE on the baseline: the part not predictable from baseline performance.
+
+Read agronomically, where the levels are treatments the baseline is the
+genotype's **efficiency** (its value irrespective of applied inputs) and the
+adjusted index its **responsiveness** — the capacity to respond *above and
+beyond* what its baseline performance would predict. Where the levels are
+traits that reading does not apply; the adjusted index is simply one trait with
+another projected out.
+
+One difference from `randomRegress()` worth noting: the second dimension is
+supplied explicitly here via `by`, rather than being recovered from a composite
+factor label. A `by` group here plays the role of a *section* there.
 
 | Feature | `fixedRegress()` | `randomRegress()` |
 |---------|-----------------|------------------|
 | Predicted values used | BLUEs (fixed effects) | BLUPs (random effects) |
 | Regression | OLS with intercept | G-matrix conditional (through origin) |
-| Response measure | OLS residual (response index) | Conditional BLUP (responsiveness) |
+| Response measure | OLS residual (adjusted index) | Conditional BLUP (adjusted) |
 | Requires G-matrix | No | Yes (FA model) |
 | Requires an FA decomposition | No | Yes (via `faSummary()`) |
-| Applicable model types | Any fixed-treatment model | FA or unstructured G models |
+| Applicable model types | Any model with the levels in the fixed effects | FA or unstructured G models |
 
-`plot_fixedRegress()` visualises the result as a regression scatter plot or an
-efficiency–response index quadrant plot.
+`plot_fixedRegress()` visualises the result as a regression scatter plot or a
+baseline–adjusted index quadrant plot.
 
 ---
 
@@ -109,9 +125,9 @@ treatment. Only the slopes are stored in `res$beta`.
 
 ---
 
-### The response index
+### The adjusted index
 
-The **response index** $\tilde{\boldsymbol{\tau}}_{jk}$ is the vector of OLS
+The **adjusted index** $\tilde{\boldsymbol{\tau}}_{jk}$ is the vector of OLS
 residuals:
 
 $$
@@ -134,7 +150,7 @@ $$
 where $\sigma_{jk}$ is the OLS residual standard deviation stored in
 `res$sigmat`.
 
-The response index is:
+The adjusted index is:
 
 - **zero-mean** within each group by construction (OLS residuals are
   mean-zero)
@@ -144,7 +160,7 @@ The response index is:
 
 ---
 
-### Tukey HSD for the response index
+### Tukey HSD for the adjusted index
 
 `fixedRegress()` also computes a **Tukey HSD** for pairwise genotype
 comparisons on the response-index scale within each group:
@@ -255,8 +271,8 @@ The return value is a named list:
 str(res_base, max.level = 1)
 ```
 
-The first few rows of `blues` show the raw BLUEs plus the response indices
-(`resp.*`) and their per-genotype standard errors (`se.*`) and Tukey HSDs
+The first few rows of `blues` show the raw BLUEs plus the adjusted indices
+(`adj.*`) and their per-genotype standard errors (`se.*`) and Tukey HSDs
 (`HSD.*`):
 
 ```{r blues_head}
@@ -271,7 +287,7 @@ head(res_base$blues)
 `type = "baseline"` (the default) regresses each non-first treatment on
 `levs[1]` (T0) alone — a simple OLS regression with one conditioning
 treatment per group. This is the most interpretable scheme: T0 BLUEs
-represent a genotype's baseline performance; the response index for T1 and T2
+represent a genotype's baseline performance; the adjusted index for T1 and T2
 represents how much each genotype over- or under-performs relative to what its
 T0 BLUE would predict.
 
@@ -341,7 +357,7 @@ res_seq$beta$T2
 ## Example 3: Partial conditioning
 
 `type = "partial"` regresses each treatment on *all other* treatments
-simultaneously. The response index is the partial regression residual —
+simultaneously. The adjusted index is the partial regression residual —
 the genetic variation in treatment $j$ that is independent of all other
 treatment BLUEs. This is the most conservative scheme: it removes the maximum
 amount of shared genetic variation before extracting the residual.
@@ -428,16 +444,16 @@ print(p_reg_raw)
 ## Quadrant plot — `type = "quadrant"`
 
 The quadrant plot shows the two components of treatment response directly:
-the **x-axis** carries the unconditional T0 BLUE (efficiency) and the
-**y-axis** carries the response index (OLS residual). Dotted zero reference
+the **x-axis** carries the unconditional T0 BLUE (baseline) and the
+**y-axis** carries the adjusted index (OLS residual). Dotted zero reference
 lines divide each panel into four quadrants.
 
-The response index y-axis is always zero-centred (OLS residuals are
+The adjusted index y-axis is always zero-centred (OLS residuals are
 mean-zero by construction). The x-axis is centred by subtracting within-group
 means when `centre = TRUE` (the default), keeping the quadrant interpretation
 valid:
 
-| Quadrant | Efficiency | Response index | Interpretation |
+| Quadrant | Baseline | Adjusted index | Interpretation |
 |----------|-----------|----------------|----------------|
 | Top-right | High | High | Broadly adapted: strong baseline and extra treatment response |
 | Top-left | Low | High | Responsive to treatment despite low baseline |
@@ -456,12 +472,12 @@ print(p_quad)
 ## Genotype highlighting
 
 By default, `highlight = "default"` automatically selects and annotates
-**six genotypes** that are informative archetypes of the efficiency–response
+**six genotypes** that are informative archetypes of the baseline–response
 space. The algorithm is identical to the one used in `plot_randomRegress()`.
 
 ### How the default algorithm works
 
-1. Compute the mean efficiency (x) and response index (y) for each genotype
+1. Compute the mean baseline (x) and adjusted index (y) for each genotype
    **across all groups and treatment pairs** using the centred quadrant data
    (regardless of the `centre` display setting).
 2. Separate genotypes into the **top-right** quadrant ($x > 0$, $y > 0$)
@@ -470,7 +486,7 @@ space. The algorithm is identical to the one used in `plot_randomRegress()`.
    exceeds the 50th percentile (relaxes to 33rd then 0th if fewer than
    three candidates remain).
 4. Pick three archetypes by polar angle $\theta = \arctan(|y|/|x|)$:
-   - **Efficiency archetype** — smallest $\theta$ (near the x-axis)
+   - **Baseline archetype** — smallest $\theta$ (near the x-axis)
    - **Balanced archetype** — closest to $\theta = \pi/4$
    - **Response archetype** — largest $\theta$ (near the y-axis)
 
@@ -559,8 +575,8 @@ ggplot(df_t1, aes(x = x, y = y, colour = Group)) +
   geom_point(size = 1.8, alpha = 0.8) +
   facet_wrap(~ Group, nrow = 2L) +
   labs(
-    x     = "Efficiency (T0 BLUE, centred)",
-    y     = "Response index (T1 | T0)",
+    x     = "Baseline (T0 BLUE, centred)",
+    y     = "Adjusted index (T1 | T0)",
     title = "Custom site-coloured quadrant plot"
   ) +
   theme_bw() +
@@ -575,7 +591,7 @@ directly with `+`:
 #| fig-height: 6
 p_titled <- plot_fixedRegress(res_base, type = "quadrant") +
   ggplot2::ggtitle(
-    "Genotype efficiency vs nitrogen response index",
+    "Genotype baseline vs nitrogen adjusted index",
     subtitle = "Baseline OLS conditioning — 4 sites"
   )
 print(p_titled)
@@ -589,7 +605,7 @@ print(p_titled)
 
 | Element | Type | Description |
 |---------|------|-------------|
-| `blues` | Data frame | Raw BLUEs + response indices (`resp.*`) + standard errors (`se.*`) + Tukey HSD (`HSD.*`) per genotype × group |
+| `blues` | Data frame | Raw BLUEs + adjusted indices (`adj.*`) + standard errors (`se.*`) + Tukey HSD (`HSD.*`) per genotype × group |
 | `beta` | Named list | One data frame per conditioned treatment; each data frame has the grouping column plus one slope column per conditioning treatment |
 | `sigmat` | Matrix | Residual standard deviations $\hat{\sigma}_{jk}$, dimensions $n_\text{groups} \times n_\text{cond}$ |
 | `cond_list` | Named list | Resolved conditioning structure |
@@ -608,7 +624,7 @@ print(p_titled)
 | Split by site / group | `by = "Site"` |
 | No grouping (one regression) | `by = NULL` (default) |
 | Regression scatter plot | `plot_fixedRegress(res, type = "regress")` |
-| Efficiency–response index plot | `plot_fixedRegress(res, type = "quadrant")` |
+| Baseline–adjusted index plot | `plot_fixedRegress(res, type = "quadrant")` |
 | Default archetype highlights | `highlight = "default"` |
 | Named genotype highlights | `highlight = c("Gen01", "Gen15")` |
 | Suppress highlights | `highlight = NULL` |

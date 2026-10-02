@@ -17,8 +17,8 @@ make_mock_res <- function(ns = 3L, nvar = 8L,
       Site    = s,
       Variety = paste0("V", seq_len(nvar)),
       T0 = u0, T1 = u1, T2 = u2,
-      resp.T1 = u1 - 0.9  * u0,
-      resp.T2 = u2 - 1.2  * u0,
+      adj.T1 = u1 - 0.9  * u0,
+      adj.T2 = u2 - 1.2  * u0,
       HSD.T1  = NA_real_,
       HSD.T2  = NA_real_,
       stringsAsFactors = FALSE
@@ -248,9 +248,9 @@ make_mock_res_partial <- function(ns = 2L, nvar = 8L,
     u2 <- 0.7*u0 + rnorm(nvar,0,100)
     data.frame(Site=s, Variety=paste0("V",seq_len(nvar)),
                T0=u0, T1=u1, T2=u2,
-               resp.T0 = u0 - 0.5*u1 - 0.3*u2,
-               resp.T1 = u1 - 0.4*u0 - 0.2*u2,
-               resp.T2 = u2 - 0.3*u0 - 0.2*u1,
+               adj.T0 = u0 - 0.5*u1 - 0.3*u2,
+               adj.T1 = u1 - 0.4*u0 - 0.2*u2,
+               adj.T2 = u2 - 0.3*u0 - 0.2*u1,
                HSD.T0=NA_real_, HSD.T1=NA_real_, HSD.T2=NA_real_,
                stringsAsFactors=FALSE)
   }))
