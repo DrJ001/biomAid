@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Julian Taylor">
-<meta name="dcterms.date" content="2026-10-02">
+<meta name="dcterms.date" content="2026-10-05">
 
 <title>Multivariate Random Regression – biomAid</title>
 <style>
@@ -4345,6 +4345,10 @@ opacity: 0.92;
  <span class="dropdown-text">Simulating Multi-Environment Trials</span></a>
   </li>  
         <li>
+    <a class="dropdown-item" href="./faSummary.html">
+ <span class="dropdown-text">Factor Analytic Variance Structures</span></a>
+  </li>  
+        <li>
     <a class="dropdown-item" href="./fastIC.html">
  <span class="dropdown-text">Factor Analytic Selection Tools: FAST and iClass</span></a>
   </li>  
@@ -4445,7 +4449,7 @@ opacity: 0.92;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 2, 2026</p>
+      <p class="date">October 5, 2026</p>
     </div>
   </div>
   
@@ -4470,8 +4474,7 @@ opacity: 0.92;
 <p>The decomposition is derived from the <strong>G-matrix</strong> (the genetic variance–covariance matrix across the levels being decomposed) using Gaussian conditional distribution theory. It generalises naturally from two levels to any number, with four built-in conditioning schemes.</p>
 <section id="scope" class="level3">
 <h3 class="anchored" data-anchor-id="scope">Scope</h3>
-<p>Two distinct dimensions are involved, and they play quite different roles.</p>
-<p>The dimension that is <strong>decomposed</strong> holds multiple <strong>treatments</strong> or multiple <strong>traits</strong> — levels that are applied to, or measured on, the same plants within the one experiment. This is what makes a genetic regression between them meaningful. The levels are commensurable, so the conditional distribution of one given another has a genuine biological interpretation. They are:</p>
+<p>The dimension that is <strong>decomposed</strong> holds multiple <strong>treatments</strong> or multiple <strong>traits</strong> that are applied to, or measured on, the same plants within the one experiment. This is what makes a genetic regression between them meaningful. The levels are commensurable, so the conditional distribution of one given another has a genuine biological interpretation. They are:</p>
 <ul>
 <li><strong>Treatments</strong>: the baseline can be viewed as the variety’s <strong>efficiency</strong>, its genetic value under the control or low-input treatment. The adjusted component is its <strong>responsiveness</strong> (or <strong>tolerance</strong>), the extra genetic gain it realises when the treatment is applied.</li>
 <li><strong>Traits</strong>: the baseline is just the unadjusted variety genetic value for the trait and the adjusted component is part of the genetic value of the second trait that is not genetically predictable from another.</li>
@@ -4520,8 +4523,8 @@ opacity: 0.92;
 </tbody>
 </table>
 <p>Where the grouping factor is a composite of two factors, such as the Treatment-by-Site factor <code>TSite</code> used throughout this vignette, the decomposition is carried out independently within each level of the second factor. Where it is a plain factor there is a single section, reported as <code>&quot;Single&quot;</code>, and plots show one facet column.</p>
-<p>Multi-treatment MET data is used as the worked example here because it is the most complex case, exercising both dimensions at once; the single-section cases follow by simply supplying a plain grouping factor.</p>
 <p><code>plot_randomRegress()</code> visualises the result as a regression scatter plot, a baseline–adjusted quadrant plot, or a G-matrix heatmap.</p>
+<p>To motivate the mathematical framework and illustrate the use of the function, multi-treatment MET data is used because it represents one of the most complex cases, exercising both dimensions at once; the single-section cases follow by simply supplying a plain grouping factor.</p>
 <hr>
 </section>
 </section>
