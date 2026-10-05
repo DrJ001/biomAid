@@ -3,8 +3,12 @@
 asreml::predict.asreml().  Working directly with predict() output
 means contrasts are specified through meaningful factor-level labels
 rather than raw coefficient indices, and the prediction error
-variance–covariance matrix (pred$vcov) is used directly  – no access to
-model internals required.
+variance–covariance matrix is used directly  – no access to model
+internals required.
+waldTest() is generic.  Supply the list returned by
+predict(model, vcov = TRUE) and the default method is used; supply the
+fitted asreml model itself, together with classify, and
+waldTest.asreml() runs the prediction step for you.
 Two test types are available for each element of cc:
 "con"  – contrasts
 Test \(H_0: \bm{c}^\top\hat{\bm{\tau}} = 0\)
@@ -26,8 +30,12 @@ for a set of \(q\) coefficients simultaneously.  The statistic is
 asreml::predict.asreml().  Working directly with predict() output
 means contrasts are specified through meaningful factor-level labels
 rather than raw coefficient indices, and the prediction error
-variance–covariance matrix (pred$vcov) is used directly  – no access to
-model internals required.
+variance–covariance matrix is used directly  – no access to model
+internals required.
+waldTest() is generic.  Supply the list returned by
+predict(model, vcov = TRUE) and the default method is used; supply the
+fitted asreml model itself, together with classify, and
+waldTest.asreml() runs the prediction step for you.
 Two test types are available for each element of cc:
 "con"  – contrasts
 Test \(H_0: \bm{c}^\top\hat{\bm{\tau}} = 0\)
@@ -70,6 +78,9 @@ for a set of \(q\) coefficients simultaneously.  The statistic is
     <li><a class="dropdown-item" href="../fixedRegress.html">Multivariate Fixed-Effects Regression</a></li>
     <li><a class="dropdown-item" href="../padTrial.html">Extracting and Padding Field Trial Layouts</a></li>
     <li><a class="dropdown-item" href="../accuracy.html">BLUP Accuracy in Multi-Environment Trials</a></li>
+    <li><a class="dropdown-item" href="../simTrialData.html">Simulating Multi-Environment Trials</a></li>
+    <li><a class="dropdown-item" href="../faSummary.html">Factor Analytic Variance Structures</a></li>
+    <li><a class="dropdown-item" href="../fastIC.html">Factor Analytic Selection Tools: FAST and iClass</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"></ul></div>
 
@@ -89,8 +100,12 @@ for a set of \(q\) coefficients simultaneously.  The statistic is
 <code><a href="https://rdrr.io/pkg/asreml/man/predict.asreml.html" class="external-link">asreml::predict.asreml()</a></code>.  Working directly with <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> output
 means contrasts are specified through <strong>meaningful factor-level labels</strong>
 rather than raw coefficient indices, and the prediction error
-variance–covariance matrix (<code>pred$vcov</code>) is used directly  – no access to
-model internals required.</p>
+variance–covariance matrix is used directly  – no access to model
+internals required.</p>
+<p><code>waldTest()</code> is generic.  Supply the list returned by
+<code>predict(model, vcov = TRUE)</code> and the default method is used; supply the
+fitted <code>asreml</code> model itself, together with <code>classify</code>, and
+<code>waldTest.asreml()</code> runs the prediction step for you.</p>
 <p>Two test types are available for each element of <code>cc</code>:</p><dl><dt><code>"con"</code>  – contrasts</dt>
 <dd><p>Test \(H_0: \bm{c}^\top\hat{\bm{\tau}} = 0\)
 for a specified contrast vector \(\bm{c}\).  The Wald statistic is
@@ -110,16 +125,21 @@ for a set of \(q\) coefficients simultaneously.  The statistic is
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">waldTest</span><span class="op">(</span></span>
-<span>  <span class="va">pred</span>,</span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">waldTest</span><span class="op">(</span><span class="va">object</span>, <span class="va">...</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Default S3 method</span></span>
+<span><span class="fu">waldTest</span><span class="op">(</span></span>
+<span>  <span class="va">object</span>,</span>
 <span>  <span class="va">cc</span>,</span>
 <span>  by <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  test <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Wald"</span>, <span class="st">"F"</span><span class="op">)</span>,</span>
 <span>  df_error <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  adjust <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"none"</span>, <span class="st">"bonferroni"</span>, <span class="st">"holm"</span>, <span class="st">"fdr"</span>, <span class="st">"BH"</span>, <span class="st">"BY"</span><span class="op">)</span></span>
+<span>  adjust <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"none"</span>, <span class="st">"bonferroni"</span>, <span class="st">"holm"</span>, <span class="st">"fdr"</span>, <span class="st">"BH"</span>, <span class="st">"BY"</span><span class="op">)</span>,</span>
+<span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu">waldTest.asreml</span><span class="op">(</span></span>
+<span><span class="co"># S3 method for class 'asreml'</span></span>
+<span><span class="fu">waldTest</span><span class="op">(</span></span>
 <span>  <span class="va">object</span>,</span>
 <span>  <span class="va">classify</span>,</span>
 <span>  <span class="va">cc</span>,</span>
@@ -134,17 +154,23 @@ for a set of \(q\) coefficients simultaneously.  The statistic is
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-pred">pred<a class="anchor" aria-label="anchor" href="#arg-pred"></a></dt>
-<dd><p>List returned by <code>predict(model, classify = ..., vcov = TRUE)</code>.
-Must contain elements <code>pvals</code> (data frame of predictions) and <code>vcov</code>
-(prediction error variance–covariance matrix).</p></dd>
+<dl><dt id="arg-object">object<a class="anchor" aria-label="anchor" href="#arg-object"></a></dt>
+<dd><p>For the default method, the list returned by
+<code>predict(model, classify = ..., vcov = TRUE)</code>, containing elements
+<code>pvals</code> (data frame of predictions) and <code>vcov</code> (prediction error
+variance–covariance matrix).  For the <code>asreml</code> method, the fitted model
+itself.</p></dd>
+
+
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Arguments passed between methods.</p></dd>
 
 
 <dt id="arg-cc">cc<a class="anchor" aria-label="anchor" href="#arg-cc"></a></dt>
 <dd><p>Named list of test specifications.  Each element is itself
 a list with fields:</p><dl><dt><code>coef</code></dt>
 <dd><p>Integer indices <strong>or</strong> character labels identifying which
-rows of <code>pred$pvals</code> are involved.  When <code>by</code> is used, indices/labels
+rows of <code>object$pvals</code> are involved.  When <code>by</code> is used, indices/labels
 refer to rows <strong>within the group</strong>.  Character labels are matched
 against the pasted factor-level combination (e.g. <code>"T0:G01"</code> for a
 <code>Treatment:Genotype</code> prediction).</p></dd>
@@ -170,7 +196,7 @@ override the auto-generated <code>"A vs B"</code> row labels.</p></dd>
 
 <dt id="arg-by">by<a class="anchor" aria-label="anchor" href="#arg-by"></a></dt>
 <dd><p>Character string <strong>or character vector</strong> naming one or more
-factor columns in <code>pred$pvals</code> to split by.  When a single name is
+factor columns in <code>object$pvals</code> to split by.  When a single name is
 supplied the rows are split by that column's levels.  When a vector of
 names is supplied (e.g. <code>by = c("Site", "Year")</code>) the levels of those
 columns are pasted together to form an interaction grouping variable, and
@@ -218,18 +244,9 @@ positive) dependence between test statistics; more conservative than
 </dl></dd>
 
 
-<dt id="arg-object">object<a class="anchor" aria-label="anchor" href="#arg-object"></a></dt>
-<dd><p>An ASReml-R V4 model object.</p></dd>
-
-
 <dt id="arg-classify">classify<a class="anchor" aria-label="anchor" href="#arg-classify"></a></dt>
 <dd><p>Character string passed to <code><a href="https://rdrr.io/pkg/asreml/man/predict.asreml.html" class="external-link">asreml::predict.asreml()</a></code> as
 the <code>classify</code> argument.</p></dd>
-
-
-<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
-<dd><p>Additional arguments forwarded to
-<code><a href="https://rdrr.io/pkg/asreml/man/predict.asreml.html" class="external-link">asreml::predict.asreml()</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -254,11 +271,14 @@ Columns: grouping variable (if <code>by</code> used), <code>Test</code>,
 
 </dl></div>
     <div class="section level2">
-    <h2 id="functions">Functions<a class="anchor" aria-label="anchor" href="#functions"></a></h2>
+    <h2 id="methods-by-class-">Methods (by class)<a class="anchor" aria-label="anchor" href="#methods-by-class-"></a></h2>
 
-<ul><li><p><code>waldTest.asreml()</code>: Convenience method that calls <code><a href="https://rdrr.io/pkg/asreml/man/predict.asreml.html" class="external-link">asreml::predict.asreml()</a></code>
-internally.  <code>classify</code> is required; <code>test = "F"</code> uses <code>object$nedf</code>
-automatically.</p></li>
+<ul><li><p><code>waldTest(default)</code>: Default method, operating on the list returned by
+<code>predict(model, vcov = TRUE)</code>.</p></li>
+<li><p><code>waldTest(asreml)</code>: Method for a fitted <code>asreml</code> model.  Calls
+<code><a href="https://rdrr.io/pkg/asreml/man/predict.asreml.html" class="external-link">asreml::predict.asreml()</a></code> internally, so <code>classify</code> is required and
+<code>...</code> is forwarded to it; <code>test = "F"</code> takes the denominator degrees of
+freedom from <code>object$nedf</code> automatically.</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
