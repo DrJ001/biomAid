@@ -59,10 +59,8 @@ levels to any number, with four built-in conditioning schemes.
 
 ### Scope
 
-Two distinct dimensions are involved, and they play quite different roles.
-
 The dimension that is **decomposed** holds multiple **treatments** or multiple
-**traits** — levels that are applied to, or measured on, the same plants within
+**traits** that are applied to, or measured on, the same plants within
 the one experiment. This is what makes a genetic regression between them
 meaningful. The levels are commensurable, so the conditional distribution of
 one given another has a genuine biological interpretation. They are:
@@ -92,12 +90,13 @@ decomposition is carried out independently within each level of the second
 factor. Where it is a plain factor there is a single section, reported as
 `"Single"`, and plots show one facet column.
 
-Multi-treatment MET data is used as the worked example here because it is the
-most complex case, exercising both dimensions at once; the single-section cases
-follow by simply supplying a plain grouping factor.
-
 `plot_randomRegress()` visualises the result as a regression scatter plot,
 a baseline–adjusted quadrant plot, or a G-matrix heatmap.
+
+To motivate the mathematical framework and illustrate the use of the function,
+multi-treatment MET data is used because it represents one of the
+most complex cases, exercising both dimensions at once; the single-section cases
+follow by simply supplying a plain grouping factor.
 
 ---
 
