@@ -10,10 +10,10 @@ is the FA regression prediction:
 $$
   \widehat{\text{CVE}}(g,j) = \sum_{r=1}^{k} \hat{\lambda}_{rj}\,\hat{f}_{rg}
 $$
-The Variance Accounted For (VAF) by each factor in environment \(j\)
-is \(\hat{\lambda}_{rj}^2 / (\sum_r \hat{\lambda}_{rj}^2 + \hat{\psi}_j)\),
-and the specific variance accounts for the remainder; see plot_faSummary()
-with type = "VAF" for a per-environment visualisation.'><meta property="og:description" content='A unified implementation of the FAST (Factor Analytic Selection Tools;
+The Variance Accounted For (VAF) decomposition is owned by
+faSummary(), not by this function.  To visualise it, call faSummary() on
+the same model and pass the result to plot_faSummary() with
+type = "VAF".'><meta property="og:description" content='A unified implementation of the FAST (Factor Analytic Selection Tools;
 Smith &amp;amp; Cullis 2018) and iClass (interaction class; Smith et al. 2021)
 approaches for summarising variety performance from a Factor Analytic Linear
 Mixed Model fitted in ASReml-R V4.
@@ -24,10 +24,10 @@ is the FA regression prediction:
 $$
   \widehat{\text{CVE}}(g,j) = \sum_{r=1}^{k} \hat{\lambda}_{rj}\,\hat{f}_{rg}
 $$
-The Variance Accounted For (VAF) by each factor in environment \(j\)
-is \(\hat{\lambda}_{rj}^2 / (\sum_r \hat{\lambda}_{rj}^2 + \hat{\psi}_j)\),
-and the specific variance accounts for the remainder; see plot_faSummary()
-with type = "VAF" for a per-environment visualisation.'></head><body>
+The Variance Accounted For (VAF) decomposition is owned by
+faSummary(), not by this function.  To visualise it, call faSummary() on
+the same model and pass the result to plot_faSummary() with
+type = "VAF".'></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -80,10 +80,10 @@ is the FA regression prediction:</p>
 <p>$$
   \widehat{\text{CVE}}(g,j) = \sum_{r=1}^{k} \hat{\lambda}_{rj}\,\hat{f}_{rg}
 $$</p>
-<p>The <strong>Variance Accounted For</strong> (VAF) by each factor in environment \(j\)
-is \(\hat{\lambda}_{rj}^2 / (\sum_r \hat{\lambda}_{rj}^2 + \hat{\psi}_j)\),
-and the specific variance accounts for the remainder; see <code><a href="plot_faSummary.html">plot_faSummary()</a></code>
-with <code>type = "VAF"</code> for a per-environment visualisation.</p>
+<p>The <strong>Variance Accounted For</strong> (VAF) decomposition is owned by
+<code><a href="faSummary.html">faSummary()</a></code>, not by this function.  To visualise it, call <code><a href="faSummary.html">faSummary()</a></code> on
+the same model and pass the result to <code><a href="plot_faSummary.html">plot_faSummary()</a></code> with
+<code>type = "VAF"</code>.</p>
     </div>
 
     <div class="section level2">
@@ -137,12 +137,12 @@ combination, sorted by <code>iclass</code> then environment then genotype, conta
 <dt><code>score1</code>, ..., <code>scoreK</code></dt>
 <dd><p>Rotated FA score EBLUPs per genotype.</p></dd>
 
+<dt><code>CVE</code></dt>
+<dd><p>Common Variety Effect (sum of all fitted values).</p></dd>
+
 <dt><code>fitted1</code>, ..., <code>fittedK</code></dt>
 <dd><p>Per-factor contributions to CVE:
 \(\hat{\lambda}_{rj}\hat{f}_{rg}\).</p></dd>
-
-<dt><code>CVE</code></dt>
-<dd><p>Common Variety Effect (sum of all fitted values).</p></dd>
 
 <dt><code>global_op</code></dt>
 <dd><p>Global Overall Performance (FAST): repeated for
@@ -168,20 +168,11 @@ Only present when \(k &gt; 1\).</p></dd>
 <dd><p>Within-iClass RMSD for the genotype.</p></dd>
 
 
-</dl><p>Two attributes are attached to the returned data frame, passed through
-from <code><a href="faSummary.html">faSummary()</a></code>, for use by <code><a href="plot_faSummary.html">plot_faSummary()</a></code> with <code>type = "VAF"</code>:</p><dl><dt><code>vaf_env</code></dt>
-<dd><p>Data frame with one row per environment containing the
-proportion of genetic variance accounted for by each factor
-(<code>Factor1</code>, ..., <code>FactorK</code>) and the specific variance (<code>Specific</code>),
-plus the total genetic variance (<code>total_var</code>) for that environment.</p></dd>
-
-<dt><code>vaf_summary</code></dt>
-<dd><p>Data frame with one row per source (<code>Factor 1</code>, ...,
-<code>Factor K</code>, <code>Specific</code>) containing the overall proportion of total
-genetic variance (<code>pct_var</code>) and cumulative proportion (<code>cum_pct</code>).</p></dd>
-
-
-</dl></div>
+</dl><p>The variance decomposition itself is not returned here.  <code>vaf_env</code> and
+<code>vaf_summary</code> are components of the <code><a href="faSummary.html">faSummary()</a></code> result
+(<code>$gammas[[term]]</code>), and <code><a href="plot_faSummary.html">plot_faSummary()</a></code> requires that object rather
+than this data frame.</p>
+    </div>
     <div class="section level2">
     <h2 id="unified-framework">Unified framework<a class="anchor" aria-label="anchor" href="#unified-framework"></a></h2>
 
