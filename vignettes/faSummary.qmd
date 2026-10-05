@@ -1,0 +1,559 @@
+---
+title: "Factor Analytic Variance Structures"
+subtitle: "`faSummary()` and `plot_faSummary()`"
+author: "Julian Taylor"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: false
+    smooth-scroll: true
+    embed-resources: true
+    theme: litera
+    css: custom.css
+    highlight-style: github
+    code-fold: false
+    fig-width: 9
+    fig-height: 5.5
+    fig-dpi: 150
+    html-math-method: katex
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| include: false
+library(biomAid)
+library(ggplot2)
+asreml_ok <- requireNamespace("asreml", quietly = TRUE)
+if (asreml_ok) {
+  library(asreml)
+  asreml.options(trace = FALSE)
+}
+```
+
+<img id="biomaid-logo" src="../man/figures/biomAid_logo.png" alt="biomAid"/>
+<script>(function(){ var i=document.getElementById('biomaid-logo'),h=document.getElementById('title-block-header'); if(i&&h){h.appendChild(i);} })();</script>
+
+---
+
+## Overview
+
+`faSummary()` extracts, rotates and summarises the **factor analytic variance
+structure** of an ASReml-R V4 mixed model. For every `fa()` term in the random
+formula it returns the genetic covariance and correlation matrices, the rotated
+loadings, the specific variances, the variance accounted for, and — unless
+switched off — the genotype BLUPs and factor score EBLUPs.
+
+It is the engine underneath the rest of the factor analytic machinery in
+**biomAid**: [`fastIC()`](fastIC.html) calls it to obtain the loadings and
+scores it needs for FAST and iClass metrics, and `randomRegress()` calls it on
+the FA path. Anything those functions know about the FA structure, they learned
+here.
+
+`plot_faSummary()` provides five diagnostic plots:
+
+| Type | Description |
+|------|-------------|
+| `"VAF"` | Stacked 100% bar chart of variance accounted for, per environment |
+| `"heatmap"` | Genetic correlation between environments, optionally clustered |
+| `"loadings"` | Correlation-scaled loadings as vectors, one panel per factor pair |
+| `"regress"` | Genotype BLUPs against environment loadings; slope is the factor score |
+| `"added"` | As `"regress"`, with the other factors projected out |
+
+> **Where to go next.** This vignette is about the variance structure itself.
+> For selection tools built on top of it — Overall Performance, stability and
+> interaction classes — see
+> [Factor Analytic Selection Tools: FAST and iClass](fastIC.html).
+
+---
+
+## Mathematical Framework
+
+### The FA(k) covariance structure
+
+An FA($k$) random structure models the $t \times t$ genetic covariance matrix
+across $t$ environments as
+
+$$
+\mathbf{G} = \boldsymbol{\Lambda}\boldsymbol{\Lambda}^\top + \boldsymbol{\Psi},
+$$
+
+where $\boldsymbol{\Lambda} \in \mathbb{R}^{t \times k}$ holds the loadings
+(element $\lambda_{rj}$: factor $r$, environment $j$) and
+$\boldsymbol{\Psi} = \operatorname{diag}(\psi_1,\ldots,\psi_t)$ is the diagonal
+matrix of **specific variances** — the environment-specific genetic variance
+not shared through the common factors. The genetic correlation matrix is
+$\mathbf{C} = \operatorname{cov2cor}(\mathbf{G})$.
+
+The attraction of the structure is parsimony: $t(k+1)$ parameters instead of
+the $t(t+1)/2$ of an unstructured model, while still permitting a different
+genetic variance in every environment and a different correlation between
+every pair.
+
+### Rotation
+
+The decomposition is identified only up to an orthogonal rotation: for any
+orthogonal $\mathbf{R}$, $(\boldsymbol{\Lambda}\mathbf{R})(\boldsymbol{\Lambda}\mathbf{R})^\top = \boldsymbol{\Lambda}\boldsymbol{\Lambda}^\top$.
+`faSummary()` resolves this by rotating with the right singular vectors of
+$\boldsymbol{\Lambda}$ and negating, and then applies **the identical rotation
+to the factor scores**. The loadings and scores therefore stay conformable and
+their product is invariant.
+
+After rotation the first factor typically captures the dominant
+**non-crossover** genotype × environment interaction, with all-positive
+loadings; higher factors are bipolar and carry the crossover signal. The sign
+of each factor is arbitrary but reproducible.
+
+### Correlation-scaled loadings
+
+Dividing each row of $\boldsymbol{\Lambda}$ by that environment's total genetic
+standard deviation gives
+
+$$
+\boldsymbol{\Lambda}^{\!*} = \operatorname{diag}\!\bigl(\sigma_1^{-1},\ldots,\sigma_t^{-1}\bigr)\boldsymbol{\Lambda},
+\qquad \sigma_j^2 = \textstyle\sum_r \lambda_{rj}^2 + \psi_j,
+$$
+
+returned as `loads_cor`. Each row now lies **inside the unit hypersphere**,
+which is what makes the `"loadings"` plot interpretable: an environment's
+distance from the origin is the proportion of its genetic variance explained by
+the plotted factors, and the angle between two environment vectors approximates
+their genetic correlation.
+
+### Variance accounted for
+
+With $\sigma_j^2$ as above, the proportion of environment $j$'s genetic
+variance attributable to factor $r$, and the residual specific proportion, are
+
+$$
+\text{VAF}(r,j) = \frac{\lambda_{rj}^2}{\sigma_j^2}, \qquad
+\text{Specific}(j) = \frac{\psi_j}{\sigma_j^2}, \qquad
+\sum_{r=1}^{k}\text{VAF}(r,j) + \text{Specific}(j) = 1 .
+$$
+
+These are the rows of `vaf_env`. Pooling across environments gives
+`vaf_summary`, $\overline{\text{VAF}}(r) = \sum_j\lambda_{rj}^2 / \sum_j\sigma_j^2$,
+and `vaf_total` is the overall percentage explained by all $k$ factors
+together.
+
+> **Specific variances are clamped at zero for the VAF calculation only.**
+> ASReml-R can return a fractionally negative boundary estimate for $\psi_j$,
+> which would otherwise produce a negative proportion. `spec_var` always
+> reports the unclamped estimate, so a negative value there is informative and
+> is not hidden.
+
+### Common variety effect
+
+The factor score EBLUPs $\hat{\mathbf{F}} \in \mathbb{R}^{n \times k}$
+(element $\hat{f}_{rg}$: factor $r$, variety $g$) combine with the loadings to
+give the FA regression prediction, the **common variety effect**
+
+$$
+\widehat{\text{CVE}}(g,j) = \sum_{r=1}^{k}\lambda_{rj}\hat{f}_{rg},
+\qquad \widehat{\mathbf{CVE}} = \hat{\mathbf{F}}\boldsymbol{\Lambda}^\top .
+$$
+
+This is the quantity the `"regress"` and `"added"` plots decompose, and the
+basis of every metric in [`fastIC()`](fastIC.html).
+
+---
+
+## Worked example — 50 Varieties × 12 Sites
+
+> **Requires:** ASReml-R V4. The vignette is pre-rendered so no licence is
+> needed to read it; run the code chunks only if you have the packages
+> installed.
+
+### Data simulation
+
+We use the same simulated MET as the
+[FAST and iClass vignette](fastIC.html) — 50 varieties at 12 balanced sites,
+with a deliberately wide genetic correlation range (`g_cor_min = 0.10`,
+`g_cor_max = 0.65`) so that higher factors carry real crossover signal. Using
+the same data makes the two vignettes directly comparable.
+
+```{r sim1}
+#| cache: true
+#| eval: !expr asreml_ok
+set.seed(101L)
+sim1 <- simTrialData(
+  nvar        = 50L,
+  nsite       = 12L,
+  nrep        = 3L,
+  G           = "auto",
+  incidence   = "balanced",
+  seed        = 101L,
+  verbose     = FALSE,
+  sim.options = list(
+    g_cor_min     = 0.10,
+    g_cor_max     = 0.65,
+    sigma_genetic = 300,
+    error_sd      = 280,
+    site_mean     = 4500,
+    site_sd       = 450
+  )
+)
+dat1         <- sim1$data
+dat1$Site    <- factor(dat1$Site)
+dat1$Variety <- factor(dat1$Variety)
+dat1$Rep     <- factor(dat1$Rep)
+dat1$Row     <- factor(dat1$Row)
+dat1$Column  <- factor(dat1$Column)
+```
+
+### Fitting the FA(3) model
+
+```{r fit1}
+#| cache: true
+#| dependson: sim1
+#| eval: !expr asreml_ok
+#| results: hide
+m1_fa3 <- asreml(
+  yield  ~ Site,
+  random = ~ fa(Site, 3):Variety + at(Site):Rep,
+  data   = dat1,
+  maxit  = 30L
+)
+m1_fa3 <- update(m1_fa3)
+```
+
+### Calling `faSummary()`
+
+With `term = NULL` — the default — every `fa()` term in the random formula is
+summarised. Here there is one. The `at(Site):Rep` term is not factor analytic
+and is ignored.
+
+```{r fasummary1}
+#| cache: true
+#| dependson: fit1
+#| eval: !expr asreml_ok
+fas1 <- faSummary(m1_fa3)
+fas1
+```
+
+The compact `print()` method reports, for each term, the number of factors, the
+number of environments and the total percentage of genetic variance accounted
+for. Work with the term label rather than retyping it:
+
+```{r term1}
+#| eval: !expr asreml_ok
+trm <- fas1$terms[1L]
+trm
+names(fas1$gammas[[trm]])
+```
+
+#### Loadings and specific variances
+
+`loads` is the $t \times k$ matrix of rotated loadings, with columns named
+`fac_1` … `fac_k`. Note the all-positive first column and the mixed signs in
+the second and third — exactly the pattern described above.
+
+```{r loads1}
+#| eval: !expr asreml_ok
+g1 <- fas1$gammas[[trm]]
+round(g1$loads, 2)
+```
+
+The specific variances are the diagonal of $\boldsymbol{\Psi}$, reported
+exactly as ASReml-R estimated them:
+
+```{r specvar1}
+#| eval: !expr asreml_ok
+round(g1$spec_var, 3)
+```
+
+`Env03` is instructive: its specific variance sits on the boundary at zero, so
+the three common factors account for **all** of its genetic variance — and it
+has both the largest first-factor loading and the largest third-factor loading
+of any site. Its `Specific` proportion in the VAF table below is therefore
+exactly zero. Where ASReml-R returns a fractionally *negative* boundary
+estimate, `spec_var` reports it unchanged; only the VAF calculation clamps it,
+so the proportions cannot go negative.
+
+#### Variance accounted for
+
+`vaf_summary` pools the decomposition across environments. Shown here as
+percentages:
+
+```{r vafsumm1}
+#| eval: !expr asreml_ok
+vs <- g1$vaf_summary
+vs$pct_var <- round(100 * vs$pct_var, 1)
+vs$cum_pct <- round(100 * vs$cum_pct, 1)
+vs
+```
+
+```{r vaftotal1}
+#| eval: !expr asreml_ok
+cat("Total variance accounted for by all", g1$k, "factors:",
+    round(g1$vaf_total, 2), "%\n")
+```
+
+#### Genetic covariance and correlation
+
+`Gmat` and `Cmat` are the $t \times t$ genetic covariance and correlation
+matrices implied by the fitted structure. The first few sites:
+
+```{r cmat1}
+#| eval: !expr asreml_ok
+round(g1$Cmat[1:5, 1:5], 2)
+```
+
+#### BLUPs and factor scores
+
+`$blups[[term]]` holds two data frames. `blups` has one row per environment ×
+variety with the BLUP, the FA regression prediction `regblup` (the common
+variety effect) and `pres`, the number of non-missing observations:
+
+```{r blups1}
+#| eval: !expr asreml_ok
+head(fas1$blups[[trm]]$blups)
+```
+
+`scores` holds the rotated factor score EBLUPs in long form, with the factors
+as pseudo-levels `Comp1` … `Compk` of the outer variable. `blupr` is the
+rotated score; `blup` is the unrotated one:
+
+```{r scores1}
+#| eval: !expr asreml_ok
+head(fas1$blups[[trm]]$scores)
+```
+
+> Set `blups = FALSE` when only the variance structure is needed. That skips a
+> potentially expensive `coef()` call, but the `"regress"`, `"added"` and
+> `"loadings"` score-dependent plots then become unavailable.
+
+---
+
+## Visualising the structure
+
+### Variance accounted for
+
+The `"VAF"` plot shows, for each environment, what proportion of its total
+genetic variance is accounted for by each factor and what is left in the
+specific variance. Every bar reaches 100%: Factor 1 (darkest blue) at the
+bottom, further factors stacked above it, and the specific variance in grey on
+top. The dashed line marks the overall mean proportion explained.
+
+Environments with a **large grey segment** are poorly described by the common
+factor structure. They are worth inspecting — for outlying observations,
+unusual site characteristics, or simply as candidates for an additional factor.
+
+```{r plot1_vaf}
+#| eval: !expr asreml_ok
+#| fig-height: 4.5
+plot_faSummary(fas1, type = "VAF")
+```
+
+Environments are ordered by first-factor loading by default; `order = "asis"`
+keeps the data order and `order = "cluster"` groups similar environments.
+
+### Genetic correlation heatmap
+
+The `"heatmap"` type displays `Cmat` on a diverging palette centred at zero.
+
+```{r plot1_heat}
+#| eval: !expr asreml_ok
+#| fig-height: 6
+plot_faSummary(fas1, type = "heatmap")
+```
+
+`order = "cluster"` reorders both margins by average-linkage hierarchical
+clustering on $1 - \mathbf{C}$, which brings any block structure onto the
+diagonal. This is usually the more informative view when looking for groups of
+genetically similar environments:
+
+```{r plot1_heat_clust}
+#| eval: !expr asreml_ok
+#| fig-height: 6
+plot_faSummary(fas1, type = "heatmap", order = "cluster")
+```
+
+> The clustering uses `stats::hclust()`. The original `ASExtras4::fa.asreml()`
+> used `cluster::agnes()`; switching to base R avoids an extra dependency for a
+> purely presentational ordering.
+
+### Correlation-scaled loadings
+
+The `"loadings"` plot draws each environment as a vector of correlation-scaled
+loadings, one panel per pair of factors — with $k = 3$ that is three panels.
+The unit circle is drawn for reference. Environments reaching beyond `tol`
+(default `0.85`) are drawn solid and blue; those falling short are dotted and
+red, indicating that the plotted pair of factors does not explain them well.
+
+Two readings: an environment's **distance from the origin** is how well the
+pair explains it, and the **angle between two vectors** approximates their
+genetic correlation — vectors pointing the same way are positively correlated,
+opposed vectors negatively so, and perpendicular vectors roughly independent.
+
+```{r plot1_loadings}
+#| eval: !expr asreml_ok
+#| fig-height: 7
+plot_faSummary(fas1, type = "loadings")
+```
+
+Requires $k \ge 2$; it errors on an FA(1) model, where there are no pairs to
+plot. Tighten or loosen the solid/dotted split with `tol`:
+
+```{r plot1_loadings_tol}
+#| eval: !expr asreml_ok
+#| fig-height: 7
+plot_faSummary(fas1, type = "loadings", tol = 0.6)
+```
+
+### Regression of BLUPs on loadings
+
+The `"regress"` plot is the FA model's own interpretation of a variety's
+performance: for each factor, the variety's BLUPs are plotted against the
+environment loadings, and **the slope of the fitted line is that variety's
+factor score**. A steep positive slope on Factor 1 is a variety that gains more
+than average from favourable environments.
+
+By default the varieties shown are each factor's extremes — the minimum and
+maximum score on every factor, up to `n_varieties`:
+
+```{r plot1_regress}
+#| eval: !expr asreml_ok
+#| fig-width: 9
+#| fig-height: 8
+plot_faSummary(fas1, type = "regress", n_varieties = 4L)
+```
+
+Varieties are rows and factors are columns. Name them explicitly with
+`varieties = c("Var01", "Var22")` to follow particular lines.
+
+### Added variable plots
+
+With $k \ge 2$ the plain `"regress"` panels are misleading: the scatter about
+each line contains the other factors' contributions, so the points look noisier
+than the fit really is. The `"added"` type removes them, plotting
+
+$$
+\hat{u}_{gj} - \sum_{s \ne r} \lambda_{sj}\hat{f}_{sg}
+\quad\text{against}\quad \lambda_{rj},
+$$
+
+which is the correct display when more than one factor is fitted. The slopes
+are unchanged — they are still the factor scores — but the points now sit
+tightly around them.
+
+```{r plot1_added}
+#| eval: !expr asreml_ok
+#| fig-width: 9
+#| fig-height: 8
+plot_faSummary(fas1, type = "added", n_varieties = 4L)
+```
+
+### Returning the plotted data
+
+Every type accepts `return_data = TRUE`, giving a list with `$plot` and
+`$data` instead of the plot alone — useful for tabulating or re-plotting.
+
+```{r return_data1}
+#| eval: !expr asreml_ok
+out <- plot_faSummary(fas1, type = "VAF", return_data = TRUE)
+names(out$data)
+head(out$data$env, 3)
+```
+
+---
+
+## Combined `vm()` and `ide()` terms
+
+A common MET model separates additive and non-additive genetic effects:
+
+```r
+random = ~ fa(Site, 2):vm(Variety, Ginv) + fa(Site, 2):ide(Variety)
+```
+
+Each term is summarised in its own right. In addition, when `combine.ide =
+TRUE` (the default) and such a pair shares the same outer and inner variables,
+`faSummary()` appends an extra entry named `"<outer>:<inner>-total"` holding the
+**summed** covariance matrix and summed BLUPs — the total genetic structure.
+
+That entry has no loadings or scores of its own, because the sum of two FA
+structures is not itself an FA structure. Consequently only
+`type = "heatmap"` is available for it; the other four plot types raise an
+explanatory error. Pass `combine.ide = FALSE` to suppress it.
+
+---
+
+## Summary
+
+### `faSummary()` arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `model` | — | Fitted ASReml-R V4 model whose random formula contains at least one `fa()` term |
+| `term` | `NULL` | Character vector of FA term labels to summarise, e.g. `"fa(Site, 3):Variety"`. `NULL` summarises every FA term found |
+| `blups` | `TRUE` | Return genotype BLUPs and factor score EBLUPs. `FALSE` skips the potentially expensive `coef()` call |
+| `combine.ide` | `TRUE` | Append the summed `vm()` + `ide()` "total" structure where such a pair exists |
+
+### `faSummary()` return
+
+An object of class `faSummary` with `$gammas`, `$blups`, `$terms` and `$call`.
+Each `$gammas[[term]]` contains:
+
+| Component | Description |
+|-----------|-------------|
+| `Gmat`, `Cmat` | $t \times t$ genetic covariance and correlation matrices |
+| `loads` | $t \times k$ rotated loadings (columns `fac_1` … `fac_k`) |
+| `loads_cor` | Correlation-scaled loadings; rows inside the unit hypersphere |
+| `spec_var` | Specific variances, **unclamped** |
+| `vaf_env` | Per-environment proportions: `Factor1` … `FactorK`, `Specific`, `total_var` |
+| `vaf_summary` | Pooled proportions: `factor`, `pct_var`, `cum_pct` |
+| `vaf_total` | Overall percentage accounted for by all $k$ factors |
+| `k`, `env` | Number of factors; environment labels |
+| `outer`, `inner`, `inner_fun` | Environment variable, genotype variable, and the wrapper on it (`id`, `vm`, `ide` or `total`) |
+
+Each `$blups[[term]]` contains a `blups` data frame (`<outer>`, `<inner>`,
+`blup`, `regblup`, `pres`) and a `scores` data frame (`<outer>` holding
+`Comp1` … `Compk`, `<inner>`, `blup`, `blupr`).
+
+> `pres` counts non-missing observations per environment × genotype and is
+> `NA`, not `0`, where the combination is entirely absent.
+
+### `plot_faSummary()` arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `res` | — | An object of class `faSummary` |
+| `type` | `"VAF"` | One of `"VAF"`, `"heatmap"`, `"loadings"`, `"regress"`, `"added"` |
+| `term` | `NULL` | Which FA term to plot; `NULL` takes the first carrying loadings |
+| `order` | `"loading"` | Environment ordering for `"VAF"` and `"heatmap"`: `"loading"`, `"asis"` or `"cluster"` |
+| `varieties` | `"default"` | Varieties for `"regress"` / `"added"`; `"default"` picks each factor's extremes |
+| `n_varieties` | `6L` | Maximum number selected by `"default"` |
+| `tol` | `0.85` | Radius threshold flagging well-explained environments in `"loadings"` |
+| `theme` | `theme_bw()` | A ggplot2 theme object |
+| `return_data` | `FALSE` | `TRUE` returns `list($plot, $data)` |
+
+### `plot_faSummary()` types
+
+| Type | Requires | Description |
+|------|----------|-------------|
+| `"VAF"` | — | Stacked 100% bar chart per environment: one segment per factor plus specific variance, with a dashed overall-mean line |
+| `"heatmap"` | — | Genetic correlation on a diverging palette centred at zero; the only type available for a combined `vm()` + `ide()` entry |
+| `"loadings"` | $k \ge 2$ | Correlation-scaled loadings as vectors, one panel per factor pair, with the unit circle; `tol` splits solid from dotted |
+| `"regress"` | `blups = TRUE` | BLUPs against loadings, faceted variety × factor; slope is the factor score |
+| `"added"` | `blups = TRUE` | As `"regress"` with the other factors projected out — the correct display when $k \ge 2$ |
+
+---
+
+## References
+
+Smith, A.B., Cullis, B.R. & Thompson, R. (2001). Analyzing variety by
+environment data using multiplicative mixed models and adjustments for spatial
+field trend. *Biometrics*, **57**, 1138–1147.
+
+Smith, A.B. & Cullis, B.R. (2018). Plant breeding selection tools built on
+factor analytic mixed models for multi-environment trial data.
+*Euphytica*, **214**, 143.
+
+Thompson, R., Cullis, B.R., Smith, A.B. & Gilmour, A.R. (2003). A sparse
+implementation of the average information algorithm for factor analytic and
+reduced rank variance models. *Australian & New Zealand Journal of
+Statistics*, **45**, 445–459.

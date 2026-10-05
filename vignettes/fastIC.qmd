@@ -1,6 +1,6 @@
 ---
 title: "Factor Analytic Selection Tools: FAST and iClass"
-subtitle: "`fastIC()` and `plot_fastIC()`, with `faSummary()` for the variance decomposition"
+subtitle: "`fastIC()` and `plot_fastIC()`"
 author: "Julian Taylor"
 date: today
 format:
@@ -80,14 +80,20 @@ agree exactly: `iClassOP` equals `global_op` and `iClassRMSD` equals
 
 An FA($k$) random structure decomposes the $t \times t$ genetic covariance
 matrix as $\mathbf{G} = \hat{\boldsymbol{\Lambda}}\hat{\boldsymbol{\Lambda}}^\top + \hat{\boldsymbol{\Psi}}$,
-where $\hat{\boldsymbol{\Lambda}} \in \mathbb{R}^{t \times k}$ are the
-varimax-rotated loadings (element $\hat{\lambda}_{rj}$: factor $r$,
-environment $j$) and $\hat{\boldsymbol{\Psi}} = \operatorname{diag}(\hat{\psi}_1,\ldots,\hat{\psi}_t)$
+where $\hat{\boldsymbol{\Lambda}} \in \mathbb{R}^{t \times k}$ are the rotated
+loadings (element $\hat{\lambda}_{rj}$: factor $r$, environment $j$) and
+$\hat{\boldsymbol{\Psi}} = \operatorname{diag}(\hat{\psi}_1,\ldots,\hat{\psi}_t)$
 is the diagonal specific-variance matrix. After rotation, factor 1 captures
 the dominant non-crossover GEI with typically all-positive loadings; higher
-factors are bipolar. `faSummary()` additionally returns score
+factors are bipolar. Alongside the loadings, `faSummary()` returns the score
 EBLUPs $\hat{\mathbf{F}} \in \mathbb{R}^{n \times k}$ (element $\hat{f}_{rg}$:
-factor $r$, variety $g$).
+factor $r$, variety $g$) under the same rotation.
+
+> **The decomposition itself — the rotation convention, the specific
+> variances, the correlation-scaled loadings and the variance accounted for —
+> is the subject of its own vignette:
+> [Factor Analytic Variance Structures](faSummary.html).** Only what FAST and
+> iClass build on is restated here.
 
 The **Common Variety Effect** for variety $g$ in environment $j$ is:
 
@@ -146,21 +152,6 @@ FAST is the special case $q = 1$ with one class spanning all environments:
 `global_stab`. When $q \ge 2$, environments split into classes and
 `iClassOP` captures within-class performance, revealing crossover GEI
 invisible to `global_op`.
-
-### Variance Accounted For (VAF)
-
-The total genetic variance for environment $j$ is
-$\sigma^2_j = \sum_r \hat{\lambda}_{rj}^2 + \hat{\psi}_j$.
-The per-factor and specific proportions are:
-
-$$
-\text{VAF}(r,j) = \frac{\hat{\lambda}_{rj}^2}{\sigma^2_j}, \qquad
-\text{Specific}(j) = \frac{\hat{\psi}_j}{\sigma^2_j}, \qquad
-\sum_{r=1}^{k}\text{VAF}(r,j) + \text{Specific}(j) = 1.
-$$
-
-The overall VAF for factor $r$ pools across all environments:
-$\overline{\text{VAF}}(r) = \sum_j\hat{\lambda}_{rj}^2 \,/\, \sum_j\sigma^2_j$.
 
 ---
 
@@ -314,25 +305,11 @@ The two iClasses partition sites by whether they respond positively or
 negatively to the second FA factor — a measure of crossover GEI that is
 invisible from the global rankings alone.
 
-### Variance Accounted For
-
-The FA variance decomposition is performed by `faSummary()`, and the `"VAF"`
-plot of `plot_faSummary()` visualises it. The plot below shows, for each
-environment, what proportion of the total genetic variance
-($\sigma^2_j = \sum_r \hat{\lambda}_{rj}^2 + \hat{\psi}_j$)
-is accounted for by each FA factor versus left in the specific variance.
-Each bar reaches 100%; Factor 1 (darkest blue) occupies the bottom and
-typically dominates, with Factor 2 and Factor 3 adding further layers, and
-the specific variance (grey) at the top representing unexplained genetic
-variation. The dashed horizontal line marks the overall mean proportion
-explained across all environments.
-
-```{r plot1_vaf}
-#| eval: !expr asreml_ok
-#| fig-height: 4.5
-fas1 <- faSummary(m1_fa3, term = "fa(Site, 3):Variety")
-plot_faSummary(fas1, type = "VAF")
-```
+> **How much of the genetic variance do these three factors explain?** That
+> question belongs to the decomposition rather than to the selection tools.
+> The [Factor Analytic Variance Structures](faSummary.html) vignette answers it
+> for this very model — the same simulation, the same FA(3) fit — with
+> `plot_faSummary(type = "VAF")` and the correlation heatmap.
 
 ### FAST: Global OP vs Stability
 
@@ -583,21 +560,12 @@ With three classification factors and 25 environments, several distinct
 interaction classes emerge. Classes reflect groups of environments that share
 the same pattern of positive/negative response on all three bipolar factors.
 
-### Variance Accounted For
-
-With 25 environments and four FA factors, the VAF plot quickly reveals
-which sites are well captured by the common factor structure and which have
-substantial specific variance. Sites where the grey segment is large
-contribute variance beyond what the FA factors explain — these environments
-may warrant inspection for outlying observations or unusual site characteristics.
-The subtitle reports the overall proportion explained across all 25 sites.
-
-```{r plot2_vaf}
-#| eval: !expr asreml_ok
-#| fig-height: 4.5
-fas2 <- faSummary(m2_fa4, term = "fa(Site, 4):Variety")
-plot_faSummary(fas2, type = "VAF")
-```
+> With 25 environments and four factors it is worth checking how much of the
+> genetic variance the common structure actually captures before trusting the
+> class metrics — sites with a large specific variance contribute variation the
+> factors do not explain. Run
+> `plot_faSummary(faSummary(m2_fa4), type = "VAF")`; the approach is set out in
+> [Factor Analytic Variance Structures](faSummary.html).
 
 ### FAST: Global OP vs Stability
 

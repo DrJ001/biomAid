@@ -24,6 +24,8 @@ website:
             href: accuracy.html
           - text: "Simulating Multi-Environment Trials"
             href: simTrialData.html
+          - text: "Factor Analytic Variance Structures"
+            href: faSummary.html
           - text: "Factor Analytic Selection Tools: FAST and iClass"
             href: fastIC.html
     right:

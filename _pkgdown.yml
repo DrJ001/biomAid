@@ -39,6 +39,8 @@ navbar:
           href: accuracy.html
         - text: "Simulating Multi-Environment Trials"
           href: simTrialData.html
+        - text: "Factor Analytic Variance Structures"
+          href: faSummary.html
         - text: "Factor Analytic Selection Tools: FAST and iClass"
           href: fastIC.html
 
@@ -66,8 +68,8 @@ reference:
 
   - title: "Random Regression"
     desc: >
-      Decompose variety BLUPs into efficiency and responsiveness components
-      via G-matrix conditioning (multivariate random regression).
+      Decompose variety BLUPs into baseline and adjusted components via
+      G-matrix conditioning (multivariate random regression).
     contents:
       - randomRegress
       - plot_randomRegress

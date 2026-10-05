@@ -25,6 +25,7 @@ space, there are a lot more functions coming.
 | [Multiple Comparison Criteria](https://DrJ001.github.io/biomAid/compare.html) | HSD, LSD, and Bonferroni criteria, by-group comparisons, and all three plot types for `compare()` and `plot_compare()` |
 | [BLUP Accuracy in Multi-Environment Trials](https://DrJ001.github.io/biomAid/accuracy.html) | Mrode accuracy and Cullis H², supported random structures, and all six plot types for `accuracy()` and `plot_accuracy()` |
 | [Simulating Multi-Environment Trials](https://DrJ001.github.io/biomAid/simTrialData.html) | Mathematical framework, balanced/unbalanced/split-plot designs, and all four plot types for `simTrialData()` and `plot_simTrialData()` |
+| [Factor Analytic Variance Structures](https://DrJ001.github.io/biomAid/faSummary.html) | Rotation, specific variances, variance accounted for, and all five plot types for `faSummary()` and `plot_faSummary()` |
 | [Factor Analytic Selection Tools: FAST and iClass](https://DrJ001.github.io/biomAid/fastIC.html) | Mathematical framework, FAST global metrics, iClass interaction classes, all six plot types for `fastIC()` and `plot_fastIC()`, and the variance-accounted-for chart from `faSummary()` and `plot_faSummary()` |
 
 ## Function reference

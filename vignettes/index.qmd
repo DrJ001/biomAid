@@ -48,7 +48,8 @@ remotes::install_github("DrJ001/biomAid")
 | [Multiple Comparison Criteria](compare.html) | `compare()`, `plot_compare()` | HSD, LSD and Bonferroni criteria, by-group comparisons and all four plot types |
 | [BLUP Accuracy in Multi-Environment Trials](accuracy.html) | `accuracy()`, `plot_accuracy()` | Mrode accuracy and Cullis H², supported random structures and all six plot types |
 | [Simulating Multi-Environment Trials](simTrialData.html) | `simTrialData()`, `plot_simTrialData()` | Mathematical framework, balanced/unbalanced/split-plot designs and all four plot types |
-| [Factor Analytic Selection Tools: FAST and iClass](fastIC.html) | `fastIC()`, `plot_fastIC()`, `faSummary()`, `plot_faSummary()` | FAST global metrics, iClass interaction classes, all six plot types and the variance-accounted-for chart |
+| [Factor Analytic Variance Structures](faSummary.html) | `faSummary()`, `plot_faSummary()` | The FA decomposition itself: rotation, specific variances, variance accounted for, and all five plot types |
+| [Factor Analytic Selection Tools: FAST and iClass](fastIC.html) | `fastIC()`, `plot_fastIC()` | FAST global metrics, iClass interaction classes and all six plot types, built on the decomposition above |
 
 ## Function reference
 
