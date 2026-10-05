@@ -2,19 +2,23 @@
 % Please edit documentation in R/waldTest.R
 \name{waldTest}
 \alias{waldTest}
+\alias{waldTest.default}
 \alias{waldTest.asreml}
 \title{Wald Tests for Fixed-Effect Contrasts Using Predicted Values}
 \usage{
-waldTest(
-  pred,
+waldTest(object, ...)
+
+\method{waldTest}{default}(
+  object,
   cc,
   by = NULL,
   test = c("Wald", "F"),
   df_error = NULL,
-  adjust = c("none", "bonferroni", "holm", "fdr", "BH", "BY")
+  adjust = c("none", "bonferroni", "holm", "fdr", "BH", "BY"),
+  ...
 )
 
-waldTest.asreml(
+\method{waldTest}{asreml}(
   object,
   classify,
   cc,
@@ -25,15 +29,19 @@ waldTest.asreml(
 )
 }
 \arguments{
-\item{pred}{List returned by \code{predict(model, classify = ..., vcov = TRUE)}.
-Must contain elements \code{pvals} (data frame of predictions) and \code{vcov}
-(prediction error variance--covariance matrix).}
+\item{object}{For the default method, the list returned by
+\code{predict(model, classify = ..., vcov = TRUE)}, containing elements
+\code{pvals} (data frame of predictions) and \code{vcov} (prediction error
+variance--covariance matrix).  For the \code{asreml} method, the fitted model
+itself.}
+
+\item{...}{Arguments passed between methods.}
 
 \item{cc}{Named list of test specifications.  Each element is itself
 a list with fields:
 \describe{
 \item{\code{coef}}{Integer indices \strong{or} character labels identifying which
-rows of \code{pred$pvals} are involved.  When \code{by} is used, indices/labels
+rows of \code{object$pvals} are involved.  When \code{by} is used, indices/labels
 refer to rows \strong{within the group}.  Character labels are matched
 against the pasted factor-level combination (e.g. \code{"T0:G01"} for a
 \code{Treatment:Genotype} prediction).}
@@ -49,7 +57,7 @@ override the auto-generated \code{"A vs B"} row labels.}
 }}
 
 \item{by}{Character string \strong{or character vector} naming one or more
-factor columns in \code{pred$pvals} to split by.  When a single name is
+factor columns in \code{object$pvals} to split by.  When a single name is
 supplied the rows are split by that column's levels.  When a vector of
 names is supplied (e.g. \code{by = c("Site", "Year")}) the levels of those
 columns are pasted together to form an interaction grouping variable, and
@@ -81,13 +89,8 @@ positive) dependence between test statistics; more conservative than
 \code{"BH"} but provides stronger guarantees.}
 }}
 
-\item{object}{An ASReml-R V4 model object.}
-
 \item{classify}{Character string passed to \code{asreml::predict.asreml()} as
 the \code{classify} argument.}
-
-\item{...}{Additional arguments forwarded to
-\code{asreml::predict.asreml()}.}
 }
 \value{
 A named list with elements:
@@ -108,8 +111,13 @@ Performs Wald tests on linear contrasts of predicted values obtained from
 \code{asreml::predict.asreml()}.  Working directly with \code{predict()} output
 means contrasts are specified through \strong{meaningful factor-level labels}
 rather than raw coefficient indices, and the prediction error
-variance--covariance matrix (\code{pred$vcov}) is used directly  -- no access to
-model internals required.
+variance--covariance matrix is used directly  -- no access to model
+internals required.
+
+\code{waldTest()} is generic.  Supply the list returned by
+\code{predict(model, vcov = TRUE)} and the default method is used; supply the
+fitted \code{asreml} model itself, together with \code{classify}, and
+\code{\link[=waldTest.asreml]{waldTest.asreml()}} runs the prediction step for you.
 
 Two test types are available for each element of \code{cc}:
 \describe{
@@ -125,11 +133,15 @@ for a set of \eqn{q} coefficients simultaneously.  The statistic is
     \bm{Z}\hat{\bm{\tau}} \sim \chi^2_q} (or \eqn{F_{q,\nu}/q}).}
 }
 }
-\section{Functions}{
+\section{Methods (by class)}{
 \itemize{
-\item \code{waldTest.asreml()}: Convenience method that calls \code{asreml::predict.asreml()}
-internally.  \code{classify} is required; \code{test = "F"} uses \code{object$nedf}
-automatically.
+\item \code{waldTest(default)}: Default method, operating on the list returned by
+\code{predict(model, vcov = TRUE)}.
+
+\item \code{waldTest(asreml)}: Method for a fitted \code{asreml} model.  Calls
+\code{asreml::predict.asreml()} internally, so \code{classify} is required and
+\code{...} is forwarded to it; \code{test = "F"} takes the denominator degrees of
+freedom from \code{object$nedf} automatically.
 
 }}
 \examples{

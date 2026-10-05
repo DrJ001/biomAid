@@ -160,14 +160,14 @@ test_that("Wald statistic = estimate^2 / variance", {
 # SECTION 3 — Input validation
 # ===========================================================================
 
-test_that("pred without pvals or vcov errors", {
+test_that("prediction object without pvals or vcov errors", {
   expect_error(
     waldTest(list(pvals = NULL), cc = list()),
-    "'pred' must be the list returned"
+    "'object' must be the list returned"
   )
   expect_error(
     waldTest(list(x = 1), cc = list()),
-    "'pred' must be the list returned"
+    "'object' must be the list returned"
   )
 })
 
@@ -602,9 +602,29 @@ test_that("waldTest.asreml is a function with expected formals", {
 # ===========================================================================
 # SECTION 10 — print.waldTest
 # ===========================================================================
+#
+# These assertions deliberately match the method's own header strings
+# ("Contrast Tests (", "Joint Zero-Equality Tests (", "P-value adjustment: ")
+# rather than bare words.  waldTest() previously returned an unclassed list,
+# so print.waldTest() was never dispatched to at all -- yet tests matching
+# "Contrast" and "Zero" still passed, because a raw list dump prints the
+# element *names* $Contrasts and $Zero.  Matching on the headers means these
+# tests fail if the "waldTest" class is ever dropped again.
 
 # ---------------------------------------------------------------------------
-# 10a. Contrasts-only output (no Zero): Contrast header printed
+# 10a. The result carries the class that makes the print method reachable
+# ---------------------------------------------------------------------------
+test_that("waldTest() returns an object of class 'waldTest'", {
+  p <- make_pred_wt(seed = 5L)
+  res <- waldTest(p,
+                  cc = list(list(coef = c("N0","N1"),
+                                 type = "con",
+                                 comp = c(-1, 1))))
+  expect_s3_class(res, "waldTest")
+})
+
+# ---------------------------------------------------------------------------
+# 10b. Contrasts-only output (no Zero): Contrast header printed
 # ---------------------------------------------------------------------------
 test_that("print.waldTest with ONLY Contrasts prints contrast header", {
   p <- make_pred_wt(seed = 5L)
@@ -612,7 +632,7 @@ test_that("print.waldTest with ONLY Contrasts prints contrast header", {
                   cc = list(list(coef = c("N0","N1"),
                                  type = "con",
                                  comp = c(-1, 1))))
-  expect_output(print(res), "Contrast")
+  expect_output(print(res), "Contrast Tests (", fixed = TRUE)
 })
 
 # ---------------------------------------------------------------------------
@@ -625,10 +645,10 @@ test_that("print.waldTest with ONLY Zero results prints Zero header", {
                                  type  = "zero",
                                  group = "all")))
   out <- paste(capture.output(print(res)), collapse = "\n")
-  # "Zero" header should appear
-  expect_true(grepl("Zero", out))
+  # The Zero header should appear
+  expect_true(grepl("Joint Zero-Equality Tests (", out, fixed = TRUE))
   # "Contrast Tests" header should NOT appear (no con elements)
-  expect_false(grepl("Contrast Tests", out))
+  expect_false(grepl("Contrast Tests", out, fixed = TRUE))
 })
 
 # ---------------------------------------------------------------------------
@@ -643,8 +663,8 @@ test_that("print.waldTest with BOTH Contrasts and Zero prints both headers", {
                   ))
   out <- capture.output(print(res))
   combined <- paste(out, collapse = "\n")
-  expect_true(grepl("Contrast",    combined))
-  expect_true(grepl("Zero",        combined))
+  expect_true(grepl("Contrast Tests (",             combined, fixed = TRUE))
+  expect_true(grepl("Joint Zero-Equality Tests (",  combined, fixed = TRUE))
 })
 
 # ---------------------------------------------------------------------------
@@ -656,7 +676,7 @@ test_that("print.waldTest() shows p-value adjustment method", {
                   cc     = list(list(coef = c("N0","N1","N2"),
                                      type = "con", comp = "pairwise")),
                   adjust = "bonferroni")
-  expect_output(print(res), "bonferroni")
+  expect_output(print(res), "P-value adjustment: bonferroni", fixed = TRUE)
 })
 
 # ---------------------------------------------------------------------------

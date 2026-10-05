@@ -125,8 +125,13 @@
 #' `asreml::predict.asreml()`.  Working directly with `predict()` output
 #' means contrasts are specified through **meaningful factor-level labels**
 #' rather than raw coefficient indices, and the prediction error
-#' variance--covariance matrix (`pred$vcov`) is used directly  -- no access to
-#' model internals required.
+#' variance--covariance matrix is used directly  -- no access to model
+#' internals required.
+#'
+#' `waldTest()` is generic.  Supply the list returned by
+#' `predict(model, vcov = TRUE)` and the default method is used; supply the
+#' fitted `asreml` model itself, together with `classify`, and
+#' [waldTest.asreml()] runs the prediction step for you.
 #'
 #' Two test types are available for each element of `cc`:
 #' \describe{
@@ -142,14 +147,17 @@
 #'     \bm{Z}\hat{\bm{\tau}} \sim \chi^2_q} (or \eqn{F_{q,\nu}/q}).}
 #' }
 #'
-#' @param pred     List returned by `predict(model, classify = ..., vcov = TRUE)`.
-#'   Must contain elements `pvals` (data frame of predictions) and `vcov`
-#'   (prediction error variance--covariance matrix).
+#' @param object   For the default method, the list returned by
+#'   `predict(model, classify = ..., vcov = TRUE)`, containing elements
+#'   `pvals` (data frame of predictions) and `vcov` (prediction error
+#'   variance--covariance matrix).  For the `asreml` method, the fitted model
+#'   itself.
+#' @param ...      Arguments passed between methods.
 #' @param cc       Named list of test specifications.  Each element is itself
 #'   a list with fields:
 #'   \describe{
 #'     \item{`coef`}{Integer indices **or** character labels identifying which
-#'       rows of `pred$pvals` are involved.  When `by` is used, indices/labels
+#'       rows of `object$pvals` are involved.  When `by` is used, indices/labels
 #'       refer to rows **within the group**.  Character labels are matched
 #'       against the pasted factor-level combination (e.g. `"T0:G01"` for a
 #'       `Treatment:Genotype` prediction).}
@@ -164,7 +172,7 @@
 #'       override the auto-generated `"A vs B"` row labels.}
 #'   }
 #' @param by       Character string **or character vector** naming one or more
-#'   factor columns in `pred$pvals` to split by.  When a single name is
+#'   factor columns in `object$pvals` to split by.  When a single name is
 #'   supplied the rows are split by that column's levels.  When a vector of
 #'   names is supplied (e.g. `by = c("Site", "Year")`) the levels of those
 #'   columns are pasted together to form an interaction grouping variable, and
@@ -259,20 +267,27 @@
 #'
 #' @seealso `asreml::predict.asreml()`
 #' @export
-waldTest <- function(pred, cc, by = NULL,
+waldTest <- function(object, ...) UseMethod("waldTest")
+
+#' @describeIn waldTest Default method, operating on the list returned by
+#'   `predict(model, vcov = TRUE)`.
+#' @export
+waldTest.default <- function(object, cc, by = NULL,
                      test     = c("Wald", "F"),
                      df_error = NULL,
-                     adjust   = c("none","bonferroni","holm","fdr","BH","BY")) {
+                     adjust   = c("none","bonferroni","holm","fdr","BH","BY"),
+                     ...) {
 
   test   <- match.arg(test)
   adjust <- match.arg(adjust)
 
-  # ---- Validate pred input -----------------------------------------------
-  if (!is.list(pred) || !all(c("pvals","vcov") %in% names(pred)))
-    stop("'pred' must be the list returned by predict(model, vcov = TRUE).")
+  # ---- Validate prediction input -----------------------------------------
+  if (!is.list(object) || !all(c("pvals","vcov") %in% names(object)))
+    stop("'object' must be the list returned by predict(model, vcov = TRUE), ",
+         "or a fitted 'asreml' model (see waldTest.asreml()).")
 
-  pvals <- pred$pvals
-  Vcov  <- as.matrix(pred$vcov)
+  pvals <- object$pvals
+  Vcov  <- as.matrix(object$vcov)
 
   # Remove NA predictions and align vcov
   whna  <- !is.na(pvals$predicted.value)
@@ -281,7 +296,7 @@ waldTest <- function(pred, cc, by = NULL,
   rownames(pvals) <- NULL
 
   if (nrow(pvals) == 0L)
-    stop("No non-missing predicted values in 'pred'.")
+    stop("No non-missing predicted values in 'object'.")
 
   if (test == "F" && is.null(df_error))
     stop("'df_error' must be supplied when test = \"F\".")
@@ -441,26 +456,29 @@ waldTest <- function(pred, cc, by = NULL,
   rownames(con_out)  <- NULL
   rownames(zero_out) <- NULL
 
-  invisible(list(
-    Contrasts = if (!is.null(con_out)  && nrow(con_out)  > 0L) con_out  else NULL,
-    Zero      = if (!is.null(zero_out) && nrow(zero_out) > 0L) zero_out else NULL,
-    test      = test,
-    adjust    = adjust
+  # The class is what makes print.waldTest() reachable.  Without it the
+  # result is a bare list and the registered print method never dispatches.
+  invisible(structure(
+    list(
+      Contrasts = if (!is.null(con_out)  && nrow(con_out)  > 0L) con_out  else NULL,
+      Zero      = if (!is.null(zero_out) && nrow(zero_out) > 0L) zero_out else NULL,
+      test      = test,
+      adjust    = adjust
+    ),
+    class = "waldTest"
   ))
 }
 
 
 # ---- Convenience S3 method for asreml models ----------------------------
 
-#' @describeIn waldTest Convenience method that calls `asreml::predict.asreml()`
-#'   internally.  `classify` is required; `test = "F"` uses `object$nedf`
-#'   automatically.
+#' @describeIn waldTest Method for a fitted `asreml` model.  Calls
+#'   `asreml::predict.asreml()` internally, so `classify` is required and
+#'   `...` is forwarded to it; `test = "F"` takes the denominator degrees of
+#'   freedom from `object$nedf` automatically.
 #'
-#' @param object   An ASReml-R V4 model object.
 #' @param classify Character string passed to `asreml::predict.asreml()` as
 #'   the `classify` argument.
-#' @param ...      Additional arguments forwarded to
-#'   `asreml::predict.asreml()`.
 #'
 #' @export
 waldTest.asreml <- function(object, classify, cc, by = NULL,
@@ -484,7 +502,8 @@ waldTest.asreml <- function(object, classify, cc, by = NULL,
     NULL
   }
 
-  waldTest(pred       = pred,
+  # 'pred' is a plain list, so this dispatches to waldTest.default().
+  waldTest(object     = pred,
            cc         = cc,
            by         = by,
            test       = test,

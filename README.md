@@ -22,11 +22,11 @@ space, there are a lot more functions coming.
 | [Multivariate Random Regression](https://DrJ001.github.io/biomAid/randomRegress.html) | Conditioning schemes, baseline/adjusted decomposition, and all plot types for `randomRegress()` and `plot_randomRegress()`, worked through on multi-treatment MET data |
 | [Multivariate Fixed-Effects Regression](https://DrJ001.github.io/biomAid/fixedRegress.html) | OLS conditioning schemes, baseline/adjusted index decomposition, and plot types for `fixedRegress()` and `plot_fixedRegress()` |
 | [Extracting and Padding Field Trial Layouts](https://DrJ001.github.io/biomAid/padTrial.html) | Step-by-step guide to guard-row removal, missing-plot padding, and Before/After visualisation with `padTrial()` and `plot_padTrial()` |
-| [Multiple Comparison Criteria](https://DrJ001.github.io/biomAid/compare.html) | HSD, LSD, and Bonferroni criteria, by-group comparisons, and all three plot types for `compare()` and `plot_compare()` |
+| [Multiple Comparison Criteria](https://DrJ001.github.io/biomAid/compare.html) | HSD, LSD, and Bonferroni criteria, by-group comparisons, and all four plot types for `compare()` and `plot_compare()` |
 | [BLUP Accuracy in Multi-Environment Trials](https://DrJ001.github.io/biomAid/accuracy.html) | Mrode accuracy and Cullis H², supported random structures, and all six plot types for `accuracy()` and `plot_accuracy()` |
 | [Simulating Multi-Environment Trials](https://DrJ001.github.io/biomAid/simTrialData.html) | Mathematical framework, balanced/unbalanced/split-plot designs, and all four plot types for `simTrialData()` and `plot_simTrialData()` |
 | [Factor Analytic Variance Structures](https://DrJ001.github.io/biomAid/faSummary.html) | Rotation, specific variances, variance accounted for, and all five plot types for `faSummary()` and `plot_faSummary()` |
-| [Factor Analytic Selection Tools: FAST and iClass](https://DrJ001.github.io/biomAid/fastIC.html) | Mathematical framework, FAST global metrics, iClass interaction classes, all six plot types for `fastIC()` and `plot_fastIC()`, and the variance-accounted-for chart from `faSummary()` and `plot_faSummary()` |
+| [Factor Analytic Selection Tools: FAST and iClass](https://DrJ001.github.io/biomAid/fastIC.html) | Mathematical framework, FAST global metrics, iClass interaction classes, and all six plot types for `fastIC()` and `plot_fastIC()` |
 
 ## Function reference
 
@@ -82,7 +82,8 @@ compare(model, term, by = NULL,
 
 Four plot types for the output of `compare()`, faceted automatically over
 multi-factor `by`-group structure, with an optional interactive
-[plotly](https://plotly.com/r/) version (see `pc_add()`).
+[plotly](https://plotly.com/r/) version. Use `pc_add()` to add ggplot2 layers
+before conversion, and `as_plotly()` to convert an existing result.
 
 ```r
 plot_compare(res,
@@ -116,23 +117,48 @@ plot_compare(res,
 
 Tests linear contrasts of predicted values using the prediction error variance
 from `predict.asreml()`. Supports pairwise, custom contrast matrix, and joint
-zero tests, with optional p-value adjustment.
+zero tests, with optional p-value adjustment. Generic, with a method for a
+prediction list and one for a fitted model.
 
 ```r
-waldTest(pred, cc, by = NULL,
+# default method — you have already called predict()
+waldTest(object, cc, by = NULL,
          test     = c("Wald", "F"),
          df_error = NULL,
          adjust   = c("none", "bonferroni", "holm", "fdr", "BH", "BY"))
+
+# asreml method — predict() is run for you
+waldTest(object, classify, cc, by = NULL,
+         test   = c("Wald", "F"),
+         adjust = c("none", "bonferroni", "holm", "fdr", "BH", "BY"),
+         ...)
 ```
 
 | Argument | Description |
 |----------|-------------|
-| `pred` | List returned by `predict(model, vcov = TRUE)` |
+| `object` | Either the list returned by `predict(model, vcov = TRUE)`, or a fitted ASReml-R V4 model |
+| `classify` | **`asreml` method only.** Classify string passed to `predict.asreml()`. Required |
 | `cc` | Named list of test specifications (`coef`, `type`, `comp`, `group`) |
 | `by` | Column(s) to run tests within. `NULL` = single group |
-| `test` | `"Wald"` (default, χ² statistic) or `"F"` (requires `df_error`) |
-| `df_error` | Denominator degrees of freedom for F-tests (e.g. `model$nedf`) |
+| `test` | `"Wald"` (default, χ² statistic) or `"F"` |
+| `df_error` | **Default method only.** Denominator degrees of freedom for F-tests (e.g. `model$nedf`) |
 | `adjust` | P-value adjustment method. Default `"none"` |
+| `...` | **`asreml` method only.** Forwarded to `predict.asreml()` |
+
+Passing the model directly is the shorter route — it runs `predict()` for you
+and, for `test = "F"`, takes the denominator degrees of freedom from
+`object$nedf` so `df_error` is not needed:
+
+```r
+# equivalent
+pred <- predict(model, classify = "Treatment", vcov = TRUE)
+res  <- waldTest(pred, cc = cc)
+
+res  <- waldTest(model, classify = "Treatment", cc = cc)
+```
+
+The result has class `waldTest` and a `print()` method that formats the
+contrast and joint-zero tables.
 
 ---
 
@@ -361,9 +387,11 @@ faSummary(model, term = NULL, blups = TRUE, combine.ide = TRUE)
 | `blups` | Return genotype BLUPs and factor score EBLUPs. Default `TRUE` |
 | `combine.ide` | Append the combined `vm()` + `ide()` "total" structure where such a pair exists. Default `TRUE` |
 
-Each `$gammas[[term]]` element contains `Gmat`, `Cmat`, `loads`, `loads_cor`,
-`spec_var`, `vaf_env`, `vaf_summary`, `vaf_total`, `k`, `env`, `outer`, `inner`
-and `inner_fun`; each `$blups[[term]]` element contains `blups` and `scores`.
+Returns an object of class `faSummary` with `$gammas`, `$blups`, `$terms` and
+`$call`, and a compact `print()` method. Each `$gammas[[term]]` element contains
+`Gmat`, `Cmat`, `loads`, `loads_cor`, `spec_var`, `vaf_env`, `vaf_summary`,
+`vaf_total`, `k`, `env`, `outer`, `inner` and `inner_fun`; each
+`$blups[[term]]` element contains `blups` and `scores`.
 
 ---
 
