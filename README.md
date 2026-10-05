@@ -428,9 +428,10 @@ fastIC(model, term = "fa(Site, 4):Genotype",
 | `...` | Additional arguments forwarded to `faSummary()` |
 
 Returns one row per environment × genotype carrying the loadings, scores,
-per-factor fitted values, `CVE`, `global_op`, `iclass`, `iClassOP` and
-`iClassRMSD` (`global_dev` and `global_stab` only when k > 1), plus the
-`vaf_env` and `vaf_summary` attributes used by `plot_faSummary(type = "VAF")`.
+`spec.var`, `CVE`, the per-factor fitted values, `global_op`, `iclass`,
+`iClassOP` and `iClassRMSD` (`global_dev` and `global_stab` only when k > 1).
+For the variance decomposition call `faSummary()` on the same model and pass
+the result to `plot_faSummary(type = "VAF")`.
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "Factor Analytic Selection Tools: FAST and iClass"
-subtitle: "`fastIC()` and `plot_fastIC()`"
+subtitle: "`fastIC()` and `plot_fastIC()`, with `faSummary()` for the variance decomposition"
 author: "Julian Taylor"
 date: today
 format:
@@ -53,18 +53,19 @@ mixed model** fitted in ASReml-R V4:
   sign patterns.
 
 Both frameworks are treated as a single continuum. FAST global metrics
-(`GlobalOP`, `GlobalRMSD`) are always computed across **all** environments.
+(`global_op`, `global_stab`) are always computed across **all** environments.
 iClass metrics (`iclass`, `iClassOP`, `iClassRMSD`) partition environments
 by the sign pattern of their first `ic.num` rotated loadings. When
 `ic.num = 1` and — as is typical after rotation — all first-factor
 loadings are positive, there is exactly one iClass and the two frameworks
-agree exactly: `iClassOP = GlobalOP` and `iClassRMSD = GlobalRMSD`.
+agree exactly: `iClassOP` equals `global_op` and `iClassRMSD` equals
+`global_stab`.
 
 `plot_fastIC()` provides six complementary visualisations:
 
 | Type | Description |
 |------|-------------|
-| `"fast"` | Global OP vs stability (GlobalRMSD) scatter with quadrant annotations |
+| `"fast"` | Global OP vs stability (`global_op` vs `global_stab`) scatter with quadrant annotations |
 | `"biplot"` | FA biplot: genotype scores + environment loading arrows |
 | `"CVE"` | Common Variety Effect heatmap (genotype × environment) |
 | `"iclass"` | iClassOP vs iClassRMSD scatter, faceted by interaction class |
@@ -103,13 +104,19 @@ Let $\bar{\lambda}_{1} = t^{-1}\sum_j \hat{\lambda}_{1j}$ be the mean of
 the first-factor loadings. The global metrics for variety $g$ are:
 
 $$
-\text{GlobalOP}(g) = \bar{\lambda}_{1}\,\hat{f}_{1g}, \qquad
-\text{GlobalRMSD}(g) = \sqrt{t^{-1}\sum_j \bigl(\widehat{\text{CVE}}(g,j) - \hat{\lambda}_{1j}\hat{f}_{1g}\bigr)^2}.
+\texttt{global\_op}(g) = \bar{\lambda}_{1}\,\hat{f}_{1g}, \qquad
+\texttt{global\_dev}(g,j) = \widehat{\text{CVE}}(g,j) - \hat{\lambda}_{1j}\hat{f}_{1g},
+$$
+
+$$
+\texttt{global\_stab}(g) = \sqrt{t^{-1}\sum_j \texttt{global\_dev}(g,j)^2}.
 $$
 
 `global_op` is on the trait scale (expected performance at an average
-environment); `global_stab` is the RMSD of the first-factor residual — small
-for broadly adapted varieties, large for environment-specific responders.
+environment); `global_stab` is the RMSD of the first-factor residual
+`global_dev` — small for broadly adapted varieties, large for
+environment-specific responders. Both `global_dev` and `global_stab`
+require $k > 1$ and are absent from the output of an FA(1) model.
 
 ### iClass metrics
 
@@ -135,9 +142,10 @@ $$
 is reserved for this purpose, so $1 \le \texttt{ic.num} \le k-1$.
 
 FAST is the special case $q = 1$ with one class spanning all environments:
-$\text{iClassOP} = \text{GlobalOP}$ and $\text{iClassRMSD} = \text{GlobalRMSD}$.
-When $q \ge 2$, environments split into classes and `iClassOP` captures
-within-class performance, revealing crossover GEI invisible to `GlobalOP`.
+`iClassOP` is then identical to `global_op`, and `iClassRMSD` to
+`global_stab`. When $q \ge 2$, environments split into classes and
+`iClassOP` captures within-class performance, revealing crossover GEI
+invisible to `global_op`.
 
 ### Variance Accounted For (VAF)
 
@@ -400,9 +408,11 @@ plot_fastIC(res1, type = "OP.pairs", n_highlight = 5L)
 
 The `"OP.variety"` plot traces each variety's iClassOP across the ordered
 interaction classes. Highlighted varieties are selected by default as those
-with the largest range in iClassOP (i.e. the greatest crossover). Steep
-crossing lines indicate strong specialists; near-parallel lines indicate
-stable generalists.
+with the highest **mean** iClassOP across classes — the best performers
+overall, not necessarily the biggest crossovers. Steep crossing lines
+indicate strong specialists; near-parallel lines indicate stable
+generalists. To follow a specific crossover instead, name the varieties
+explicitly with `highlight = c("Var12", "Var34")`.
 
 ```{r plot1_trajectory}
 #| eval: !expr asreml_ok
@@ -478,7 +488,7 @@ cat("Sites per variety  — mean:", round(mean(rowSums(inc)), 1),
 The true genetic correlation structure shows considerable variability
 across the 25 sites, with some site pairs sharing very low or even
 negative genetic correlations — precisely the conditions under which
-four FA factors and three iClasses are warranted.
+four FA factors and several iClasses are warranted.
 
 ```{r plot_sim2_cor}
 #| eval: !expr asreml_ok
@@ -668,7 +678,7 @@ line traces a variety's iClassOP from the first class (left) through to the
 last (right). Strongly crossing lines — and especially varieties that switch
 rank — illustrate precisely the crossover GEI that a global OP ranking
 misses. The highlighted varieties are automatically chosen as those with the
-greatest range in iClassOP.
+highest mean iClassOP across classes.
 
 ```{r plot2_trajectory}
 #| eval: !expr asreml_ok
@@ -698,7 +708,7 @@ plot_fastIC(res2, type = "OP.variety", n_highlight = 8L)
 | `"CVE"` | Common Variety Effect heatmap (genotype × environment); environments grouped by iClass, genotypes ordered by `global_op`. |
 | `"iclass"` | iClassOP vs iClassRMSD scatter, faceted by interaction class; per-class mean reference line. Auto-highlights top by mean iClassOP. |
 | `"OP.pairs"` | Lower-triangular pairs plot of iClassOP across all iClass levels; y = x reference diagonal. Requires ≥ 2 classes. Uses `patchwork` when available. |
-| `"OP.variety"` | iClassOP trajectory across ordered interaction classes; highlighted varieties over grey background. Auto-highlights by range of iClassOP. |
+| `"OP.variety"` | iClassOP trajectory across ordered interaction classes; highlighted varieties over grey background. Auto-highlights by mean iClassOP across classes. |
 
 All types support `highlight = "default" | character | NULL` and
 `return_data = TRUE` returning `list($plot, $data)`.

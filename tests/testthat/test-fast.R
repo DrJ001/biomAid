@@ -373,28 +373,18 @@ test_that("B: CVE == fitted1 + fitted2 + fitted3", {
 })
 
 # ---------------------------------------------------------------------------
-# B3. VAF attributes are attached to the result
+# B3. The VAF decomposition is deliberately NOT attached to the result
 # ---------------------------------------------------------------------------
-test_that("B: fastIC() result has vaf_env and vaf_summary attributes", {
+# fastIC() used to carry vaf_env / vaf_summary as attributes, documented as
+# being "for use by plot_faSummary() with type = 'VAF'".  That was never
+# possible: plot_faSummary() requires an object of class "faSummary" and reads
+# res$gammas[[term]]$vaf_env, so it never looked at the attributes.  They are
+# now absent by design -- faSummary() owns the decomposition and
+# test-faSummary.R covers the arithmetic.
+test_that("B: fastIC() does not attach vaf_env / vaf_summary attributes", {
   out <- run_fastIC()
-  expect_false(is.null(attr(out, "vaf_env")))
-  expect_false(is.null(attr(out, "vaf_summary")))
-})
-
-test_that("B: vaf_env has one row per environment with proportions summing to 1", {
-  out     <- run_fastIC()
-  vaf_env <- attr(out, "vaf_env")
-  expect_equal(nrow(vaf_env), length(.envs))
-  fac_cols <- paste0("Factor", 1:.k)
-  row_sums <- rowSums(vaf_env[, c(fac_cols, "Specific"), drop = FALSE])
-  expect_true(all(abs(row_sums - 1.0) < 1e-10))
-})
-
-test_that("B: vaf_summary has k+1 rows and pct_var sums to 1", {
-  out  <- run_fastIC()
-  summ <- attr(out, "vaf_summary")
-  expect_equal(nrow(summ), .k + 1L)
-  expect_equal(sum(summ$pct_var), 1.0, tolerance = 1e-10)
+  expect_null(attr(out, "vaf_env"))
+  expect_null(attr(out, "vaf_summary"))
 })
 
 # ---------------------------------------------------------------------------

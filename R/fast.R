@@ -15,10 +15,10 @@
 #'   \widehat{\text{CVE}}(g,j) = \sum_{r=1}^{k} \hat{\lambda}_{rj}\,\hat{f}_{rg}
 #' }
 #'
-#' The **Variance Accounted For** (VAF) by each factor in environment \eqn{j}
-#' is \eqn{\hat{\lambda}_{rj}^2 / (\sum_r \hat{\lambda}_{rj}^2 + \hat{\psi}_j)},
-#' and the specific variance accounts for the remainder; see [plot_faSummary()]
-#' with `type = "VAF"` for a per-environment visualisation.
+#' The **Variance Accounted For** (VAF) decomposition is owned by
+#' [faSummary()], not by this function.  To visualise it, call [faSummary()] on
+#' the same model and pass the result to [plot_faSummary()] with
+#' `type = "VAF"`.
 #'
 #' @section Unified framework:
 #' FAST and iClass are treated as a single framework.  FAST global metrics
@@ -103,9 +103,9 @@
 #'     \item{`loads1`, ..., `loadsK`}{Rotated FA loadings per environment.}
 #'     \item{`spec.var`}{Specific (residual) genetic variance per environment.}
 #'     \item{`score1`, ..., `scoreK`}{Rotated FA score EBLUPs per genotype.}
+#'     \item{`CVE`}{Common Variety Effect (sum of all fitted values).}
 #'     \item{`fitted1`, ..., `fittedK`}{Per-factor contributions to CVE:
 #'       \eqn{\hat{\lambda}_{rj}\hat{f}_{rg}}.}
-#'     \item{`CVE`}{Common Variety Effect (sum of all fitted values).}
 #'     \item{`global_op`}{Global Overall Performance (FAST): repeated for
 #'       every environment row of a genotype.}
 #'     \item{`global_dev`}{Residual from first-factor regression (FAST):
@@ -119,17 +119,10 @@
 #'     \item{`iClassRMSD`}{Within-iClass RMSD for the genotype.}
 #'   }
 #'
-#'   Two attributes are attached to the returned data frame, passed through
-#'   from [faSummary()], for use by [plot_faSummary()] with `type = "VAF"`:
-#'   \describe{
-#'     \item{`vaf_env`}{Data frame with one row per environment containing the
-#'       proportion of genetic variance accounted for by each factor
-#'       (`Factor1`, ..., `FactorK`) and the specific variance (`Specific`),
-#'       plus the total genetic variance (`total_var`) for that environment.}
-#'     \item{`vaf_summary`}{Data frame with one row per source (`Factor 1`, ...,
-#'       `Factor K`, `Specific`) containing the overall proportion of total
-#'       genetic variance (`pct_var`) and cumulative proportion (`cum_pct`).}
-#'   }
+#'   The variance decomposition itself is not returned here.  `vaf_env` and
+#'   `vaf_summary` are components of the [faSummary()] result
+#'   (`$gammas[[term]]`), and [plot_faSummary()] requires that object rather
+#'   than this data frame.
 #'
 #' @references
 #' Smith, A.B. & Cullis, B.R. (2018). Plant breeding selection tools built on
@@ -213,12 +206,6 @@ fastIC <- function(model, term = "fa(Site, 4):Genotype",
   # ---- CVE via matrix multiplication -----------------------------------
   CVE_mat <- score_mat %*% t(loads_mat)        # m × t
 
-  # ---- VAF (Variance Accounted For) ------------------------------------
-  # Computed by faSummary(), which owns the FA variance decomposition.
-  # Carried through as attributes for plot_faSummary(type = "VAF").
-  vaf_env_df  <- sfa$gammas[[term]]$vaf_env
-  vaf_summary <- sfa$gammas[[term]]$vaf_summary
-
   # ---- Build base long-format data frame (environment-major order) -----
   env_rep  <- rep(seq_len(t_envs), each = m)
   geno_rep <- rep(seq_len(m),      times = t_envs)
@@ -291,12 +278,14 @@ fastIC <- function(model, term = "fa(Site, 4):Genotype",
   out$iClassOP   <- iClassOP_mat[gi]
   out$iClassRMSD <- iClassRMSD_mat[gi]
 
-  # ---- Sort and attach VAF attributes -----------------------------------
+  # ---- Sort --------------------------------------------------------------
+  # The VAF decomposition is deliberately not attached here.  It was once
+  # carried as attributes documented "for use by plot_faSummary()", but that
+  # function requires an object of class "faSummary" and reads
+  # res$gammas[[term]]$vaf_env, so the attributes could never be used as
+  # described.  Call faSummary() directly for the decomposition.
   out <- out[do.call(order, out[, c("iclass", sterm, gterm)]), ]
   rownames(out) <- NULL
-
-  attr(out, "vaf_env")     <- vaf_env_df
-  attr(out, "vaf_summary") <- vaf_summary
 
   out
 }

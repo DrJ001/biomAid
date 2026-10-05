@@ -103,31 +103,9 @@ local({
   df <- df[order(df$iclass, df$Site, df$Genotype), ]
   rownames(df) <- NULL
 
-  # ---- VAF attributes (mirrors fastIC() computation) --------------------
-  loads_sq  <- loads^2                              # t x k
-  total_var <- rowSums(loads_sq) + spec_var         # length t
-  vaf_mat   <- loads_sq / total_var                 # t x k proportions
-
-  vaf_env_df        <- as.data.frame(vaf_mat)
-  names(vaf_env_df) <- paste0("Factor", 1:k)
-  vaf_env_df$Site      <- envs
-  vaf_env_df$Specific  <- spec_var / total_var
-  vaf_env_df$total_var <- total_var
-  vaf_env_df <- vaf_env_df[, c("Site", paste0("Factor", 1:k), "Specific", "total_var")]
-  rownames(vaf_env_df) <- NULL
-
-  total_all  <- sum(total_var)
-  pct_factor <- colSums(loads_sq) / total_all
-  pct_spec   <- sum(spec_var) / total_all
-  vaf_summ   <- data.frame(
-    factor  = c(paste0("Factor ", 1:k), "Specific"),
-    pct_var = c(pct_factor, pct_spec),
-    stringsAsFactors = FALSE
-  )
-  vaf_summ$cum_pct <- cumsum(vaf_summ$pct_var)
-
-  attr(df, "vaf_env")     <- vaf_env_df
-  attr(df, "vaf_summary") <- vaf_summ
+  # No VAF attributes: fastIC() does not attach them, so this fixture must not
+  # either.  The decomposition belongs to faSummary(); see test-faSummary.R and
+  # test-plot_faSummary.R.
 
   # Assign to parent env so tests can use .pfi_res
   .pfi_res <<- df
@@ -464,19 +442,6 @@ test_that("G: .pfi_parse() sets has_fast FALSE when global_op absent", {
   res2 <- .pfi_res[, setdiff(names(.pfi_res), "global_op")]
   p    <- biomAid:::.pfi_parse(res2)
   expect_false(p$has_fast)
-})
-
-test_that("G: 'vaf_env' attribute is still carried on fastIC() output", {
-  # Ownership of the VAF calculation moved to faSummary(); fastIC() passes it
-  # through so plot_faSummary(type = "VAF") can consume it.
-  expect_false(is.null(attr(.pfi_res, "vaf_env")))
-})
-
-test_that("G: 'vaf_summary' has 'factor', 'pct_var', 'cum_pct' columns", {
-  summ <- attr(.pfi_res, "vaf_summary")
-  expect_true("factor"  %in% names(summ))
-  expect_true("pct_var" %in% names(summ))
-  expect_true("cum_pct" %in% names(summ))
 })
 
 test_that("G: .pfi_geno_data() returns one row per genotype", {

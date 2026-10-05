@@ -32,9 +32,9 @@ combination, sorted by \code{iclass} then environment then genotype, containing:
 \item{\code{loads1}, ..., \code{loadsK}}{Rotated FA loadings per environment.}
 \item{\code{spec.var}}{Specific (residual) genetic variance per environment.}
 \item{\code{score1}, ..., \code{scoreK}}{Rotated FA score EBLUPs per genotype.}
+\item{\code{CVE}}{Common Variety Effect (sum of all fitted values).}
 \item{\code{fitted1}, ..., \code{fittedK}}{Per-factor contributions to CVE:
 \eqn{\hat{\lambda}_{rj}\hat{f}_{rg}}.}
-\item{\code{CVE}}{Common Variety Effect (sum of all fitted values).}
 \item{\code{global_op}}{Global Overall Performance (FAST): repeated for
 every environment row of a genotype.}
 \item{\code{global_dev}}{Residual from first-factor regression (FAST):
@@ -48,17 +48,10 @@ Only present when \eqn{k > 1}.}
 \item{\code{iClassRMSD}}{Within-iClass RMSD for the genotype.}
 }
 
-Two attributes are attached to the returned data frame, passed through
-from \code{\link[=faSummary]{faSummary()}}, for use by \code{\link[=plot_faSummary]{plot_faSummary()}} with \code{type = "VAF"}:
-\describe{
-\item{\code{vaf_env}}{Data frame with one row per environment containing the
-proportion of genetic variance accounted for by each factor
-(\code{Factor1}, ..., \code{FactorK}) and the specific variance (\code{Specific}),
-plus the total genetic variance (\code{total_var}) for that environment.}
-\item{\code{vaf_summary}}{Data frame with one row per source (\verb{Factor 1}, ...,
-\verb{Factor K}, \code{Specific}) containing the overall proportion of total
-genetic variance (\code{pct_var}) and cumulative proportion (\code{cum_pct}).}
-}
+The variance decomposition itself is not returned here.  \code{vaf_env} and
+\code{vaf_summary} are components of the \code{\link[=faSummary]{faSummary()}} result
+(\verb{$gammas[[term]]}), and \code{\link[=plot_faSummary]{plot_faSummary()}} requires that object rather
+than this data frame.
 }
 \description{
 A unified implementation of the \strong{FAST} (Factor Analytic Selection Tools;
@@ -75,10 +68,10 @@ is the FA regression prediction:
   \widehat{\text{CVE}}(g,j) = \sum_{r=1}^{k} \hat{\lambda}_{rj}\,\hat{f}_{rg}
 }
 
-The \strong{Variance Accounted For} (VAF) by each factor in environment \eqn{j}
-is \eqn{\hat{\lambda}_{rj}^2 / (\sum_r \hat{\lambda}_{rj}^2 + \hat{\psi}_j)},
-and the specific variance accounts for the remainder; see \code{\link[=plot_faSummary]{plot_faSummary()}}
-with \code{type = "VAF"} for a per-environment visualisation.
+The \strong{Variance Accounted For} (VAF) decomposition is owned by
+\code{\link[=faSummary]{faSummary()}}, not by this function.  To visualise it, call \code{\link[=faSummary]{faSummary()}} on
+the same model and pass the result to \code{\link[=plot_faSummary]{plot_faSummary()}} with
+\code{type = "VAF"}.
 }
 \section{Unified framework}{
 
