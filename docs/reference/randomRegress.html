@@ -327,15 +327,21 @@ BLUP.  If <code>FALSE</code> it is the posterior variance
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A named list:</p><dl><dt><code>blups</code></dt>
-<dd><p>Data frame with columns: <code>Site</code>, <code>Variety</code>, one raw BLUP
-column per level in <code>levs</code>, one <code>adj.&lt;lev&gt;</code> column per conditioned
-level, and one <code>HSD.&lt;lev&gt;</code> column per conditioned level (Tukey's HSD on
-the adjusted scale; <code>NA</code> for FA models or absent combinations).
-The <code>Site</code> column holds the <strong>section</strong> label whatever the stratifying
-dimension represents, and is <code>"Single"</code> throughout when the grouping
-factor is not composite.  The <code>Variety</code> column holds the levels of the
-variety factor named in <code>term</code>, whatever that factor is called in the
-model.</p></dd>
+<dd><p>Data frame whose first two columns identify the row and
+whose remaining columns hold the decomposition: one raw BLUP column per
+level in <code>levs</code>, one <code>adj.&lt;lev&gt;</code> column per conditioned level, and one
+<code>HSD.&lt;lev&gt;</code> column per conditioned level (Tukey's HSD on the adjusted
+scale; <code>NA</code> for FA models or absent combinations).
+The first column is <code>Section</code> and holds the <strong>section</strong> label whatever
+the repeated-over dimension represents; it is <code>"Single"</code> throughout
+when the grouping factor is not composite.  The second column holds the
+levels of the unit factor — the varieties, genotypes or lines — and
+<strong>takes its name from that factor as <code>term</code> names it</strong>, so it is
+<code>Variety</code> for <code>us(TSite):Variety</code> and <code>Genotype</code> for
+<code>us(TSite):Genotype</code>.  This mirrors <code><a href="fixedRegress.html">fixedRegress()</a></code>, whose <code>blues</code>
+columns are likewise named after the variables supplied to it.  Read
+the two names from <code>section</code> and <code>unit</code> below rather than assuming
+them.</p></dd>
 
 <dt><code>TGmat</code></dt>
 <dd><p>Transformed G-matrix \(\boldsymbol{T}\boldsymbol{G}
@@ -374,6 +380,18 @@ one element per level in <code>levs</code>.</p></dd>
 
 <dt><code>sep</code></dt>
 <dd><p>The <code>sep</code> argument used.</p></dd>
+
+<dt><code>section</code></dt>
+<dd><p>Name of the <code>blups</code> column holding the section label,
+normally <code>"Section"</code>.</p></dd>
+
+<dt><code>unit</code></dt>
+<dd><p>Name of the <code>blups</code> column holding the unit factor levels,
+i.e. the bare variety-factor name parsed from <code>term</code> with any
+<code>vm()</code> / <code>ide()</code> wrapper stripped.  <code><a href="plot_randomRegress.html">plot_randomRegress()</a></code> reads these
+two names from the result, so the plots and their <code>return_data</code> frames
+carry the same column names as <code>blups</code> whatever the factors are
+called.</p></dd>
 
 <dt><code>label_map</code></dt>
 <dd><p>Data frame with one row per G-matrix column —
