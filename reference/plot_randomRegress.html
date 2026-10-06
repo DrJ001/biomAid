@@ -149,7 +149,10 @@ build the plot rather than the plot itself. Default <code>FALSE</code>.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A <code>ggplot</code> object (when <code>return_data = FALSE</code>) or a <code>data.frame</code>
-(when <code>return_data = TRUE</code>).</p>
+(when <code>return_data = TRUE</code>).  For <code>"regress"</code> and <code>"quadrant"</code> that frame
+is the section column, the unit column, <code>x</code>, <code>y</code>, <code>pair_label</code> and — for
+<code>"regress"</code> — <code>beta</code>; the first two carry the same names as in
+<code>res$blups</code>.  For <code>"gmat"</code> it is <code>row_var</code>, <code>col_var</code> and <code>corr</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -158,6 +161,13 @@ dimension (a member of <code>levs</code> — a treatment or a trait) and <em>sec
 level of the dimension the decomposition is repeated within, ordinarily a
 site.  Facet columns are sections, and carry the single label <code>"Single"</code> when
 the grouping factor of the model term was not composite.</p>
+<p>The identifying columns are taken from the analysis rather than assumed:
+the section and unit column names are read from <code>res$section</code> and
+<code>res$unit</code>, so a model term of <code>us(TSite):Genotype</code> gives plots — and
+<code>return_data</code> frames — carrying <code>Section</code> and <code>Genotype</code>, exactly as
+<code>res$blups</code> does.  Results that predate those two elements fall back to the
+first two columns of <code>res$blups</code>, which have always held the section and
+the unit in that order.</p>
 <p>The three <code>type</code> options are:</p><dl><dt><code>"regress"</code></dt>
 <dd><p>Grid of scatter plots faceted by BLUP pair (rows) and
 section (columns).  Each panel plots the raw conditioned-level BLUPs
