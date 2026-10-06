@@ -550,9 +550,15 @@ test_that("randomRegress() baseline returns named list", {
                        levs = c("N0","N1","N2"),
                        type = "baseline")
   expect_named(res, c("blups","TGmat","Gmat","beta","sigmat","tmat",
-                      "cond_list","type","sep","label_map"))
+                      "cond_list","type","sep","section","unit","label_map"))
   expect_s3_class(res$blups, "data.frame")
   expect_equal(res$type, "baseline")
+
+  # section / unit name the two identifying columns of blups, so that nothing
+  # downstream has to assume what the factors are called
+  expect_equal(res$section, "Section")
+  expect_equal(res$unit,    "Variety")
+  expect_equal(names(res$blups)[1:2], c("Section", "Variety"))
 
   # label_map is the authoritative level/section resolution
   expect_s3_class(res$label_map, "data.frame")
@@ -573,11 +579,13 @@ test_that("randomRegress() blups has correct columns", {
   res <- randomRegress(make_rrm_model(),
                        term = "us(TSite):Variety",
                        levs = c("N0","N1","N2"))
-  expect_true("Site"    %in% names(res$blups))
+  expect_true("Section" %in% names(res$blups))
   expect_true("Variety" %in% names(res$blups))
   expect_true("N0"      %in% names(res$blups))
   expect_true("adj.N1" %in% names(res$blups))
   expect_true("adj.N2" %in% names(res$blups))
+  # The old hard-coded name is gone, not merely duplicated
+  expect_false("Site" %in% names(res$blups))
 })
 
 # --- D3. Gmat returned correctly -------------------------------------------
@@ -679,18 +687,30 @@ test_that("randomRegress() custom type runs without error", {
 })
 
 # --- D9. blups data frame structure (row count) ----------------------------
-test_that("blups data frame has Site, Variety and correct row count", {
-  usnams <- c("S1","S2")
-  glev   <- paste0("G", sprintf("%02d", 1:10))
-  nvar   <- length(glev)
-  ns     <- length(usnams)
-  blups  <- data.frame(
-    Site    = rep(usnams, each = nvar),
-    Variety = rep(glev,   times = ns),
-    stringsAsFactors = FALSE
+# This test previously built its own data.frame with the expected columns and
+# then asserted those columns, so it exercised none of randomRegress() and
+# would have passed whatever the function returned.  It now runs the function.
+test_that("blups has one row per section x unit, keyed by its first two columns", {
+  sites <- c("S1","S2")
+  n_var <- 10L
+  G  <- make_Gmat_rrm(sites = sites)
+  pv <- make_pvals_rrm(sites = sites, n_var = n_var)
+  local_mocked_bindings(
+    predict         = function(...) pv,
+    .asreml_vparams = function(...) G,
+    .package        = "biomAid"
   )
-  expect_equal(nrow(blups), ns * nvar)
-  expect_named(blups, c("Site","Variety"))
+  res <- randomRegress(make_rrm_model(),
+                       term = "us(TSite):Variety",
+                       levs = c("N0","N1","N2"))
+
+  expect_equal(nrow(res$blups), length(sites) * n_var)
+  expect_equal(names(res$blups)[1:2], c(res$section, res$unit))
+  expect_equal(names(res$blups)[1:2], c("Section", "Variety"))
+  # Every section x unit combination appears exactly once
+  key <- paste(res$blups[[res$section]], res$blups[[res$unit]])
+  expect_equal(anyDuplicated(key), 0L)
+  expect_setequal(unique(res$blups[[res$section]]), sites)
 })
 
 # ===========================================================================
@@ -861,10 +881,10 @@ test_that("randomRegress() sep='-' correctly parses site-treatment labels", {
                        levs = levs,
                        sep  = "-")
   expect_s3_class(res$blups, "data.frame")
-  expect_true("Site"    %in% names(res$blups))
+  expect_true("Section" %in% names(res$blups))
   expect_true("adj.N1" %in% names(res$blups))
-  # Sites should be S1 and S2
-  expect_equal(sort(unique(res$blups$Site)), c("S1","S2"))
+  # Sections should be S1 and S2
+  expect_equal(sort(unique(res$blups$Section)), c("S1","S2"))
 })
 
 # ---------------------------------------------------------------------------
@@ -982,12 +1002,18 @@ test_that("treatment absent from a site: no error, other sites return results", 
                        levs = c("N0","N1","N2"),
                        type = "baseline")
   expect_s3_class(res$blups, "data.frame")
+  # Select on the recorded section column rather than a literal name.  The
+  # row selections are asserted non-empty first: an empty selection makes
+  # all(is.na(...)) vacuously TRUE, so the S2 check below would pass even if
+  # the section column were missing entirely.
+  s1_rows <- res$blups[[res$section]] == "S1"
+  s2_rows <- res$blups[[res$section]] == "S2"
+  expect_true(any(s1_rows))
+  expect_true(any(s2_rows))
   # S1 has all three treatments — adj.N1 and adj.N2 should be non-NA for S1
-  s1_rows <- res$blups$Site == "S1"
   expect_true(any(!is.na(res$blups$adj.N1[s1_rows])))
   expect_true(any(!is.na(res$blups$adj.N2[s1_rows])))
   # S2 is missing N2: adj.N2 rows for S2 must all be NA
-  s2_rows <- res$blups$Site == "S2"
   expect_true(all(is.na(res$blups$adj.N2[s2_rows])))
 })
 
@@ -1324,4 +1350,94 @@ test_that("RHS mismatch: vm() term against bare-Variety model errors", {
                   levs = c("N0", "N1", "N2")),
     "Term mismatch"
   )
+})
+
+# ===========================================================================
+# SECTION G: Identifying column names of $blups
+#
+# $blups holds the section label in a column named "Section" and the unit
+# levels in a column named after the unit factor itself, as `term` names it.
+# Both names are returned in $section and $unit so that plot_randomRegress()
+# and user code read them rather than assuming them.
+# ===========================================================================
+
+# Mock builders parameterised by the name of the unit factor, so the same
+# end-to-end path can be exercised for Variety, Genotype, ... .
+make_pvals_unit <- function(ucol, levs = c("N0","N1","N2"),
+                            sites = c("S1","S2"), n_var = 10L, seed = 1L) {
+  set.seed(seed)
+  tsnams <- as.vector(outer(levs, sites, paste, sep = "-"))
+  units  <- paste0("U", sprintf("%02d", seq_len(n_var)))
+  pv <- expand.grid(
+    TSite          = factor(tsnams, levels = tsnams),
+    unit__         = factor(units),
+    KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+  )
+  names(pv)[names(pv) == "unit__"] <- ucol
+  pv$predicted.value <- rnorm(nrow(pv), 0, 1)
+  pv$std.error       <- runif(nrow(pv), 0.1, 0.5)
+  pv$status          <- factor(rep("Estimable", nrow(pv)))
+  n    <- nrow(pv)
+  Av   <- matrix(rnorm(n * n) * 0.1, n, n)
+  list(pvals = pv, vcov = crossprod(Av) + diag(0.05, n))
+}
+
+make_model_unit <- function(ucol) {
+  m <- list(formulae = list(random =
+         stats::as.formula(paste0("~ us(TSite):", ucol))), call = list())
+  class(m) <- "asreml"
+  m
+}
+
+run_unit <- function(ucol) {
+  G  <- make_Gmat_rrm()
+  pv <- make_pvals_unit(ucol)
+  local_mocked_bindings(
+    predict         = function(...) pv,
+    .asreml_vparams = function(...) G,
+    .package        = "biomAid"
+  )
+  randomRegress(make_model_unit(ucol), term = paste0("us(TSite):", ucol),
+                levs = c("N0","N1","N2"))
+}
+
+test_that("unit column is named after the factor in 'term', not hard-coded", {
+  res <- run_unit("Genotype")
+  expect_equal(res$unit, "Genotype")
+  expect_equal(names(res$blups)[1:2], c("Section", "Genotype"))
+  expect_false("Variety" %in% names(res$blups))
+  # and it really holds the unit levels, not the section labels
+  expect_setequal(unique(res$blups$Genotype),
+                  paste0("U", sprintf("%02d", 1:10)))
+  expect_setequal(unique(res$blups$Section), c("S1", "S2"))
+})
+
+test_that("a unit factor called 'Section' does not collide with the section column", {
+  # Two identically named columns would make blups[["Section"]] silently
+  # return only the first, so the section column steps aside instead.
+  res <- run_unit("Section")
+  expect_equal(res$unit,    "Section")
+  expect_equal(res$section, "Section.1")
+  expect_false(anyDuplicated(names(res$blups)) > 0L)
+  expect_setequal(unique(res$blups[[res$section]]), c("S1", "S2"))
+  expect_setequal(unique(res$blups[[res$unit]]),
+                  paste0("U", sprintf("%02d", 1:10)))
+})
+
+test_that("plain grouping factor: section column is the single label 'Single'", {
+  levs <- c("N0","N1","N2")
+  G    <- make_Gmat_rrm(levs = levs, sites = "")   # labels "N0-", "N1-", ...
+  dimnames(G) <- list(levs, levs)                  # plain, separator-free
+  pv   <- make_pvals_unit("Variety", levs = levs, sites = "")
+  pv$pvals$TSite <- factor(sub("-$", "", as.character(pv$pvals$TSite)),
+                           levels = levs)
+  local_mocked_bindings(
+    predict         = function(...) pv,
+    .asreml_vparams = function(...) G,
+    .package        = "biomAid"
+  )
+  res <- randomRegress(make_model_unit("Variety"),
+                       term = "us(TSite):Variety", levs = levs)
+  expect_equal(res$section, "Section")
+  expect_equal(unique(res$blups$Section), "Single")
 })

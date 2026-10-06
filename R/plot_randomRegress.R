@@ -4,12 +4,81 @@
 # ============================================================
 
 utils::globalVariables(c(
-  "x", "y", "Variety", "group", "beta_label", "col_var", "row_var",
+  "x", "y", "group", "beta_label", "col_var", "row_var",
   "corr", "cov2cor", "ave", "aggregate", "quantile"
 ))
 
 #' @importFrom stats aggregate ave cov2cor quantile
 NULL
+
+# ---- Column-name resolution ---------------------------------------------
+
+#' Resolve the section and unit column names of a randomRegress() result
+#'
+#' randomRegress() names the two identifying columns of `blups` after what
+#' they hold: the section label (normally `"Section"`) and the unit factor as
+#' the model names it (`Variety`, `Genotype`, `Line`, ...).  It records both
+#' names in `res$section` and `res$unit` precisely so that nothing downstream
+#' has to assume them.
+#'
+#' Results that predate those elements — and the hand-built objects used in
+#' the tests — fall back to position: `blups` has always carried the section
+#' label first and the unit second.  Inferring by position rather than by a
+#' hard-coded `"Site"` / `"Variety"` keeps the fallback working for any
+#' factor names.
+#'
+#' @param res A `randomRegress()` result.
+#' @return List with `section` and `unit`, both column names of `res$blups`.
+#' @noRd
+.rreg_cols <- function(res) {
+
+  nms <- names(res$blups)
+  if (length(nms) < 2L)
+    stop("'res$blups' must have at least a section column and a unit column. ",
+         "Was it produced by randomRegress()?")
+
+  pick <- function(stored, pos) {
+    if (!is.null(stored) && length(stored) == 1L && stored %in% nms)
+      stored
+    else
+      nms[pos]
+  }
+
+  list(section = pick(res$section, 1L),
+       unit    = pick(res$unit,    2L))
+}
+
+#' Assemble one tidy plot frame with the resolved identifying columns first
+#'
+#' Keeps the section and unit columns named as `res$blups` names them, so that
+#' `return_data = TRUE` hands back the same column names the analysis used.
+#'
+#' @param section,unit Identifier values (length 1 is recycled).
+#' @param x,y,pair_label,beta Plot columns; `beta` is optional.
+#' @param scol,ucol Names to give the section and unit columns.
+#' @return Data frame: section, unit, `x`, `y`, `pair_label` [, `beta`].
+#' @noRd
+.rreg_df <- function(section, unit, x, y, pair_label, beta = NULL,
+                     scol, ucol) {
+
+  df <- data.frame(section, unit,
+                   x = x, y = y, pair_label = pair_label,
+                   stringsAsFactors = FALSE)
+  names(df)[1:2] <- c(scol, ucol)
+  if (!is.null(beta)) df$beta <- unname(beta)
+  df
+}
+
+#' Record the resolved column names on a tidy plot frame
+#'
+#' The plot builders receive only the data frame, so the two names travel with
+#' it as attributes rather than being resolved a second time.
+#' @noRd
+.rreg_tag_cols <- function(df, scol, ucol) {
+  attr(df, "section_col") <- scol
+  attr(df, "unit_col")    <- ucol
+  df
+}
 
 # ---- Data preparation helpers ------------------------------------------
 
@@ -17,9 +86,10 @@ NULL
 
 #' Extract the T x T within-section G-matrix block from the full Gmat
 #'
-#' "Site" here means a section in the general sense of randomRegress(): the
-#' second component of a composite group label, or the sole pseudo-section
-#' "Single" when the group labels carry no separator.
+#' A *section* is the dimension the decomposition is repeated within, in the
+#' general sense of randomRegress(): the second component of a composite group
+#' label, or the sole pseudo-section "Single" when the group labels carry no
+#' separator.
 #'
 #' Label resolution is **not** repeated here.  `map` is the `label_map`
 #' resolved once by randomRegress(); re-splitting the strings independently is
@@ -27,12 +97,12 @@ NULL
 #' half of a composite label was the section.
 #'
 #' @param Gmat       Full Gmat, columns named by grouping-factor level
-#' @param site       Section label (e.g. "Env1", or "Single")
+#' @param section    Section label (e.g. "Env1", or "Single")
 #' @param treatments Character vector of conditioned-dimension levels needed
 #' @param map        `label_map` data frame: `label`, `level`, `section`
 #' @return T x T matrix with rownames/colnames = levels, or NULL on failure
 #' @noRd
-.rreg_site_Gmat <- function(Gmat, site, treatments, map) {
+.rreg_site_Gmat <- function(Gmat, section, treatments, map) {
 
   tsnams <- colnames(Gmat)
   idx    <- match(tsnams, map$label)
@@ -41,11 +111,11 @@ NULL
   tnam <- map$level[idx]
   snam <- map$section[idx]
 
-  site_cols <- which(snam == site & tnam %in% treatments)
-  if (length(site_cols) == 0L) return(NULL)
+  sec_cols <- which(snam == section & tnam %in% treatments)
+  if (length(sec_cols) == 0L) return(NULL)
 
-  G_ss <- Gmat[site_cols, site_cols, drop = FALSE]
-  dimnames(G_ss) <- list(tnam[site_cols], tnam[site_cols])
+  G_ss <- Gmat[sec_cols, sec_cols, drop = FALSE]
+  dimnames(G_ss) <- list(tnam[sec_cols], tnam[sec_cols])
   G_ss
 }
 
@@ -108,6 +178,9 @@ NULL
   cond_list <- res$cond_list
   Gmat      <- res$Gmat
   sep       <- if (!is.null(res$sep)) res$sep else "-"  # stored by randomRegress()
+  cols      <- .rreg_cols(res)
+  scol      <- cols$section
+  ucol      <- cols$unit
   conditioned <- names(Filter(Negate(is.null), cond_list))
 
   # Label map resolved by randomRegress().  Older result objects (and hand
@@ -153,25 +226,26 @@ NULL
     A_rest  <- A_j[-cx[ci]]          # all A_j members EXCEPT the selected one
     cond_lv_used[ci] <<- cond_lv
 
-    beta_j    <- res$beta[[lv_j]]    # ns x |A_j|, rownames = sites
-    site_beta <- setNames(beta_j[, cond_lv], rownames(beta_j))
+    beta_j   <- res$beta[[lv_j]]    # ns x |A_j|, rownames = sections
+    sec_beta <- setNames(beta_j[, cond_lv], rownames(beta_j))
 
     if (length(A_rest) == 0L) {
       # |A_j| = 1: no projection needed — use raw BLUPs
-      df <- data.frame(
-        Site       = blups$Site,
-        Variety    = blups$Variety,
+      df <- .rreg_df(
+        section    = blups[[scol]],
+        unit       = blups[[ucol]],
         x          = blups[[cond_lv]],
         y          = blups[[lv_j]],
         pair_label = paste0(lv_j, " | ", paste(A_j, collapse = ", ")),
-        beta       = site_beta[as.character(blups$Site)],
-        stringsAsFactors = FALSE
+        beta       = sec_beta[as.character(blups[[scol]])],
+        scol       = scol,
+        ucol       = ucol
       )
     } else {
-      # |A_j| >= 2: added variable plot — project per site
+      # |A_j| >= 2: added variable plot — project per section
       avp_active <<- TRUE
-      site_rows <- lapply(unique(blups$Site), function(s) {
-        idx <- blups$Site == s
+      sec_rows <- lapply(unique(blups[[scol]]), function(s) {
+        idx <- blups[[scol]] == s
         bs  <- blups[idx, , drop = FALSE]
 
         G_ss <- if (is.null(map)) NULL else
@@ -185,22 +259,23 @@ NULL
           k          = cond_lv,
           A_rest     = A_rest
         )
-        data.frame(
-          Site       = s,
-          Variety    = bs$Variety,
+        .rreg_df(
+          section    = s,
+          unit       = bs[[ucol]],
           x          = avp$x,
           y          = avp$y,
           pair_label = paste0(lv_j, " | ", paste(A_j, collapse = ", ")),
-          beta       = site_beta[s],
-          stringsAsFactors = FALSE
+          beta       = sec_beta[s],
+          scol       = scol,
+          ucol       = ucol
         )
       })
-      df <- do.call(rbind, site_rows)
+      df <- do.call(rbind, sec_rows)
     }
 
     if (centre) {
-      df$x <- df$x + ave(df$x, df$Site, FUN = mean)
-      df$y <- df$y + ave(df$y, df$Site, FUN = mean)
+      df$x <- df$x + ave(df$x, df[[scol]], FUN = mean)
+      df$y <- df$y + ave(df$y, df[[scol]], FUN = mean)
     }
     df
   })
@@ -209,7 +284,7 @@ NULL
   x_lv <- if (length(unique(cond_lv_used)) == 1L) cond_lv_used[1L] else NULL
   attr(out, "cond_lv")    <- x_lv
   attr(out, "avp_active") <- avp_active
-  out
+  .rreg_tag_cols(out, scol, ucol)
 }
 
 #' @noRd
@@ -217,6 +292,9 @@ NULL
 
   blups       <- res$blups
   cond_list   <- res$cond_list
+  cols        <- .rreg_cols(res)
+  scol        <- cols$section
+  ucol        <- cols$unit
   conditioned <- names(Filter(Negate(is.null), cond_list))
 
   if (!is.null(treatments))
@@ -234,22 +312,22 @@ NULL
     adj_col <- paste0("adj.", lv_j)
     if (!(adj_col %in% names(blups)))
       stop("Column '", adj_col, "' not found in res$blups.")
-    cond_lv <- cond_list[[lv_j]][1L]
-    df <- data.frame(
-      Site       = blups$Site,
-      Variety    = blups$Variety,
+    df <- .rreg_df(
+      section    = blups[[scol]],
+      unit       = blups[[ucol]],
       x          = blups[[base_lv]],
       y          = blups[[adj_col]],
       pair_label = paste0(lv_j, " | ", paste(cond_list[[lv_j]], collapse = ", ")),
-      stringsAsFactors = FALSE
+      scol       = scol,
+      ucol       = ucol
     )
     if (centre)
-      df$x <- df$x + ave(df$x, df$Site, FUN = mean)
+      df$x <- df$x + ave(df$x, df[[scol]], FUN = mean)
     df
   })
   out <- do.call(rbind, rows)
   attr(out, "base_lv") <- base_lv   # carry forward for axis labelling
-  out
+  .rreg_tag_cols(out, scol, ucol)
 }
 
 #' @noRd
@@ -280,56 +358,66 @@ NULL
 
 # ---- Default highlight selection ---------------------------------------
 
-# Selects up to 3 varieties per quadrant to annotate, choosing the most
-# extreme varieties (by distance from origin) that exceed the within-quadrant
-# median distance.  The top-right quadrant is shown in orange and the
-# bottom-left in blue.
+# Selects up to 3 units (varieties, genotypes, ...) per quadrant to annotate,
+# choosing the most extreme by distance from origin among those exceeding the
+# within-quadrant median distance.  The top-right quadrant is shown in orange
+# and the bottom-left in blue.
 # @param qdata  Data frame from .rreg_quadrant_data()
-# @return Data frame with columns Variety and group ("tr" or "bl")
+# @param ucol   Name of its unit column; read from the frame's attribute by
+#   default, as tagged by the data builders
+# @return Data frame with columns <ucol> and group ("tr" or "bl")
 #' @noRd
-.rreg_default_highlights <- function(qdata) {
+.rreg_default_highlights <- function(qdata, ucol = attr(qdata, "unit_col")) {
 
-  # Collapse to one representative point per variety
-  var_means <- aggregate(cbind(x, y) ~ Variety, data = qdata, FUN = mean)
+  if (is.null(ucol)) ucol <- names(qdata)[2L]
+
+  .empty <- function()
+    setNames(data.frame(character(0L), character(0L),
+                        stringsAsFactors = FALSE),
+             c(ucol, "group"))
+
+  # Collapse to one representative point per unit
+  unit_means <- aggregate(qdata[, c("x", "y")],
+                          by  = setNames(list(qdata[[ucol]]), ucol),
+                          FUN = mean)
 
   .pick_quad <- function(df, sx, sy, grp) {
     in_q <- df[df$x * sx > 0 & df$y * sy > 0, , drop = FALSE]
-    if (nrow(in_q) == 0L)
-      return(data.frame(Variety = character(0L), group = character(0L),
-                        stringsAsFactors = FALSE))
+    if (nrow(in_q) == 0L) return(.empty())
 
     in_q$dist <- sqrt(in_q$x^2 + in_q$y^2)
 
-    # Keep varieties beyond the within-quadrant median distance
+    # Keep units beyond the within-quadrant median distance
     cands <- in_q[in_q$dist > quantile(in_q$dist, 0.5), , drop = FALSE]
 
-    if (nrow(cands) == 0L)
-      return(data.frame(Variety = character(0L), group = character(0L),
-                        stringsAsFactors = FALSE))
+    if (nrow(cands) == 0L) return(.empty())
 
     # Return up to 3, ordered by decreasing distance (most extreme first)
     cands  <- cands[order(cands$dist, decreasing = TRUE), , drop = FALSE]
-    chosen <- head(cands$Variety, 3L)
+    chosen <- head(as.character(cands[[ucol]]), 3L)
 
-    data.frame(Variety = chosen, group = grp, stringsAsFactors = FALSE)
+    setNames(data.frame(chosen, grp, stringsAsFactors = FALSE),
+             c(ucol, "group"))
   }
 
   rbind(
-    .pick_quad(var_means,  1,  1, "tr"),
-    .pick_quad(var_means, -1, -1, "bl")
+    .pick_quad(unit_means,  1,  1, "tr"),
+    .pick_quad(unit_means, -1, -1, "bl")
   )
 }
 
 # ---- Shared highlight layer builder ------------------------------------
 
 # Returns a list of ggplot2 layers (geom_point + geom_text) for highlighted
-# varieties.  Returns an empty list when hl is NULL.
+# units.  Returns an empty list when hl is NULL.  `ucol` is the unit column,
+# shared by `df` and `hl`, and supplies the point labels.
 #' @noRd
-.rreg_highlight_layers <- function(df, hl, label_col = "Variety") {
+.rreg_highlight_layers <- function(df, hl, ucol = attr(df, "unit_col")) {
 
   if (is.null(hl) || nrow(hl) == 0L) return(list())
+  if (is.null(ucol)) ucol <- names(df)[2L]
 
-  hl_data <- merge(df, hl, by = "Variety")
+  hl_data <- merge(df, hl, by = ucol)
 
   # Colour palette: top-right warm, bottom-left cool, custom green
   col_map <- c(tr = "#E07B39", bl = "#4E79A7", custom = "#59A14F")
@@ -358,7 +446,7 @@ NULL
     ),
     ggplot2::geom_text(
       data         = hl_data,
-      ggplot2::aes(x = x, y = y, label = Variety,
+      ggplot2::aes(x = x, y = y, label = .data[[ucol]],
                    colour = group),
       size         = 2.5,
       vjust        = -0.7,
@@ -375,10 +463,26 @@ NULL
 
 # ---- Plot builders -------------------------------------------------------
 
+#' Facet rows by BLUP pair and columns by section
+#'
+#' The section column is named after the data, so the facet specification is
+#' built as a formula with the name backquoted — a bare `pair_label ~ Section`
+#' could not accommodate a factor called, say, `Site Code`.
+#' @noRd
+.rreg_facet <- function(scol) {
+  ggplot2::facet_grid(
+    stats::as.formula(paste0("pair_label ~ `", scol, "`")),
+    scales = "free"
+  )
+}
+
 #' @noRd
 .rreg_plot_regress <- function(df, hl, centre, theme, ...) {
 
-  panel_df <- unique(df[, c("pair_label", "Site", "beta")])
+  scol <- attr(df, "section_col")
+  ucol <- attr(df, "unit_col")
+
+  panel_df <- unique(df[, c("pair_label", scol, "beta")])
   panel_df$beta_label <- paste0("\u03b2 = ", round(panel_df$beta, 2L))
 
   base_col <- if (is.null(hl)) "#4E79A7" else "grey50"
@@ -390,21 +494,22 @@ NULL
   x_label <- if (!is.null(cond_lv)) {
     base <- if (avp_active) paste0(cond_lv, " BLUP (partial residual)")
             else paste0(cond_lv, " BLUP")
-    if (centre) paste0(base, " + site mean") else base
+    if (centre) paste0(base, " + section mean") else base
   } else {
-    if (centre) "Conditioning BLUP (+ site mean)" else "Conditioning treatment BLUP"
+    if (centre) "Conditioning BLUP (+ section mean)" else
+                "Conditioning level BLUP"
   }
 
   plot_caption <- if (avp_active)
     "Added variable plot \u2014 x and y are partial residuals; dotted line: partial regression coefficient"
   else
-    "Dotted line: site-specific random regression"
+    "Dotted line: section-specific random regression"
 
   p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y)) +
     ggplot2::geom_hline(yintercept = 0, linewidth = 0.25, colour = "grey70") +
     ggplot2::geom_vline(xintercept = 0, linewidth = 0.25, colour = "grey70") +
     ggplot2::geom_point(size = 1.6, alpha = 0.7, colour = base_col, ...) +
-    .rreg_highlight_layers(df, hl) +
+    .rreg_highlight_layers(df, hl, ucol) +
     ggplot2::geom_abline(
       data     = panel_df,
       ggplot2::aes(slope = beta, intercept = 0),
@@ -417,11 +522,11 @@ NULL
       size        = 3.2, colour = "grey20", fontface = "italic",
       inherit.aes = FALSE
     ) +
-    ggplot2::facet_grid(pair_label ~ Site, scales = "free") +
+    .rreg_facet(scol) +
     ggplot2::labs(
       x       = x_label,
-      y       = if (centre) "Conditioned BLUP (+ site mean)" else
-                             "Conditioned treatment BLUP",
+      y       = if (centre) "Conditioned BLUP (+ section mean)" else
+                             "Conditioned level BLUP",
       caption = plot_caption
     ) +
     theme +
@@ -437,14 +542,17 @@ NULL
 #' @noRd
 .rreg_plot_quadrant <- function(df, hl, centre, theme, ...) {
 
+  scol <- attr(df, "section_col")
+  ucol <- attr(df, "unit_col")
+
   base_col <- if (is.null(hl)) "#E15759" else "grey50"
 
   # base_lv is attached by .rreg_quadrant_data() so axis label reflects
   # whether the x-axis is an unconditional baseline BLUP or the first
-  # treatment in levs (partial conditioning fallback).
+  # level in levs (partial conditioning fallback).
   base_lv <- attr(df, "base_lv")
   x_label <- if (centre)
-    paste0(base_lv, " BLUP (+ site mean)")
+    paste0(base_lv, " BLUP (+ section mean)")
   else
     paste0(base_lv, " BLUP")
 
@@ -454,8 +562,8 @@ NULL
     ggplot2::geom_vline(xintercept = 0, linetype = "dotted",
                         linewidth  = 0.7, colour = "grey30") +
     ggplot2::geom_point(size = 1.6, alpha = 0.7, colour = base_col, ...) +
-    .rreg_highlight_layers(df, hl) +
-    ggplot2::facet_grid(pair_label ~ Site, scales = "free") +
+    .rreg_highlight_layers(df, hl, ucol) +
+    .rreg_facet(scol) +
     ggplot2::labs(
       x       = x_label,
       y       = "Adjusted (conditional BLUP)",
@@ -511,6 +619,14 @@ NULL
 #' level of the dimension the decomposition is repeated within, ordinarily a
 #' site.  Facet columns are sections, and carry the single label `"Single"` when
 #' the grouping factor of the model term was not composite.
+#'
+#' The identifying columns are taken from the analysis rather than assumed:
+#' the section and unit column names are read from `res$section` and
+#' `res$unit`, so a model term of `us(TSite):Genotype` gives plots — and
+#' `return_data` frames — carrying `Section` and `Genotype`, exactly as
+#' `res$blups` does.  Results that predate those two elements fall back to the
+#' first two columns of `res$blups`, which have always held the section and
+#' the unit in that order.
 #'
 #' The three `type` options are:
 #' \describe{
@@ -591,7 +707,10 @@ NULL
 #'   `"gmat"`.
 #'
 #' @return A `ggplot` object (when `return_data = FALSE`) or a `data.frame`
-#'   (when `return_data = TRUE`).
+#'   (when `return_data = TRUE`).  For `"regress"` and `"quadrant"` that frame
+#'   is the section column, the unit column, `x`, `y`, `pair_label` and — for
+#'   `"regress"` — `beta`; the first two carry the same names as in
+#'   `res$blups`.  For `"gmat"` it is `row_var`, `col_var` and `corr`.
 #'
 #' @seealso [randomRegress()], [ggplot2::ggplot()]
 #'
@@ -679,21 +798,22 @@ plot_randomRegress <- function(res,
   # ---- Resolve highlights (regress + quadrant only) ----------------------
   hl <- NULL
   if (type %in% c("regress", "quadrant")) {
+    ucol <- .rreg_cols(res)$unit
     if (identical(highlight, "default")) {
       # Always derive highlights from quadrant space
       qdata <- if (type == "quadrant") df else
                  .rreg_quadrant_data(res, treatments, centre)
-      hl    <- .rreg_default_highlights(qdata)
+      hl    <- .rreg_default_highlights(qdata, ucol)
     } else if (is.character(highlight) && length(highlight) > 0L) {
-      all_vars <- unique(as.character(df$Variety))
-      bad      <- setdiff(highlight, all_vars)
+      all_units <- unique(as.character(df[[ucol]]))
+      bad       <- setdiff(highlight, all_units)
       if (length(bad))
         warning("'highlight' varieties not found in data: ",
                 paste(bad, collapse = ", "))
-      valid <- intersect(highlight, all_vars)
+      valid <- intersect(highlight, all_units)
       if (length(valid) > 0L)
-        hl <- data.frame(Variety = valid, group = "custom",
-                         stringsAsFactors = FALSE)
+        hl <- setNames(data.frame(valid, "custom", stringsAsFactors = FALSE),
+                       c(ucol, "group"))
     }
     # NULL highlight: hl stays NULL
   }

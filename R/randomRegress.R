@@ -456,15 +456,21 @@
 #'
 #' @return A named list:
 #' \describe{
-#'   \item{`blups`}{Data frame with columns: `Site`, `Variety`, one raw BLUP
-#'     column per level in `levs`, one `adj.<lev>` column per conditioned
-#'     level, and one `HSD.<lev>` column per conditioned level (Tukey's HSD on
-#'     the adjusted scale; `NA` for FA models or absent combinations).
-#'     The `Site` column holds the **section** label whatever the stratifying
-#'     dimension represents, and is `"Single"` throughout when the grouping
-#'     factor is not composite.  The `Variety` column holds the levels of the
-#'     variety factor named in `term`, whatever that factor is called in the
-#'     model.}
+#'   \item{`blups`}{Data frame whose first two columns identify the row and
+#'     whose remaining columns hold the decomposition: one raw BLUP column per
+#'     level in `levs`, one `adj.<lev>` column per conditioned level, and one
+#'     `HSD.<lev>` column per conditioned level (Tukey's HSD on the adjusted
+#'     scale; `NA` for FA models or absent combinations).
+#'     The first column is `Section` and holds the **section** label whatever
+#'     the repeated-over dimension represents; it is `"Single"` throughout
+#'     when the grouping factor is not composite.  The second column holds the
+#'     levels of the unit factor — the varieties, genotypes or lines — and
+#'     **takes its name from that factor as `term` names it**, so it is
+#'     `Variety` for `us(TSite):Variety` and `Genotype` for
+#'     `us(TSite):Genotype`.  This mirrors [fixedRegress()], whose `blues`
+#'     columns are likewise named after the variables supplied to it.  Read
+#'     the two names from `section` and `unit` below rather than assuming
+#'     them.}
 #'   \item{`TGmat`}{Transformed G-matrix \eqn{\boldsymbol{T}\boldsymbol{G}
 #'     \boldsymbol{T}^\top}.  Unconditional levels are labelled `base.<lev>`;
 #'     conditioned levels are labelled `adj.<lev>`.  Diagonal for
@@ -487,6 +493,14 @@
 #'     one element per level in `levs`.}
 #'   \item{`type`}{The `type` argument used.}
 #'   \item{`sep`}{The `sep` argument used.}
+#'   \item{`section`}{Name of the `blups` column holding the section label,
+#'     normally `"Section"`.}
+#'   \item{`unit`}{Name of the `blups` column holding the unit factor levels,
+#'     i.e. the bare variety-factor name parsed from `term` with any
+#'     `vm()` / `ide()` wrapper stripped.  [plot_randomRegress()] reads these
+#'     two names from the result, so the plots and their `return_data` frames
+#'     carry the same column names as `blups` whatever the factors are
+#'     called.}
 #'   \item{`label_map`}{Data frame with one row per G-matrix column —
 #'     `label` (the grouping-factor level as ASReml-R stores it), `level` (the
 #'     decomposed level) and `section`.  Composite labels are resolved once
@@ -788,11 +802,20 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
   dimnames(TGmat) <- list(tsnams_out, tsnams_out)
 
   # ---- Assemble blups data frame -----------------------------------------
+  # The first column holds the section label and the second the levels of the
+  # unit factor, named as that factor is named in the model (the analogue of
+  # fixedRegress()'s dynamic by/genotype columns).  A unit factor that is
+  # itself called "Section" would otherwise produce two identically named
+  # columns, and blups[["Section"]] would silently return only the first.
+  scol <- if (identical(vnam, "Section")) "Section.1" else "Section"
+
   blups <- do.call(rbind, blist)
   blups <- cbind(
-    data.frame(Site    = rep(usnams, each = nvar),
-               Variety = rep(glev,   times = ns),
-               stringsAsFactors = FALSE),
+    setNames(
+      data.frame(rep(usnams, each = nvar),
+                 rep(glev,   times = ns),
+                 stringsAsFactors = FALSE),
+      c(scol, vnam)),
     blups
   )
 
@@ -805,6 +828,8 @@ randomRegress <- function(model, term = "us(TSite):Variety", levs = NULL,
        cond_list = cond_list,
        type      = type,
        sep       = sep,
+       section   = scol,
+       unit      = vnam,
        label_map = data.frame(label   = tsnams,
                               level   = tnam,
                               section = snam,

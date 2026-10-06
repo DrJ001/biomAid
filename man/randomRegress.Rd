@@ -101,15 +101,21 @@ BLUP.  If \code{FALSE} it is the posterior variance
 \value{
 A named list:
 \describe{
-\item{\code{blups}}{Data frame with columns: \code{Site}, \code{Variety}, one raw BLUP
-column per level in \code{levs}, one \verb{adj.<lev>} column per conditioned
-level, and one \verb{HSD.<lev>} column per conditioned level (Tukey's HSD on
-the adjusted scale; \code{NA} for FA models or absent combinations).
-The \code{Site} column holds the \strong{section} label whatever the stratifying
-dimension represents, and is \code{"Single"} throughout when the grouping
-factor is not composite.  The \code{Variety} column holds the levels of the
-variety factor named in \code{term}, whatever that factor is called in the
-model.}
+\item{\code{blups}}{Data frame whose first two columns identify the row and
+whose remaining columns hold the decomposition: one raw BLUP column per
+level in \code{levs}, one \verb{adj.<lev>} column per conditioned level, and one
+\verb{HSD.<lev>} column per conditioned level (Tukey's HSD on the adjusted
+scale; \code{NA} for FA models or absent combinations).
+The first column is \code{Section} and holds the \strong{section} label whatever
+the repeated-over dimension represents; it is \code{"Single"} throughout
+when the grouping factor is not composite.  The second column holds the
+levels of the unit factor — the varieties, genotypes or lines — and
+\strong{takes its name from that factor as \code{term} names it}, so it is
+\code{Variety} for \code{us(TSite):Variety} and \code{Genotype} for
+\code{us(TSite):Genotype}.  This mirrors \code{\link[=fixedRegress]{fixedRegress()}}, whose \code{blues}
+columns are likewise named after the variables supplied to it.  Read
+the two names from \code{section} and \code{unit} below rather than assuming
+them.}
 \item{\code{TGmat}}{Transformed G-matrix \eqn{\boldsymbol{T}\boldsymbol{G}
     \boldsymbol{T}^\top}.  Unconditional levels are labelled \verb{base.<lev>};
 conditioned levels are labelled \verb{adj.<lev>}.  Diagonal for
@@ -132,6 +138,14 @@ column per section) for \code{type = "baseline"}; dense for
 one element per level in \code{levs}.}
 \item{\code{type}}{The \code{type} argument used.}
 \item{\code{sep}}{The \code{sep} argument used.}
+\item{\code{section}}{Name of the \code{blups} column holding the section label,
+normally \code{"Section"}.}
+\item{\code{unit}}{Name of the \code{blups} column holding the unit factor levels,
+i.e. the bare variety-factor name parsed from \code{term} with any
+\code{vm()} / \code{ide()} wrapper stripped.  \code{\link[=plot_randomRegress]{plot_randomRegress()}} reads these
+two names from the result, so the plots and their \code{return_data} frames
+carry the same column names as \code{blups} whatever the factors are
+called.}
 \item{\code{label_map}}{Data frame with one row per G-matrix column —
 \code{label} (the grouping-factor level as ASReml-R stores it), \code{level} (the
 decomposed level) and \code{section}.  Composite labels are resolved once

@@ -216,7 +216,12 @@ randomRegress(model, term = "us(TSite):Variety", levs = NULL,
 | `pev` | `TRUE` (default) uses PEV; `FALSE` uses posterior variance |
 
 Returns `blups`, `TGmat`, `Gmat`, `beta`, `sigmat`, `tmat`, `cond_list`, `type`,
-`sep` and `label_map`.
+`sep`, `section`, `unit` and `label_map`. The first two columns of `blups` are
+`Section` — the section label, `"Single"` when the grouping factor is not
+composite — and the unit factor named as `term` names it, so `Variety` for
+`us(TSite):Variety` and `Genotype` for `us(TSite):Genotype`. Both names are
+returned in `section` and `unit`; read them from there rather than assuming
+them.
 
 ---
 
@@ -247,6 +252,9 @@ plot_randomRegress(res,
 | `cond_x` | `"regress"` only. Positive integer selecting which member of the conditioning set $A_j$ appears on the x-axis (added variable plot). Default `1L` |
 | `theme` | A ggplot2 theme object. Default `theme_bw()` |
 | `return_data` | `TRUE` returns the tidy data frame instead of the plot |
+
+The `return_data` frame carries the section and unit columns under the same
+names as `res$blups`, read from `res$section` and `res$unit`.
 
 ---
 

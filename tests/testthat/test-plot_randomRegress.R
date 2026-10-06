@@ -4,18 +4,25 @@
 library(ggplot2)
 
 # ---- Shared mock result ------------------------------------------------
+#
+# Shaped like a real randomRegress() result: the first two columns of $blups
+# are the section label and the unit factor, and $section / $unit name them.
+# `legacy = TRUE` drops those two elements and uses the pre-rename column
+# names, which is how the positional fallback is exercised.
 make_mock_res <- function(ns = 3L, nvar = 8L,
-                          levs = c("T0", "T1", "T2")) {
+                          levs = c("T0", "T1", "T2"),
+                          ucol = "Variety", legacy = FALSE) {
   set.seed(42)
   sites <- paste0("E", seq_len(ns))
+  scol  <- if (legacy) "Site" else "Section"
 
   blups <- do.call(rbind, lapply(sites, function(s) {
     u0 <- rnorm(nvar, 0, 200)
     u1 <- 0.9  * u0 + rnorm(nvar, 0, 80)
     u2 <- 1.2  * u0 + rnorm(nvar, 0, 120)
-    data.frame(
-      Site    = s,
-      Variety = paste0("V", seq_len(nvar)),
+    d <- data.frame(
+      section = s,
+      unit    = paste0("V", seq_len(nvar)),
       T0 = u0, T1 = u1, T2 = u2,
       adj.T1 = u1 - 0.9  * u0,
       adj.T2 = u2 - 1.2  * u0,
@@ -23,6 +30,8 @@ make_mock_res <- function(ns = 3L, nvar = 8L,
       HSD.T2  = NA_real_,
       stringsAsFactors = FALSE
     )
+    names(d)[1:2] <- c(scol, ucol)
+    d
   }))
 
   beta <- list(
@@ -37,7 +46,7 @@ make_mock_res <- function(ns = 3L, nvar = 8L,
   G    <- crossprod(matrix(rnorm(nts * nts), nts, nts))
   dimnames(G) <- list(nms, nms)
 
-  list(
+  out <- list(
     sep       = "-",
     blups     = blups,
     beta      = beta,
@@ -49,6 +58,8 @@ make_mock_res <- function(ns = 3L, nvar = 8L,
     cond_list = list(T0 = NULL, T1 = "T0", T2 = "T0"),
     type      = "baseline"
   )
+  if (!legacy) { out$section <- scol; out$unit <- ucol }
+  out
 }
 
 # ---- Input validation --------------------------------------------------
@@ -144,14 +155,14 @@ test_that("return_data = TRUE returns a data.frame for all types", {
 test_that("regress return_data has required columns", {
   df <- plot_randomRegress(make_mock_res(), type = "regress",
                            return_data = TRUE)
-  expect_true(all(c("Site", "Variety", "x", "y",
+  expect_true(all(c("Section", "Variety", "x", "y",
                     "pair_label", "beta") %in% names(df)))
 })
 
 test_that("quadrant return_data has required columns", {
   df <- plot_randomRegress(make_mock_res(), type = "quadrant",
                            return_data = TRUE)
-  expect_true(all(c("Site", "Variety", "x", "y",
+  expect_true(all(c("Section", "Variety", "x", "y",
                     "pair_label") %in% names(df)))
 })
 
@@ -218,15 +229,15 @@ test_that("centre = TRUE returns ggplot for regress and quadrant", {
     )
 })
 
-test_that("centre = TRUE shifts x values by adding site mean", {
+test_that("centre = TRUE shifts x values by adding section mean", {
   res    <- make_mock_res(ns = 3L, nvar = 8L)
   df_raw <- plot_randomRegress(res, type = "quadrant",
                                centre = FALSE, return_data = TRUE)
   df_cen <- plot_randomRegress(res, type = "quadrant",
                                centre = TRUE,  return_data = TRUE)
-  # After adding site mean, x should differ from raw by the mean per site
-  site_shifts <- ave(df_raw$x, df_raw$Site, FUN = mean)
-  expect_equal(df_cen$x, df_raw$x + site_shifts, tolerance = 1e-9)
+  # After adding the section mean, x should differ from raw by that mean
+  sec_shifts <- ave(df_raw$x, df_raw$Section, FUN = mean)
+  expect_equal(df_cen$x, df_raw$x + sec_shifts, tolerance = 1e-9)
 })
 
 test_that("invalid centre value gives informative error", {
@@ -246,7 +257,7 @@ make_mock_res_partial <- function(ns = 2L, nvar = 8L,
   blups <- do.call(rbind, lapply(sites, function(s) {
     u0 <- rnorm(nvar, 0, 200); u1 <- 0.8*u0 + rnorm(nvar,0,80)
     u2 <- 0.7*u0 + rnorm(nvar,0,100)
-    data.frame(Site=s, Variety=paste0("V",seq_len(nvar)),
+    data.frame(Section=s, Variety=paste0("V",seq_len(nvar)),
                T0=u0, T1=u1, T2=u2,
                adj.T0 = u0 - 0.5*u1 - 0.3*u2,
                adj.T1 = u1 - 0.4*u0 - 0.2*u2,
@@ -275,7 +286,9 @@ make_mock_res_partial <- function(ns = 2L, nvar = 8L,
                        dimnames=list(sites, levs)),
     tmat      = diag(nts),
     cond_list = list(T0=c("T1","T2"), T1=c("T0","T2"), T2=c("T0","T1")),
-    type      = "partial"
+    type      = "partial",
+    section   = "Section",
+    unit      = "Variety"
   )
 }
 
@@ -295,7 +308,7 @@ test_that("cond_x = 2L uses AVP: x is T2 partial residual (T2 - gamma*T1)", {
   df_cx <- plot_randomRegress(res, type = "regress",
                                cond_x = 2L, return_data = TRUE)
   t0_rows_e1 <- df_cx[df_cx$pair_label == "T0 | T1, T2" &
-                       df_cx$Site == "E1", ]
+                       df_cx$Section == "E1", ]
 
   # Extract G_ss for site E1: columns 1:3 of Gmat (T0-E1, T1-E1, T2-E1)
   nms    <- colnames(res$Gmat)
@@ -306,7 +319,7 @@ test_that("cond_x = 2L uses AVP: x is T2 partial residual (T2 - gamma*T1)", {
   rownames(G_ss) <- colnames(G_ss) <- c("T0","T1","T2")
 
   gamma_k   <- G_ss["T1","T2"] / G_ss["T1","T1"]
-  blup_e1   <- res$blups[res$blups$Site == "E1", ]
+  blup_e1   <- res$blups[res$blups$Section == "E1", ]
   x_expected <- blup_e1$T2 - gamma_k * blup_e1$T1
 
   expect_equal(t0_rows_e1$x, x_expected, tolerance = 1e-9)
@@ -335,7 +348,7 @@ test_that("cond_x vector: T0 panel uses AVP, T2 panel (A_j size=2, cx=1) also AV
   # T1 panel: k = A_T1[1] = T0, A_rest = {T2}
   # x = T0 - (G_ss[T2,T0]/G_ss[T2,T2]) * T2
   t1_rows_e1 <- df_cx[df_cx$pair_label == "T1 | T0, T2" &
-                       df_cx$Site == "E1", ]
+                       df_cx$Section == "E1", ]
   nms    <- colnames(res$Gmat)
   e1_idx <- which(grepl("E1", nms) & (grepl("^T0-", nms) |
                                        grepl("^T1-", nms) |
@@ -343,7 +356,7 @@ test_that("cond_x vector: T0 panel uses AVP, T2 panel (A_j size=2, cx=1) also AV
   G_ss   <- res$Gmat[e1_idx, e1_idx]
   rownames(G_ss) <- colnames(G_ss) <- c("T0","T1","T2")
   gamma_k    <- G_ss["T2","T0"] / G_ss["T2","T2"]
-  blup_e1    <- res$blups[res$blups$Site == "E1", ]
+  blup_e1    <- res$blups[res$blups$Section == "E1", ]
   x_expected <- blup_e1$T0 - gamma_k * blup_e1$T2
   expect_equal(t1_rows_e1$x, x_expected, tolerance = 1e-9)
 })
@@ -393,4 +406,90 @@ test_that("cond_x = 2L scalar: all panels use A_j[2], attr is NULL (T2, T2, T1)"
   df  <- plot_randomRegress(res, type = "regress",
                              cond_x = 2L, return_data = TRUE)
   expect_null(attr(df, "cond_lv"))
+})
+
+# ---- Identifying column names ------------------------------------------
+#
+# The section and unit columns are named by the analysis, not by this
+# function, so the plot frames must follow whatever randomRegress() recorded
+# in $section / $unit.
+
+test_that("return_data column names match those of res$blups", {
+  res <- make_mock_res()
+  for (tp in c("regress", "quadrant")) {
+    df <- plot_randomRegress(res, type = tp, return_data = TRUE)
+    expect_equal(names(df)[1:2], names(res$blups)[1:2])
+    expect_equal(names(df)[1:2], c(res$section, res$unit))
+  }
+})
+
+test_that("a unit factor called Genotype is carried through to the plot data", {
+  res <- make_mock_res(ucol = "Genotype")
+  df  <- plot_randomRegress(res, type = "regress", return_data = TRUE)
+  expect_equal(names(df)[1:2], c("Section", "Genotype"))
+  expect_false("Variety" %in% names(df))
+  expect_setequal(unique(df$Genotype), unique(res$blups$Genotype))
+  # the names are also what the builders tag on for the plot layers
+  expect_equal(attr(df, "unit_col"),    "Genotype")
+  expect_equal(attr(df, "section_col"), "Section")
+})
+
+test_that("Genotype-named units plot, highlight and label without error", {
+  res <- make_mock_res(ucol = "Genotype")
+  for (tp in c("regress", "quadrant")) {
+    expect_s3_class(plot_randomRegress(res, type = tp), "ggplot")       # default hl
+    expect_s3_class(
+      plot_randomRegress(res, type = tp, highlight = c("V1", "V2")), "ggplot")
+    expect_s3_class(
+      plot_randomRegress(res, type = tp, highlight = NULL), "ggplot")
+  }
+  # The highlight frame is keyed by the unit column, so merge() must match
+  hl <- biomAid:::.rreg_default_highlights(
+    plot_randomRegress(res, type = "quadrant", return_data = TRUE))
+  expect_named(hl, c("Genotype", "group"))
+  expect_gt(nrow(hl), 0L)
+})
+
+test_that("the plots build (not merely construct) for a renamed unit factor", {
+  # ggplot() is lazy: a bad aes or facet specification only fails on build,
+  # so constructing the object is not evidence that it renders.
+  res <- make_mock_res(ucol = "Genotype")
+  for (tp in c("regress", "quadrant", "gmat"))
+    expect_s3_class(
+      ggplot2::ggplot_build(plot_randomRegress(res, type = tp)),
+      "ggplot_built"
+    )
+})
+
+test_that("legacy result without $section/$unit falls back to column position", {
+  # Results produced before the rename carry Site / Variety and neither
+  # element; the first two columns of $blups still identify the row.
+  res <- make_mock_res(legacy = TRUE)
+  expect_null(res$section)
+  expect_null(res$unit)
+  expect_equal(biomAid:::.rreg_cols(res),
+               list(section = "Site", unit = "Variety"))
+
+  df <- plot_randomRegress(res, type = "regress", return_data = TRUE)
+  expect_equal(names(df)[1:2], c("Site", "Variety"))
+  for (tp in c("regress", "quadrant"))
+    expect_s3_class(
+      ggplot2::ggplot_build(plot_randomRegress(res, type = tp)),
+      "ggplot_built"
+    )
+})
+
+test_that("stored names that are not columns of blups fall back to position", {
+  res <- make_mock_res()
+  res$section <- "NoSuchColumn"
+  res$unit    <- NA_character_
+  expect_equal(biomAid:::.rreg_cols(res),
+               list(section = "Section", unit = "Variety"))
+})
+
+test_that(".rreg_cols() rejects a blups frame that cannot identify a row", {
+  expect_error(
+    biomAid:::.rreg_cols(list(blups = data.frame(x = 1))),
+    regexp = "section column"
+  )
 })

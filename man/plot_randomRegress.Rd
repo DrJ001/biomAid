@@ -76,7 +76,10 @@ build the plot rather than the plot itself. Default \code{FALSE}.}
 }
 \value{
 A \code{ggplot} object (when \code{return_data = FALSE}) or a \code{data.frame}
-(when \code{return_data = TRUE}).
+(when \code{return_data = TRUE}).  For \code{"regress"} and \code{"quadrant"} that frame
+is the section column, the unit column, \code{x}, \code{y}, \code{pair_label} and — for
+\code{"regress"} — \code{beta}; the first two carry the same names as in
+\code{res$blups}.  For \code{"gmat"} it is \code{row_var}, \code{col_var} and \code{corr}.
 }
 \description{
 Produces one of three ggplot2 visualisations from a \code{\link[=randomRegress]{randomRegress()}} result
@@ -89,6 +92,14 @@ dimension (a member of \code{levs} — a treatment or a trait) and \emph{section
 level of the dimension the decomposition is repeated within, ordinarily a
 site.  Facet columns are sections, and carry the single label \code{"Single"} when
 the grouping factor of the model term was not composite.
+
+The identifying columns are taken from the analysis rather than assumed:
+the section and unit column names are read from \code{res$section} and
+\code{res$unit}, so a model term of \code{us(TSite):Genotype} gives plots — and
+\code{return_data} frames — carrying \code{Section} and \code{Genotype}, exactly as
+\code{res$blups} does.  Results that predate those two elements fall back to the
+first two columns of \code{res$blups}, which have always held the section and
+the unit in that order.
 
 The three \code{type} options are:
 \describe{

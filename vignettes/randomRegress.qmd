@@ -90,6 +90,12 @@ decomposition is carried out independently within each level of the second
 factor. Where it is a plain factor there is a single section, reported as
 `"Single"`, and plots show one facet column.
 
+The section label is returned in the `Section` column of `res$blups`,
+whatever the repeated-over dimension represents, and the variety BLUPs are
+keyed by a column named after the unit factor itself — `Variety` for a term
+of `us(TSite):Variety`, `Genotype` for `us(TSite):Genotype`. Both names are
+also returned, in `res$section` and `res$unit`.
+
 `plot_randomRegress()` visualises the result as a regression scatter plot,
 a baseline–adjusted quadrant plot, or a G-matrix heatmap.
 
@@ -764,7 +770,13 @@ combined effect of genotype × treatment and genotype × environment interaction
 
 All three plot types support `return_data = TRUE`, which returns the tidy
 data frame used to build the plot. This enables custom `ggplot2`
-visualisations beyond the built-in types:
+visualisations beyond the built-in types.
+
+The first two columns identify the row and carry the same names as
+`res$blups`: `Section` for the section label, and the unit factor named as
+`term` names it — `Variety` here, but `Genotype` for a term of
+`us(TSite):Genotype`. Read the two names from `res$section` and `res$unit`
+rather than hard-coding them:
 
 ```{r return_data}
 #| eval: !expr asreml_ok
@@ -774,11 +786,11 @@ df_t1 <- plot_randomRegress(res2, type = "quadrant",
                              treatments  = "T1",
                              return_data = TRUE)
 
-ggplot(df_t1, aes(x = x, y = y, colour = Site)) +
+ggplot(df_t1, aes(x = x, y = y, colour = Section)) +
   geom_hline(yintercept = 0, linetype = "dotted", colour = "grey40") +
   geom_vline(xintercept = 0, linetype = "dotted", colour = "grey40") +
   geom_point(size = 1.8, alpha = 0.8) +
-  facet_wrap(~ Site, nrow = 2L) +
+  facet_wrap(~ Section, nrow = 2L) +
   labs(x = "Baseline (T0 BLUP)",
        y = "Adjusted (T1 | T0)",
        title = "T1 adjusted by site") +
