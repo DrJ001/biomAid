@@ -1,7 +1,7 @@
 # biomAid
 
 [![R-CMD-check](https://github.com/DrJ001/biomAid/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/DrJ001/biomAid/actions/workflows/R-CMD-check.yml)
-[![Codecov](https://app.codecov.io/gh/DrJ001/biomAid/graph/badge.svg)](https://app.codecov.io/gh/DrJ001/biomAid)
+[![Codecov](https://codecov.io/gh/DrJ001/biomAid/graph/badge.svg)](https://app.codecov.io/gh/DrJ001/biomAid)
 [![R >= 4.1](https://img.shields.io/badge/R-%3E%3D4.1-blue)](https://cran.r-project.org/)
 
 ---
